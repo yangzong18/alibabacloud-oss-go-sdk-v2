@@ -102,8 +102,8 @@ func resolveRetryer(cfg *Config, o *Options) {
 		retryMode = retry.RetryModeStandard
 	}
 	switch retryMode {
-	case retry.RetryModeAdaptive:
-		o.Retryer = retry.NopRetryer{}
+	case retry.RetryModeStandard:
+		o.Retryer = retry.NewStandard()
 	default:
 		o.Retryer = retry.NopRetryer{}
 	}

@@ -14,7 +14,7 @@ import (
 func main() {
 
 	var body []byte
-	BucketName := "your bucket name"
+	BucketName := "you bucket"
 	provider := credentials.NewStaticCredentialsProvider("ak", "sk", "")
 
 	cfg := oss.LoadDefaultConfig().
