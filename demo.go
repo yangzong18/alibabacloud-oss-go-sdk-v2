@@ -14,8 +14,8 @@ import (
 func main() {
 
 	var body []byte
-	BucketName := "you bucket"
-	provider := credentials.NewStaticCredentialsProvider("ak", "sk", "")
+	BucketName := "skyranch-02-hz-test"
+	provider, _ := credentials.NewEnvironmentVariableCredentialsProvider()
 
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(provider).
@@ -87,4 +87,14 @@ func main() {
 		body, _ = io.ReadAll(output.Body)
 	}
 	fmt.Printf("client.InvokeOperation \ninput:%+v, \noutput: %+v\nbody: %s\nerr:%+v\n", input, output, string(body), err)
+
+	// 使用基础接口
+	listObjectsRequest := &oss.ListObjectsRequest{
+		Bucket: BucketName,
+	}
+	listObjectsResult, err := client.ListObjects(context.TODO(), listObjectsRequest)
+	fmt.Printf("client.ListObjects \nrequest:%+v, \nresult: %+v \nerr:%+v\n", listObjectsRequest, listObjectsResult, err)
+
+	opt := oss.Options{}
+	fmt.Printf("Options \nopt:%+v", opt)
 }

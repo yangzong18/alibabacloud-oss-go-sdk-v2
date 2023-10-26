@@ -17,9 +17,6 @@ type Config struct {
 	// an operation that fails with a retryable error.
 	RetryMaxAttempts int
 
-	// RetryMode specifies the retry mode the API client will be created with
-	RetryMode retry.RetryMode
-
 	// Retryer guides how HTTP requests should be retried in case of recoverable failures.
 	Retryer retry.Retryer
 
@@ -47,7 +44,6 @@ func LoadDefaultConfig() *Config {
 	config := &Config{
 		Region:           "cn-hangzhou",
 		RetryMaxAttempts: 3,
-		RetryMode:        retry.RetryModeStandard,
 		UsePathStyle:     false,
 	}
 
@@ -66,11 +62,6 @@ func (c *Config) WithEndpoint(endpoint string) *Config {
 
 func (c *Config) WithRetryMaxAttempts(value int) *Config {
 	c.RetryMaxAttempts = value
-	return c
-}
-
-func (c *Config) WithRetryMode(mode retry.RetryMode) *Config {
-	c.RetryMode = mode
 	return c
 }
 

@@ -5,23 +5,6 @@ import (
 	"time"
 )
 
-type RetryMode string
-
-const (
-	RetryModeStandard RetryMode = "standard"
-)
-
-func ParseRetryMode(v string) (mode RetryMode, err error) {
-	switch v {
-	case "standard":
-		return RetryModeStandard, nil
-	default:
-		return mode, fmt.Errorf("unknown RetryMode, %v", v)
-	}
-}
-
-func (m RetryMode) String() string { return string(m) }
-
 type Retryer interface {
 	IsErrorRetryable(error) bool
 	MaxAttempts() int
@@ -36,20 +19,4 @@ func (NopRetryer) MaxAttempts() int { return 1 }
 
 func (NopRetryer) RetryDelay(int, error) (time.Duration, error) {
 	return 0, fmt.Errorf("not retrying any attempt errors")
-}
-
-type RetryOptions struct {
-	MaxAttempts     int
-	MaxBackoff      time.Duration
-	BaseDelay       time.Duration
-	Backoff         BackoffDelayer
-	ErrorRetryables []ErrorRetryable
-}
-
-type BackoffDelayer interface {
-	BackoffDelay(attempt int, err error) (time.Duration, error)
-}
-
-type ErrorRetryable interface {
-	IsErrorRetryable(error) bool
 }

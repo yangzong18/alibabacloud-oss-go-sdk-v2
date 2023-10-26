@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"runtime"
 	"time"
 )
 
@@ -77,6 +78,11 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.IsNil()
 	}
 	return false
+}
+
+func defaultUserAgent() string {
+	return fmt.Sprintf("aliyun-sdk-go/%s (%s/%s/%s;%s)", Version(), runtime.GOOS,
+		"-", runtime.GOARCH, runtime.Version())
 }
 
 func isContextError(ctx context.Context, perr *error) bool {

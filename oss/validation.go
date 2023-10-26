@@ -96,10 +96,6 @@ func validateBucketOpsInput(input *OperationInput) error {
 		return NewErrParamInvalid("Bucket")
 	}
 
-	if !isValidObjectName(input.Key) {
-		return NewErrParamInvalid("Key")
-	}
-
 	return nil
 }
 
@@ -110,6 +106,10 @@ func validateObjectOpsInput(input *OperationInput) error {
 
 	if !isValidBucketName(input.Bucket) {
 		return NewErrParamInvalid("Bucket")
+	}
+
+	if !isValidObjectName(input.Key) {
+		return NewErrParamInvalid("Key")
 	}
 
 	return nil

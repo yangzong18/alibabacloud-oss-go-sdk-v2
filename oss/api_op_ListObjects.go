@@ -22,7 +22,7 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 	if err = validateBucketOpsInput(input); err != nil {
 		return nil, err
 	}
-	if err = c.marshalInput(request, input); err != nil {
+	if err = c.MarshalInput(request, input); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

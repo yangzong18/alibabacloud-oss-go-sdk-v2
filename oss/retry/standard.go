@@ -5,13 +5,15 @@ import (
 )
 
 const (
-	DefaultMaxAttempts int = 3
-
-	DefaultMaxBackoff time.Duration = 20 * time.Second
-	DefaultBaseDelay  time.Duration = 200 * time.Millisecond
+	defaultMaxAttempts = 3
+	defaultMaxBackoff  = 20 * time.Second
+	defaultBaseDelay   = 200 * time.Millisecond
 )
 
-var DefaultErrorRetryables = []ErrorRetryable{}
+var DefaultErrorRetryables = []ErrorRetryable{
+	&HTTPStatusCodeRetryable{},
+	&ConnectionErrorRetryable{},
+}
 
 type Standard struct {
 	maxAttempts int
@@ -21,10 +23,10 @@ type Standard struct {
 
 func NewStandard(fnOpts ...func(*RetryOptions)) *Standard {
 	o := RetryOptions{
-		MaxAttempts:     DefaultMaxAttempts,
-		MaxBackoff:      DefaultMaxBackoff,
-		BaseDelay:       DefaultBaseDelay,
-		ErrorRetryables: append([]ErrorRetryable{}, DefaultErrorRetryables...),
+		MaxAttempts:     defaultMaxAttempts,
+		MaxBackoff:      defaultMaxBackoff,
+		BaseDelay:       defaultBaseDelay,
+		ErrorRetryables: DefaultErrorRetryables,
 	}
 
 	for _, fn := range fnOpts {
@@ -32,11 +34,11 @@ func NewStandard(fnOpts ...func(*RetryOptions)) *Standard {
 	}
 
 	if o.MaxAttempts <= 0 {
-		o.MaxAttempts = DefaultMaxAttempts
+		o.MaxAttempts = defaultMaxAttempts
 	}
 
 	if o.BaseDelay <= 0 {
-		o.BaseDelay = DefaultBaseDelay
+		o.BaseDelay = defaultBaseDelay
 	}
 
 	if o.Backoff == nil {

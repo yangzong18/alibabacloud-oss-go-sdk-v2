@@ -20,7 +20,7 @@ func (c *Client) GetObject(ctx context.Context, request *GetObjectRequest, optFn
 	if err = validateObjectOpsInput(input); err != nil {
 		return nil, err
 	}
-	if err = c.marshalInput(request, input); err != nil {
+	if err = c.MarshalInput(request, input); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

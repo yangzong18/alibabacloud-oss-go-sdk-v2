@@ -3,8 +3,6 @@ package oss
 import (
 	"encoding/xml"
 	"fmt"
-	"net"
-	"strings"
 	"time"
 )
 
@@ -21,12 +19,16 @@ type ServiceError struct {
 	RequestTarget string
 }
 
-func (e ServiceError) Error() string {
+func (e *ServiceError) Error() string {
 	return fmt.Sprintf(`Error returned by Service. Http Status Code: %d. Error Code: %s. Request Id: %s. Message: %s.
 	EC: %s.
 	Timestamp: %s.
 	Request Endpoint: %s.`,
 		e.StatusCode, e.Code, e.RequestID, e.Message, e.EC, e.Timestamp, e.RequestTarget)
+}
+
+func (e *ServiceError) HttpStatusCode() int {
+	return e.StatusCode
 }
 
 type ClientError struct {
@@ -97,18 +99,9 @@ func (e *CanceledError) Error() string {
 	return fmt.Sprintf("canceled, %v", e.Err)
 }
 
+/*
 func IsServiceError(err error) (failure ServiceError, ok bool) {
 	failure, ok = err.(ServiceError)
 	return
 }
-
-func IsNetworkError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	if r, ok := err.(net.Error); ok && (r.Temporary() || r.Timeout()) || strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
-		return true
-	}
-	return false
-}
+*/

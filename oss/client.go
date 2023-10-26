@@ -8,8 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"reflect"
-	"runtime"
 	"strings"
 	"time"
 
@@ -95,16 +93,8 @@ func resolveRetryer(cfg *Config, o *Options) {
 	if o.Retryer != nil {
 		return
 	}
-	retryMode := cfg.RetryMode
-	if len(retryMode) == 0 {
-		retryMode = retry.RetryModeStandard
-	}
-	switch retryMode {
-	case retry.RetryModeStandard:
-		o.Retryer = retry.NewStandard()
-	default:
-		o.Retryer = retry.NopRetryer{}
-	}
+
+	o.Retryer = retry.NewStandard()
 }
 
 func resolveHTTPClient(cfg *Config, o *Options) {
@@ -129,16 +119,13 @@ func resolveSigner(cfg *Config, o *Options) {
 
 func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
 	options := c.options.Copy()
+	opOpt := Options{}
 
 	for _, fn := range optFns {
-		fn(&options)
+		fn(&opOpt)
 	}
 
-	//finalize retry
-
-	//finalize endpoint
-
-	//default reponse handler
+	applyOperationOpt(&options, &opOpt)
 
 	output, err = c.sendRequest(ctx, input, &options)
 
@@ -213,8 +200,8 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		SubResource: subResource,
 	}
 
-	// send request
-	response, err := c.signAndSendRequest(ctx, signingCtx, opts)
+	// send http request
+	response, err := c.sendHttpRequest(ctx, signingCtx, opts)
 
 	if err != nil {
 		return output, err
@@ -235,7 +222,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	return output, err
 }
 
-func (c *Client) signAndSendRequest(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (response *http.Response, err error) {
+func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (response *http.Response, err error) {
 	request := signingCtx.Request
 	retryer := opts.Retryer
 	body, _ := request.Body.(readers.ReadSeekerNopClose)
@@ -250,11 +237,13 @@ func (c *Client) signAndSendRequest(ctx context.Context, signingCtx *signer.Sign
 				err = &CanceledError{Err: err}
 				break
 			}
+
+			if _, err = body.Seek(bodyStart, io.SeekStart); err != nil {
+				break
+			}
 		}
 
-		response, err = c.signAndSendRequestOnce(ctx, signingCtx, opts)
-
-		if err == nil {
+		if response, err = c.sendHttpRequestOnce(ctx, signingCtx, opts); err == nil {
 			break
 		}
 
@@ -263,49 +252,36 @@ func (c *Client) signAndSendRequest(ctx context.Context, signingCtx *signer.Sign
 			break
 		}
 
-		if !retryer.IsErrorRetryable(err) {
-			break
-		}
-
 		if !readers.IsReaderSeekable(request.Body) {
 			break
 		}
 
-		_, err = body.Seek(bodyStart, io.SeekStart)
-		if err != nil {
+		if !retryer.IsErrorRetryable(err) {
 			break
 		}
 	}
 	return response, err
 }
 
-func (c *Client) signAndSendRequestOnce(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (
+func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (
 	response *http.Response, err error,
 ) {
 	cred, err := opts.CredentialsProvider.GetCredentials(ctx)
 	if err != nil {
 		return response, err
 	}
+
 	signingCtx.Credentials = &cred
-	err = c.options.Signer.Sign(ctx, signingCtx)
-	if err != nil {
-		return response, err
-	}
-	response, err = c.options.HttpClient.Do(signingCtx.Request)
-
-	if err != nil {
+	if err = c.options.Signer.Sign(ctx, signingCtx); err != nil {
 		return response, err
 	}
 
-	err = handleResponseServiceError(response)
-
-	if err != nil {
+	if response, err = c.options.HttpClient.Do(signingCtx.Request); err != nil {
 		return response, err
 	}
 
 	for _, fn := range opts.ResponseHandlers {
-		err = fn(response)
-		if err != nil {
+		if err = fn(response); err != nil {
 			return response, err
 		}
 	}
@@ -335,7 +311,7 @@ func buildURL(input *OperationInput, opts *Options) (string, string) {
 	return host, path
 }
 
-func handleResponseServiceError(response *http.Response) error {
+func serviceErrorResponseHandler(response *http.Response) error {
 	if response.StatusCode/100 == 2 {
 		return nil
 	}
@@ -348,7 +324,7 @@ func handleResponseServiceError(response *http.Response) error {
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 
-	se := ServiceError{
+	se := &ServiceError{
 		StatusCode:    response.StatusCode,
 		Code:          "BadErrorResponse",
 		RequestID:     response.Header.Get("x-oss-request-id"),
@@ -374,46 +350,32 @@ func handleResponseServiceError(response *http.Response) error {
 	return se
 }
 
-func defaultUserAgent() string {
-	return fmt.Sprintf("aliyun-sdk-go/%s (%s/%s/%s;%s)", Version(), runtime.GOOS,
-		"-", runtime.GOARCH, runtime.Version())
-}
-
-func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
-	val := reflect.ValueOf(request)
-	switch val.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		if val.IsNil() {
-			return nil
-		}
-		val = val.Elem()
-	}
-	if val.Kind() != reflect.Struct || input == nil {
-		return nil
+func applyOperationOpt(c *Options, op *Options) {
+	if c == nil || op == nil {
+		return
 	}
 
-	t := val.Type()
-	for k := 0; k < t.NumField(); k++ {
-		if v := val.Field(k); !isEmptyValue(v) {
-			if tag := t.Field(k).Tag.Get("input"); tag != "" {
-				tokens := strings.Split(tag, ",")
-				if len(tokens) < 2 {
-					continue
-				}
-				switch tokens[0] {
-				case "query":
-					if input.Parameters == nil {
-						input.Parameters = map[string]string{}
-					}
-					input.Parameters[tokens[1]] = fmt.Sprintf("%v", v.Interface())
-				case "header":
-					if input.Headers == nil {
-						input.Headers = map[string]string{}
-					}
-					input.Headers[tokens[1]] = fmt.Sprintf("%v", v.Interface())
-				}
-			}
-		}
+	if op.Endpoint != nil {
+		c.Endpoint = op.Endpoint
 	}
-	return nil
+
+	if op.RetryMaxAttempts > 0 {
+		c.RetryMaxAttempts = op.RetryMaxAttempts
+	}
+
+	if op.Retryer != nil {
+		c.Retryer = op.Retryer
+	}
+
+	if c.Retryer == nil {
+		c.Retryer = retry.NopRetryer{}
+	}
+
+	//response handler
+	handlers := []func(*http.Response) error{
+		serviceErrorResponseHandler,
+	}
+	handlers = append(handlers, c.ResponseHandlers...)
+	handlers = append(handlers, op.ResponseHandlers...)
+	c.ResponseHandlers = handlers
 }
