@@ -11,8 +11,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
-
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/util"
+	"time"
 )
 
 var requiredSignedParametersMap = map[string]string{
@@ -83,7 +82,7 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 	request := signingCtx.Request
 	cred := signingCtx.Credentials
 
-	signingCtx.Time = util.NowTime().UTC()
+	signingCtx.Time = time.Now().UTC()
 	request.Header.Set(dateHeader, signingCtx.Time.Format(http.TimeFormat))
 
 	if cred.SessionToken != "" {
@@ -105,8 +104,8 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 	sort.Strings(headers)
 	headerItems := make([]string, len(headers))
 	for i, k := range headers {
-		headerValues := make([]string, len(request.Header[k]))
-		for i, v := range request.Header[k] {
+		headerValues := make([]string, len(request.Header.Values(k)))
+		for i, v := range request.Header.Values(k) {
 			headerValues[i] = strings.TrimSpace(v)
 		}
 		headerItems[i] = k + ":" + strings.Join(headerValues, ",") + "\n"

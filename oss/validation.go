@@ -1,44 +1,10 @@
 package oss
 
 import (
-	"bytes"
 	"fmt"
+	"net/url"
 	"strings"
 )
-
-type InvalidParamsError struct {
-	Context string
-	errs    []InvalidParamError
-}
-
-func (e *InvalidParamsError) Add(err InvalidParamError) {
-	err.SetContext(e.Context)
-	e.errs = append(e.errs, err)
-}
-
-func (e *InvalidParamsError) Len() int {
-	return len(e.errs)
-}
-
-func (e InvalidParamsError) Error() string {
-	w := &bytes.Buffer{}
-	fmt.Fprintf(w, "%d validation error(s) found.\n", len(e.errs))
-
-	for _, err := range e.errs {
-		fmt.Fprintf(w, "- %s\n", err.Error())
-	}
-
-	return w.String()
-}
-
-func (e InvalidParamsError) Errs() []error {
-	errs := make([]error, len(e.errs))
-	for i := 0; i < len(errs); i++ {
-		errs[i] = e.errs[i]
-	}
-
-	return errs
-}
 
 type InvalidParamError interface {
 	error
@@ -81,4 +47,70 @@ func NewErrParamRequired(field string) *ParamRequiredError {
 			reason: fmt.Sprintf("missing required field"),
 		},
 	}
+}
+
+func NewErrParamInvalid(field string) *ParamRequiredError {
+	return &ParamRequiredError{
+		invalidParamError{
+			field:  field,
+			reason: fmt.Sprintf("invalid field"),
+		},
+	}
+}
+
+func isValidEndpoint(endpoint *url.URL) bool {
+	return (endpoint != nil)
+}
+
+func isValidBucketName(bucketName string) bool {
+	nameLen := len(bucketName)
+	if nameLen < 3 || nameLen > 63 {
+		return false
+	}
+
+	if bucketName[0] == '-' || bucketName[nameLen-1] == '-' {
+		return false
+	}
+
+	for _, v := range bucketName {
+		if !(('a' <= v && v <= 'z') || ('0' <= v && v <= '9') || v == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidObjectName(objectName string) bool {
+	if len(objectName) == 0 {
+		return false
+	}
+	return true
+}
+
+func validateBucketOpsInput(input *OperationInput) error {
+	if input == nil {
+		return nil
+	}
+
+	if !isValidBucketName(input.Bucket) {
+		return NewErrParamInvalid("Bucket")
+	}
+
+	if !isValidObjectName(input.Key) {
+		return NewErrParamInvalid("Key")
+	}
+
+	return nil
+}
+
+func validateObjectOpsInput(input *OperationInput) error {
+	if input == nil {
+		return nil
+	}
+
+	if !isValidBucketName(input.Bucket) {
+		return NewErrParamInvalid("Bucket")
+	}
+
+	return nil
 }

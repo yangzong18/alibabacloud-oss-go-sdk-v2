@@ -1,7 +1,6 @@
-package types
+package oss
 
 import (
-	"context"
 	"encoding/xml"
 	"fmt"
 	"net"
@@ -109,16 +108,6 @@ func IsNetworkError(err error) bool {
 	}
 
 	if r, ok := err.(net.Error); ok && (r.Temporary() || r.Timeout()) || strings.Contains(err.Error(), "net/http: HTTP/1.x transport connection broken") {
-		return true
-	}
-	return false
-}
-
-func ContextError(ctx context.Context, perr *error) bool {
-	if ctxErr := ctx.Err(); ctxErr != nil {
-		if *perr == nil {
-			*perr = ctxErr
-		}
 		return true
 	}
 	return false

@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"runtime"
 	"strings"
 	"time"
@@ -18,8 +18,6 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/retry"
 	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/signer"
 	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/transport"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/types"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/util"
 )
 
 type Options struct {
@@ -129,32 +127,7 @@ func resolveSigner(cfg *Config, o *Options) {
 	o.Signer = signer.SignerV1{}
 }
 
-type OperationInput struct {
-	OperationName string
-
-	Bucket string
-	Key    string
-
-	Method     string
-	Headers    map[string]string
-	Parameters map[string]string
-	Body       io.Reader
-
-	Metadata types.ApiMetadata
-}
-
-type OperationOutput struct {
-	input *OperationInput
-
-	Status     string
-	StatusCode int
-	Headers    http.Header
-	Body       io.ReadCloser
-
-	Metadata types.ApiMetadata
-}
-
-func (c *Client) InvokeOperation(ctx context.Context, input *OperationInput, optFns ...func(*Options)) (output *OperationOutput, err error) {
+func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
 	options := c.options.Copy()
 
 	for _, fn := range optFns {
@@ -170,7 +143,7 @@ func (c *Client) InvokeOperation(ctx context.Context, input *OperationInput, opt
 	output, err = c.sendRequest(ctx, input, &options)
 
 	if err != nil {
-		return output, &types.OperationError{
+		return output, &OperationError{
 			OperationName: input.OperationName,
 			Err:           err}
 	}
@@ -180,9 +153,10 @@ func (c *Client) InvokeOperation(ctx context.Context, input *OperationInput, opt
 
 func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *Options) (output *OperationOutput, err error) {
 	// covert input into httpRequest
-	if opts.Endpoint == nil {
-		return output, errors.New("Endpoint is nil")
+	if !isValidEndpoint(opts.Endpoint) {
+		return output, NewErrParamInvalid("Endpoint")
 	}
+
 	// host & path
 	host, path := buildURL(input, opts)
 	strUrl := fmt.Sprintf("%s://%s%s", opts.Endpoint.Scheme, host, path)
@@ -248,7 +222,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 
 	// covert http response into output context
 	output = &OperationOutput{
-		input:      input,
+		Input:      input,
 		Status:     response.Status,
 		StatusCode: response.StatusCode,
 		Body:       response.Body,
@@ -272,8 +246,8 @@ func (c *Client) signAndSendRequest(ctx context.Context, signingCtx *signer.Sign
 			if err != nil {
 				break
 			}
-			if err = util.SleepWithContext(ctx, delay); err != nil {
-				err = &types.CanceledError{Err: err}
+			if err = sleepWithContext(ctx, delay); err != nil {
+				err = &CanceledError{Err: err}
 				break
 			}
 		}
@@ -284,8 +258,8 @@ func (c *Client) signAndSendRequest(ctx context.Context, signingCtx *signer.Sign
 			break
 		}
 
-		if types.ContextError(ctx, &err) {
-			err = &types.CanceledError{Err: err}
+		if isContextError(ctx, &err) {
+			err = &CanceledError{Err: err}
 			break
 		}
 
@@ -348,7 +322,7 @@ func buildURL(input *OperationInput, opts *Options) (string, string) {
 	}
 
 	bucket := input.Bucket
-	object := util.EscapePath(input.Key, false)
+	object := escapePath(input.Key, false)
 
 	if bucket == "" {
 		host = opts.Endpoint.Host
@@ -368,13 +342,13 @@ func handleResponseServiceError(response *http.Response) error {
 
 	timestamp, err := time.Parse(http.TimeFormat, response.Header.Get("Date"))
 	if err != nil {
-		timestamp = util.NowTime()
+		timestamp = time.Now()
 	}
 
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
 
-	se := types.ServiceError{
+	se := ServiceError{
 		StatusCode:    response.StatusCode,
 		Code:          "BadErrorResponse",
 		RequestID:     response.Header.Get("x-oss-request-id"),
@@ -403,4 +377,43 @@ func handleResponseServiceError(response *http.Response) error {
 func defaultUserAgent() string {
 	return fmt.Sprintf("aliyun-sdk-go/%s (%s/%s/%s;%s)", Version(), runtime.GOOS,
 		"-", runtime.GOARCH, runtime.Version())
+}
+
+func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
+	val := reflect.ValueOf(request)
+	switch val.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct || input == nil {
+		return nil
+	}
+
+	t := val.Type()
+	for k := 0; k < t.NumField(); k++ {
+		if v := val.Field(k); !isEmptyValue(v) {
+			if tag := t.Field(k).Tag.Get("input"); tag != "" {
+				tokens := strings.Split(tag, ",")
+				if len(tokens) < 2 {
+					continue
+				}
+				switch tokens[0] {
+				case "query":
+					if input.Parameters == nil {
+						input.Parameters = map[string]string{}
+					}
+					input.Parameters[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+				case "header":
+					if input.Headers == nil {
+						input.Headers = map[string]string{}
+					}
+					input.Headers[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+				}
+			}
+		}
+	}
+	return nil
 }
