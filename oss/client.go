@@ -3,19 +3,23 @@ package oss
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/readers"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/retry"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/signer"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/transport"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/signer"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
 )
 
 type Options struct {
@@ -131,8 +135,8 @@ func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, opt
 
 	if err != nil {
 		return output, &OperationError{
-			OperationName: input.OperationName,
-			Err:           err}
+			name: input.OpName,
+			err:  err}
 	}
 
 	return output, err
@@ -190,10 +194,10 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	request.Body = body
 
 	//signing context
-	subResource, _ := input.Metadata.Get(signer.SubResource).([]string)
+	subResource, _ := input.OpMetadata.Get(signer.SubResource).([]string)
 	signingCtx := &signer.SigningContext{
-		Product:     "oss",
-		Region:      opts.Region,
+		Product:     Ptr("oss"),
+		Region:      Ptr(opts.Region),
 		Bucket:      input.Bucket,
 		Key:         input.Key,
 		Request:     request,
@@ -266,14 +270,16 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (
 	response *http.Response, err error,
 ) {
-	cred, err := opts.CredentialsProvider.GetCredentials(ctx)
-	if err != nil {
-		return response, err
-	}
+	if _, anonymous := opts.CredentialsProvider.(*credentials.AnonymousCredentialsProvider); !anonymous {
+		cred, err := opts.CredentialsProvider.GetCredentials(ctx)
+		if err != nil {
+			return response, err
+		}
 
-	signingCtx.Credentials = &cred
-	if err = c.options.Signer.Sign(ctx, signingCtx); err != nil {
-		return response, err
+		signingCtx.Credentials = &cred
+		if err = c.options.Signer.Sign(ctx, signingCtx); err != nil {
+			return response, err
+		}
 	}
 
 	if response, err = c.options.HttpClient.Do(signingCtx.Request); err != nil {
@@ -289,23 +295,20 @@ func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.Sig
 	return response, err
 }
 
-func buildURL(input *OperationInput, opts *Options) (string, string) {
-	var host = ""
-	var path = ""
-
+func buildURL(input *OperationInput, opts *Options) (host string, path string) {
 	if input == nil || opts == nil || opts.Endpoint == nil {
 		return host, path
 	}
 
-	bucket := input.Bucket
-	object := escapePath(input.Key, false)
-
-	if bucket == "" {
+	if input.Bucket == nil {
 		host = opts.Endpoint.Host
-		path = "/"
 	} else {
-		host = bucket + "." + opts.Endpoint.Host
-		path = "/" + object
+		host = fmt.Sprintf("%s.%s", *input.Bucket, opts.Endpoint.Host)
+	}
+
+	path = "/"
+	if input.Key != nil {
+		path += escapePath(*input.Key, false)
 	}
 
 	return host, path
@@ -379,3 +382,229 @@ func applyOperationOpt(c *Options, op *Options) {
 	handlers = append(handlers, op.ResponseHandlers...)
 	c.ResponseHandlers = handlers
 }
+
+func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
+	// merge common fields
+	if cm, ok := request.(RequestCommonInterface); ok {
+		h, p, b := cm.GetCommonFileds()
+		// headers
+		if len(h) > 0 {
+			if input.Headers == nil {
+				input.Headers = map[string]string{}
+			}
+			for k, v := range h {
+				input.Headers[k] = v
+			}
+		}
+
+		// parameters
+		if len(p) > 0 {
+			if input.Parameters == nil {
+				input.Parameters = map[string]string{}
+			}
+			for k, v := range p {
+				input.Parameters[k] = v
+			}
+		}
+
+		// body
+		input.Body = b
+	}
+
+	val := reflect.ValueOf(request)
+	switch val.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct || input == nil {
+		return nil
+	}
+
+	t := val.Type()
+	for k := 0; k < t.NumField(); k++ {
+		if v := val.Field(k); !isEmptyValue(v) {
+			if tag := t.Field(k).Tag.Get("input"); tag != "" {
+				tokens := strings.Split(tag, ",")
+				if len(tokens) < 2 {
+					continue
+				}
+				switch tokens[0] {
+				case "query":
+					if input.Parameters == nil {
+						input.Parameters = map[string]string{}
+					}
+					if v.Kind() == reflect.Pointer {
+						v = v.Elem()
+					}
+					input.Parameters[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+				case "header":
+					if input.Headers == nil {
+						input.Headers = map[string]string{}
+					}
+					if v.Kind() == reflect.Pointer {
+						v = v.Elem()
+					}
+					input.Headers[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+				case "xmlbody":
+					var b bytes.Buffer
+					if err := xml.NewEncoder(&b).EncodeElement(
+						v.Interface(),
+						xml.StartElement{Name: xml.Name{Local: tokens[1]}}); err != nil {
+						return &SerializationError{
+							Err: err,
+						}
+					}
+					input.Body = bytes.NewReader(b.Bytes())
+				case "usermeta":
+					if input.Headers == nil {
+						input.Headers = map[string]string{}
+					}
+					if v.Kind() == reflect.Pointer {
+						v = v.Elem()
+					}
+					if m, ok := v.Interface().(map[string]string); ok {
+						for k, v := range m {
+							input.Headers[tokens[1]+k] = v
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func discardBody(result interface{}, output *OperationOutput) error {
+	var err error
+	if output.Body != nil {
+		defer output.Body.Close()
+		_, err = io.ReadAll(output.Body)
+	}
+	return err
+}
+
+func unmarshalBodyXml(result interface{}, output *OperationOutput) error {
+	var err error
+	var body []byte
+	if output.Body != nil {
+		defer output.Body.Close()
+		if body, err = io.ReadAll(output.Body); err != nil {
+			return err
+		}
+	}
+	if len(body) > 0 {
+		if err = xml.Unmarshal(body, result); err != nil {
+			err = &DeserializationError{
+				Err:      err,
+				Snapshot: body,
+			}
+		}
+	}
+	return err
+}
+
+func unmarshalBodyDefault(result interface{}, output *OperationOutput) error {
+	var err error
+	var body []byte
+	if output.Body != nil {
+		defer output.Body.Close()
+		if body, err = io.ReadAll(output.Body); err != nil {
+			return err
+		}
+	}
+
+	// extract body
+	if len(body) > 0 {
+		contentType := output.Headers.Get("Content-Type")
+		switch contentType {
+		case "application/xml":
+			err = xml.Unmarshal(body, result)
+		case "application/json":
+			err = json.Unmarshal(body, result)
+		default:
+			err = fmt.Errorf("unsupport contentType:%s", contentType)
+		}
+
+		if err != nil {
+			err = &DeserializationError{
+				Err:      err,
+				Snapshot: body,
+			}
+		}
+	}
+	return err
+}
+
+func unmarshalHeader(result interface{}, output *OperationOutput) error {
+	return nil
+}
+
+func (c *Client) unmarshalOutput(result interface{}, output *OperationOutput, handlers ...func(interface{}, *OperationOutput) error) error {
+	// Common
+	if cm, ok := result.(ResultCommonInterface); ok {
+		cm.CopyIn(output.Status, output.StatusCode, output.Headers, output.OpMetadata)
+	}
+
+	var err error
+	for _, h := range handlers {
+		if err = h(result, output); err != nil {
+			break
+		}
+	}
+	return err
+}
+
+func (c *Client) updateContentMd5(input *OperationInput) error {
+	var err error
+	var contentMd5 string
+	if input.Body != nil {
+		var r io.ReadSeeker
+		if r, ok := input.Body.(io.ReadSeeker); !ok {
+			buf, _ := io.ReadAll(input.Body)
+			r = bytes.NewReader(buf)
+			input.Body = r
+		}
+		h := md5.New()
+		if _, err = copySeekableBody(h, r); err != nil {
+			// error
+		} else {
+			contentMd5 = base64.StdEncoding.EncodeToString(h.Sum(nil))
+		}
+	} else {
+		contentMd5 = "1B2M2Y8AsgTpgAmY7PhCfg=="
+	}
+
+	// set content-md5 and content-type
+	if err == nil {
+		if input.Headers == nil {
+			input.Headers = map[string]string{}
+		}
+		input.Headers["Content-Md5"] = contentMd5
+	}
+
+	return err
+}
+
+func (c *Client) toClientError(err error, code string, output *OperationOutput) error {
+	if err == nil {
+		return nil
+	}
+
+	return &ClientError{
+		Code: code,
+		Message: fmt.Sprintf("execute %s fail, error code is %s, request id:%s",
+			output.Input.OpName,
+			code,
+			output.Headers.Get(HeaderOssRequestID),
+		),
+		Err: err}
+}
+
+// Content-Type
+const (
+	contentTypeDefault string = "application/octet-stream"
+	contentTypeXML            = "application/xml"
+)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 	"runtime"
@@ -93,4 +94,23 @@ func isContextError(ctx context.Context, perr *error) bool {
 		return true
 	}
 	return false
+}
+
+func copySeekableBody(dst io.Writer, src io.ReadSeeker) (int64, error) {
+	curPos, err := src.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return 0, err
+	}
+
+	n, err := io.Copy(dst, src)
+	if err != nil {
+		return n, err
+	}
+
+	_, err = src.Seek(curPos, io.SeekStart)
+	if err != nil {
+		return n, err
+	}
+
+	return n, nil
 }

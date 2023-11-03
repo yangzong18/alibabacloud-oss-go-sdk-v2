@@ -6,15 +6,15 @@ import (
 	"io"
 	"strings"
 
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/signer"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/signer"
 )
 
 func main() {
 
 	var body []byte
-	BucketName := "skyranch-02-hz-test"
+	BucketName := "bucket-name"
 	provider, _ := credentials.NewEnvironmentVariableCredentialsProvider()
 
 	cfg := oss.LoadDefaultConfig().
@@ -26,9 +26,9 @@ func main() {
 
 	// 子资源在缺省子资源列表
 	input := &oss.OperationInput{
-		OperationName: "GetBucketAcl",
-		Bucket:        BucketName,
-		Method:        "GET",
+		OpName: "GetBucketAcl",
+		Bucket: oss.Ptr(BucketName),
+		Method: "GET",
 		Parameters: map[string]string{
 			"acl": "",
 		}}
@@ -42,13 +42,13 @@ func main() {
 
 	// 子资源不在缺省子资源列表
 	input = &oss.OperationInput{
-		OperationName: "GetBucketResourceGroup",
-		Bucket:        BucketName,
-		Method:        "GET",
+		OpName: "GetBucketResourceGroup",
+		Bucket: oss.Ptr(BucketName),
+		Method: "GET",
 		Parameters: map[string]string{
 			"resourceGroup": "",
 		}}
-	input.Metadata.Set(signer.SubResource, []string{"resourceGroup"})
+	input.OpMetadata.Set(signer.SubResource, []string{"resourceGroup"})
 	output, err = client.InvokeOperation(context.TODO(), input)
 	body = nil
 	if output != nil && output.Body != nil {
@@ -59,11 +59,11 @@ func main() {
 
 	// 通过PutObject上传
 	input = &oss.OperationInput{
-		OperationName: "PutObject",
-		Bucket:        BucketName,
-		Key:           "test-key.txt",
-		Method:        "PUT",
-		Body:          strings.NewReader("hello world"),
+		OpName: "PutObject",
+		Bucket: oss.Ptr(BucketName),
+		Key:    oss.Ptr("test-key.txt"),
+		Method: "PUT",
+		Body:   strings.NewReader("hello world"),
 	}
 	output, err = client.InvokeOperation(context.TODO(), input)
 	body = nil
@@ -75,10 +75,10 @@ func main() {
 
 	// 通过GetObject获取数据
 	input = &oss.OperationInput{
-		OperationName: "GetObject",
-		Bucket:        BucketName,
-		Key:           "test-key.txt",
-		Method:        "GET",
+		OpName: "GetObject",
+		Bucket: oss.Ptr(BucketName),
+		Key:    oss.Ptr("test-key.txt"),
+		Method: "GET",
 	}
 	output, err = client.InvokeOperation(context.TODO(), input)
 	body = nil
@@ -90,11 +90,12 @@ func main() {
 
 	// 使用基础接口
 	listObjectsRequest := &oss.ListObjectsRequest{
-		Bucket: BucketName,
+		Bucket: oss.Ptr(BucketName),
+		Prefix: oss.Ptr("skyranch"),
 	}
 	listObjectsResult, err := client.ListObjects(context.TODO(), listObjectsRequest)
 	fmt.Printf("client.ListObjects \nrequest:%+v, \nresult: %+v \nerr:%+v\n", listObjectsRequest, listObjectsResult, err)
 
 	opt := oss.Options{}
-	fmt.Printf("Options \nopt:%+v", opt)
+	fmt.Printf("Options \nopt:%v", opt)
 }

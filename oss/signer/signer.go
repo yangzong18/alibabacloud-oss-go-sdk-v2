@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
 )
 
 const (
@@ -14,18 +14,19 @@ const (
 
 type SigningContext struct {
 	//input
-	Product string
-	Region  string
-	Bucket  string
-	Key     string
+	Product *string
+	Region  *string
+	Bucket  *string
+	Key     *string
 	Request *http.Request
 
 	SubResource []string
 
+	Credentials *credentials.Credentials
+
 	// output
-	Credentials   *credentials.Credentials
+	SignedHeaders map[string]string
 	Time          time.Time
-	SignedHeaders http.Header
 	StringToSign  string
 }
 

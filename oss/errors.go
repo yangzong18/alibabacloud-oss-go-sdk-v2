@@ -40,20 +40,20 @@ type ClientError struct {
 func (e *ClientError) Unwrap() error { return e.Err }
 
 func (e *ClientError) Error() string {
-	return fmt.Sprintf("client error: %v", e.Err)
+	return fmt.Sprintf("client error: %v, %v", e.Message, e.Err)
 }
 
 type OperationError struct {
-	OperationName string
-	Err           error
+	name string
+	err  error
 }
 
-func (e *OperationError) Operation() string { return e.OperationName }
+func (e *OperationError) Operation() string { return e.name }
 
-func (e *OperationError) Unwrap() error { return e.Err }
+func (e *OperationError) Unwrap() error { return e.err }
 
 func (e *OperationError) Error() string {
-	return fmt.Sprintf("operation error %s: %v", e.OperationName, e.Err)
+	return fmt.Sprintf("operation error %s: %v", e.name, e.err)
 }
 
 type DeserializationError struct {

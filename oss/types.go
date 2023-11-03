@@ -42,27 +42,46 @@ func (m OperationMetadata) Has(key interface{}) bool {
 type RequestCommon struct {
 	Headers    map[string]string
 	Parameters map[string]string
+	Body       io.Reader
+}
+
+type RequestCommonInterface interface {
+	GetCommonFileds() (map[string]string, map[string]string, io.Reader)
+}
+
+func (r *RequestCommon) GetCommonFileds() (map[string]string, map[string]string, io.Reader) {
+	return r.Headers, r.Parameters, r.Body
 }
 
 type ResultCommon struct {
 	Status     string
 	StatusCode int
 	Headers    http.Header
-	Metadata   OperationMetadata
+	OpMetadata OperationMetadata
+}
+
+type ResultCommonInterface interface {
+	CopyIn(status string, statusCode int, headers http.Header, meta OperationMetadata)
+}
+
+func (r *ResultCommon) CopyIn(status string, statusCode int, headers http.Header, meta OperationMetadata) {
+	r.Status = status
+	r.StatusCode = statusCode
+	r.Headers = headers
+	r.OpMetadata = meta
 }
 
 type OperationInput struct {
-	OperationName string
-
-	Bucket string
-	Key    string
-
+	OpName     string
 	Method     string
 	Headers    map[string]string
 	Parameters map[string]string
 	Body       io.Reader
 
-	Metadata OperationMetadata
+	Bucket *string
+	Key    *string
+
+	OpMetadata OperationMetadata
 }
 
 type OperationOutput struct {
@@ -73,5 +92,5 @@ type OperationOutput struct {
 	Headers    http.Header
 	Body       io.ReadCloser
 
-	Metadata OperationMetadata
+	OpMetadata OperationMetadata
 }

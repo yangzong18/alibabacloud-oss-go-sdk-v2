@@ -54,6 +54,7 @@ const (
 	contentTypeHeader = "Content-Type"
 	contentMd5Header  = "Content-MD5"
 	ossHeaderPreifx   = "x-oss-"
+	ossDateHeader     = "x-oss-date"
 )
 
 type SignerV1 struct {
@@ -79,11 +80,29 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 			+ CanonicalizedResource
 		Signature = base64(hmac-sha1(AccessKeySecret, SignToString))
 	*/
+	if signingCtx == nil {
+		return fmt.Errorf("SigningContext is null.")
+	}
+
+	if signingCtx.Credentials == nil || !signingCtx.Credentials.HasKeys() {
+		return fmt.Errorf("SigningContext.Credentials is null or empty.")
+	}
+
+	if signingCtx.Request == nil {
+		return fmt.Errorf("SigningContext.Request is null.")
+	}
+
 	request := signingCtx.Request
 	cred := signingCtx.Credentials
 
-	signingCtx.Time = time.Now().UTC()
-	request.Header.Set(dateHeader, signingCtx.Time.Format(http.TimeFormat))
+	date := request.Header.Get(ossDateHeader)
+	if len(date) == 0 {
+		signingCtx.Time = time.Now().UTC()
+		date = signingCtx.Time.Format(http.TimeFormat)
+	} else {
+		signingCtx.Time, _ = http.ParseTime(date)
+	}
+	request.Header.Set(dateHeader, date)
 
 	if cred.SessionToken != "" {
 		request.Header.Set(securityTokenHeader, cred.SessionToken)
@@ -91,7 +110,6 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 
 	contentMd5 := request.Header.Get(contentMd5Header)
 	contentType := request.Header.Get(contentTypeHeader)
-	date := request.Header.Get(dateHeader)
 
 	//CanonicalizedOSSHeaders
 	var headers []string
@@ -135,14 +153,15 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 		}
 	}
 	subResource := strings.Join(paramItems, "&")
-	if subResource != "" {
-		subResource = "?" + subResource
+	canonicalizedResource := "/"
+	if signingCtx.Bucket != nil {
+		canonicalizedResource += *signingCtx.Bucket + "/"
 	}
-	var canonicalizedResource string
-	if signingCtx.Bucket == "" {
-		canonicalizedResource = fmt.Sprintf("/%s%s", signingCtx.Bucket, subResource)
-	} else {
-		canonicalizedResource = fmt.Sprintf("/%s/%s%s", signingCtx.Bucket, signingCtx.Key, subResource)
+	if signingCtx.Key != nil {
+		canonicalizedResource += *signingCtx.Key
+	}
+	if subResource != "" {
+		canonicalizedResource += "?" + subResource
 	}
 
 	// string to Sign

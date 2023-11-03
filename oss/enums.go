@@ -1,118 +1,81 @@
 package oss
 
-// ACLType bucket/object ACL
-type ACLType string
+// The access control list (ACL) of the bucket
+type BucketACLType string
 
+// Enum values for BucketACLType
 const (
-	// ACLPrivate definition : private read and write
-	ACLPrivate ACLType = "private"
+	// Only the bucket owner can perform read and write operations on objects in the bucket.
+	// Other users cannot access the objects in the bucket.
+	BucketACLPrivate BucketACLType = "private"
 
-	// ACLPublicRead definition : public read and private write
-	ACLPublicRead ACLType = "public-read"
+	// Only the bucket owner can write data to objects in the bucket.
+	// Other users, including anonymous users, can only read objects in the bucket.
+	BucketACLPublicRead BucketACLType = "public-read"
 
-	// ACLPublicReadWrite definition : public read and public write
-	ACLPublicReadWrite ACLType = "public-read-write"
-
-	// ACLDefault Object. It's only applicable for object.
-	ACLDefault ACLType = "default"
+	// All users, including anonymous users, can perform read and write operations on the bucket.
+	BucketACLPublicReadWrite BucketACLType = "public-read-write"
 )
 
-// bucket versioning status
-type VersioningStatus string
-
-const (
-	// Versioning Status definition: Enabled
-	VersionEnabled VersioningStatus = "Enabled"
-
-	// Versioning Status definition: Suspended
-	VersionSuspended VersioningStatus = "Suspended"
-)
-
-// MetadataDirectiveType specifying whether use the metadata of source object when copying object.
-type MetadataDirectiveType string
-
-const (
-	// MetaCopy the target object's metadata is copied from the source one
-	MetaCopy MetadataDirectiveType = "COPY"
-
-	// MetaReplace the target object's metadata is created as part of the copy request (not same as the source one)
-	MetaReplace MetadataDirectiveType = "REPLACE"
-)
-
-// TaggingDirectiveType specifying whether use the tagging of source object when copying object.
-type TaggingDirectiveType string
-
-const (
-	// TaggingCopy the target object's tagging is copied from the source one
-	TaggingCopy TaggingDirectiveType = "COPY"
-
-	// TaggingReplace the target object's tagging is created as part of the copy request (not same as the source one)
-	TaggingReplace TaggingDirectiveType = "REPLACE"
-)
-
-// AlgorithmType specifying the server side encryption algorithm name
-type AlgorithmType string
-
-const (
-	KMSAlgorithm AlgorithmType = "KMS"
-	AESAlgorithm AlgorithmType = "AES256"
-	SM4Algorithm AlgorithmType = "SM4"
-)
-
-// StorageClassType bucket storage type
+// The storage class of the bucket
 type StorageClassType string
 
+// Enum values for StorageClassType
 const (
-	// StorageStandard standard
-	StorageStandard StorageClassType = "Standard"
+	// Standard provides highly reliable, highly available,
+	// and high-performance object storage for data that is frequently accessed.
+	StorageClassStandard StorageClassType = "Standard"
 
-	// StorageIA infrequent access
-	StorageIA StorageClassType = "IA"
+	// IA provides highly durable storage at lower prices compared with Standard.
+	// IA has a minimum billable size of 64 KB and a minimum billable storage duration of 30 days.
+	StorageClassIA StorageClassType = "IA"
 
-	// StorageArchive archive
-	StorageArchive StorageClassType = "Archive"
+	// Archive provides high-durability storage at lower prices compared with Standard and IA.
+	// Archive has a minimum billable size of 64 KB and a minimum billable storage duration of 60 days.
+	StorageClassArchive StorageClassType = "Archive"
 
-	// StorageColdArchive cold archive
-	StorageColdArchive StorageClassType = "ColdArchive"
+	// Cold Archive provides highly durable storage at lower prices compared with Archive.
+	// Cold Archive has a minimum billable size of 64 KB and a minimum billable storage duration of 180 days.
+	StorageClassColdArchive StorageClassType = "ColdArchive"
 
-	// StorageDeepColdArchive deep cold archive
-	StorageDeepColdArchive StorageClassType = "DeepColdArchive"
+	// Deep Cold Archive provides highly durable storage at lower prices compared with Cold Archive.
+	// Deep Cold Archive has a minimum billable size of 64 KB and a minimum billable storage duration of 180 days.
+	StorageClassDeepColdArchive StorageClassType = "DeepColdArchive"
 )
 
-// RedundancyType bucket data Redundancy type
+// The redundancy type of the bucket
 type DataRedundancyType string
 
+// Enum values for BucketACLType
 const (
-	// RedundancyLRS Local redundancy, default value
-	RedundancyLRS DataRedundancyType = "LRS"
+	// Locally redundant storage (LRS) stores copies of each object across different devices in the same zone.
+	// This ensures data reliability and availability even if two storage devices are damaged at the same time.
+	DataRedundancyLRS DataRedundancyType = "LRS"
 
-	// RedundancyZRS Same city redundancy
-	RedundancyZRS DataRedundancyType = "ZRS"
+	// Zone-redundant storage (ZRS) uses the multi-zone mechanism to distribute user data across
+	// multiple zones in the same region. If one zone becomes unavailable, you can continue to access the data
+	// that is stored in other zones.
+	DataRedundancyZRS DataRedundancyType = "ZRS"
 )
 
-// PayerType the type of request payer
-type PayerType string
+// The access control list (ACL) of the object
+type ObjectACLType string
 
+// Enum values for ObjectACLType
 const (
-	// Requester the requester who send the request
-	Requester PayerType = "Requester"
+	// Only the object owner is allowed to perform read and write operations on the object.
+	// Other users cannot access the object.
+	ObjectACLPrivate ObjectACLType = "private"
 
-	// BucketOwner the requester who send the request
-	BucketOwner PayerType = "BucketOwner"
-)
+	// Only the object owner can write data to the object.
+	// Other users, including anonymous users, can only read the object.
+	ObjectACLPublicRead ObjectACLType = "public-read"
 
-// RestoreMode the restore mode for coldArchive object
-type RestoreMode string
+	// All users, including anonymous users, can perform read and write operations on the object.
+	ObjectACLPublicReadWrite ObjectACLType = "public-read-write"
 
-const (
-	//RestoreExpedited object will be restored in 1 hour
-	RestoreExpedited RestoreMode = "Expedited"
-
-	//RestoreStandard object will be restored in 2-5 hours
-	RestoreStandard RestoreMode = "Standard"
-
-	//RestoreBulk object will be restored in 5-10 hours
-	RestoreBulk RestoreMode = "Bulk"
+	// The ACL of the object is the same as that of the bucket in which the object is stored.
+	ObjectACLDefault ObjectACLType = "default"
 )
 
 // OSS headers
@@ -153,6 +116,31 @@ const (
 	HeaderOssContentSha256                      = "X-Oss-Content-Sha256"
 	HeaderOssEC                                 = "X-Oss-Ec"
 	HeaderOssERR                                = "X-Oss-Err"
+)
+
+// HTTP headers
+const (
+	HTTPHeaderAcceptEncoding     string = "Accept-Encoding"
+	HTTPHeaderAuthorization             = "Authorization"
+	HTTPHeaderCacheControl              = "Cache-Control"
+	HTTPHeaderContentDisposition        = "Content-Disposition"
+	HTTPHeaderContentEncoding           = "Content-Encoding"
+	HTTPHeaderContentLength             = "Content-Length"
+	HTTPHeaderContentMD5                = "Content-MD5"
+	HTTPHeaderContentType               = "Content-Type"
+	HTTPHeaderContentLanguage           = "Content-Language"
+	HTTPHeaderDate                      = "Date"
+	HTTPHeaderEtag                      = "ETag"
+	HTTPHeaderExpires                   = "Expires"
+	HTTPHeaderHost                      = "Host"
+	HTTPHeaderLastModified              = "Last-Modified"
+	HTTPHeaderRange                     = "Range"
+	HTTPHeaderLocation                  = "Location"
+	HTTPHeaderUserAgent                 = "User-Agent"
+	HTTPHeaderIfModifiedSince           = "If-Modified-Since"
+	HTTPHeaderIfUnmodifiedSince         = "If-Unmodified-Since"
+	HTTPHeaderIfMatch                   = "If-Match"
+	HTTPHeaderIfNoneMatch               = "If-None-Match"
 )
 
 // AuthVersion the version of auth

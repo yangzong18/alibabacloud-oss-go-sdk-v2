@@ -3,14 +3,15 @@ package oss
 import (
 	"net/http"
 
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/retry"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
 )
 
 type Config struct {
-	// The region to send requests to.
+	// The region in which the bucket is located.
 	Region string
 
+	// The domain names that other services can use to access OSS.
 	Endpoint string
 
 	// RetryMaxAttempts specifies the maximum number attempts an API client will call
