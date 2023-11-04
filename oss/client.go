@@ -397,102 +397,6 @@ const (
 	fTypeTime
 )
 
-/*
-func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
-	// merge common fields
-	if cm, ok := request.(RequestCommonInterface); ok {
-		h, p, b := cm.GetCommonFileds()
-		// headers
-		if len(h) > 0 {
-			if input.Headers == nil {
-				input.Headers = map[string]string{}
-			}
-			for k, v := range h {
-				input.Headers[k] = v
-			}
-		}
-
-		// parameters
-		if len(p) > 0 {
-			if input.Parameters == nil {
-				input.Parameters = map[string]string{}
-			}
-			for k, v := range p {
-				input.Parameters[k] = v
-			}
-		}
-
-		// body
-		input.Body = b
-	}
-
-	val := reflect.ValueOf(request)
-	switch val.Kind() {
-	case reflect.Pointer, reflect.Interface:
-		if val.IsNil() {
-			return nil
-		}
-		val = val.Elem()
-	}
-	if val.Kind() != reflect.Struct || input == nil {
-		return nil
-	}
-
-	t := val.Type()
-	for k := 0; k < t.NumField(); k++ {
-		if v := val.Field(k); !isEmptyValue(v) {
-			if tag := t.Field(k).Tag.Get("input"); tag != "" {
-				tokens := strings.Split(tag, ",")
-				if len(tokens) < 2 {
-					continue
-				}
-				switch tokens[0] {
-				case "query":
-					if input.Parameters == nil {
-						input.Parameters = map[string]string{}
-					}
-					if v.Kind() == reflect.Pointer {
-						v = v.Elem()
-					}
-					input.Parameters[tokens[1]] = fmt.Sprintf("%v", v.Interface())
-				case "header":
-					if input.Headers == nil {
-						input.Headers = map[string]string{}
-					}
-					if v.Kind() == reflect.Pointer {
-						v = v.Elem()
-					}
-					input.Headers[tokens[1]] = fmt.Sprintf("%v", v.Interface())
-				case "xmlbody":
-					var b bytes.Buffer
-					if err := xml.NewEncoder(&b).EncodeElement(
-						v.Interface(),
-						xml.StartElement{Name: xml.Name{Local: tokens[1]}}); err != nil {
-						return &SerializationError{
-							Err: err,
-						}
-					}
-					input.Body = bytes.NewReader(b.Bytes())
-				case "usermeta":
-					if input.Headers == nil {
-						input.Headers = map[string]string{}
-					}
-					if v.Kind() == reflect.Pointer {
-						v = v.Elem()
-					}
-					if m, ok := v.Interface().(map[string]string); ok {
-						for k, v := range m {
-							input.Headers[tokens[1]+k] = v
-						}
-					}
-				}
-			}
-		}
-	}
-	return nil
-}
-*/
-
 func parseFiledFlags(tokens []string) int {
 	var flags int = 0
 	for _, token := range tokens {
@@ -553,7 +457,7 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput) error 
 	t := val.Type()
 	for k := 0; k < t.NumField(); k++ {
 		if tag, ok := t.Field(k).Tag.Lookup("input"); ok {
-			// header|query|body,filed_name,[require,time,usermeta...]
+			// header|query|body,filed_name,[required,time,usermeta...]
 			v := val.Field(k)
 			var flags int = 0
 			tokens := strings.Split(tag, ",")
@@ -700,7 +604,7 @@ func unmarshalHeader(result interface{}, output *OperationOutput) error {
 			if len(tokens) < 2 {
 				continue
 			}
-			// header|query|body,filed_name,[require,time,usermeta...]
+			// header|query|body,filed_name,[required,time,usermeta...]
 			switch tokens[0] {
 			case "header":
 				lowkey := strings.ToLower(tokens[1])
