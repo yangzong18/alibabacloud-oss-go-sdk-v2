@@ -3,11 +3,15 @@ package oss
 import (
 	"bytes"
 	"context"
+	"encoding"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"reflect"
 	"runtime"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -79,6 +83,76 @@ func isEmptyValue(v reflect.Value) bool {
 		return v.IsNil()
 	}
 	return false
+}
+
+func setTimeReflectValue(dst reflect.Value, value time.Time) (err error) {
+	dst0 := dst
+	if dst.Kind() == reflect.Pointer {
+		if dst.IsNil() {
+			dst.Set(reflect.New(dst.Type().Elem()))
+		}
+		dst = dst.Elem()
+	}
+	if dst.CanAddr() {
+		pv := dst.Addr()
+		if pv.CanInterface() {
+			if val, ok := pv.Interface().(encoding.TextUnmarshaler); ok {
+				return val.UnmarshalText([]byte(value.Format(time.RFC3339)))
+			}
+		}
+	}
+	return errors.New("cannot unmarshal into " + dst0.Type().String())
+}
+
+func setReflectValue(dst reflect.Value, data string) (err error) {
+	dst0 := dst
+	src := []byte(data)
+
+	if dst.Kind() == reflect.Pointer {
+		if dst.IsNil() {
+			dst.Set(reflect.New(dst.Type().Elem()))
+		}
+		dst = dst.Elem()
+	}
+
+	switch dst.Kind() {
+	case reflect.Invalid:
+	default:
+		return errors.New("cannot unmarshal into " + dst0.Type().String())
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if len(src) == 0 {
+			dst.SetInt(0)
+			return nil
+		}
+		itmp, err := strconv.ParseInt(strings.TrimSpace(string(src)), 10, dst.Type().Bits())
+		if err != nil {
+			return err
+		}
+		dst.SetInt(itmp)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		if len(src) == 0 {
+			dst.SetUint(0)
+			return nil
+		}
+		utmp, err := strconv.ParseUint(strings.TrimSpace(string(src)), 10, dst.Type().Bits())
+		if err != nil {
+			return err
+		}
+		dst.SetUint(utmp)
+	case reflect.Bool:
+		if len(src) == 0 {
+			dst.SetBool(false)
+			return nil
+		}
+		value, err := strconv.ParseBool(strings.TrimSpace(string(src)))
+		if err != nil {
+			return err
+		}
+		dst.SetBool(value)
+	case reflect.String:
+		dst.SetString(string(src))
+	}
+	return nil
 }
 
 func defaultUserAgent() string {

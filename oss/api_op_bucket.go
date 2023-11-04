@@ -19,7 +19,7 @@ type PutBucketRequest struct {
 	ResourceGroupId *string `input:"header,x-oss-resource-group-id"`
 
 	// The configuration information for the bucket.
-	CreateBucketConfiguration *CreateBucketConfiguration `input:"xmlbody,CreateBucketConfiguration"`
+	CreateBucketConfiguration *CreateBucketConfiguration `input:"body,CreateBucketConfiguration,xml"`
 
 	RequestCommon
 }

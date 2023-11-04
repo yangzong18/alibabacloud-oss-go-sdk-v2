@@ -89,3 +89,30 @@ func TestUnmarshalOutput_encodetype(t *testing.T) {
 	assert.Equal(t, "oss.jpg", result.Contents[2].Key)
 	assert.Len(t, result.CommonPrefixes, 0)
 }
+
+func TestUnmarshalOutput_encodetype1(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+		<ListBucketResult xmlns="http://doc.oss-cn-hangzhou.aliyuncs.com">
+			<Contents>
+				<LastModified>2012-02-24T08:43:07.000Z</LastModified>
+			</Contents>
+		</ListBucketResult>`
+
+	// unsupport content-type
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"Content-Type": {"application/xml"},
+		},
+	}
+	result := &ListObjectsResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+}

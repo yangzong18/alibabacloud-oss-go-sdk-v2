@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
 	"github.com/stretchr/testify/assert"
@@ -121,7 +122,7 @@ type xmlbodyRequest struct {
 	StrHostPrtField    *string        `input:"host,bucket,required"`
 	StrQueryPrtField   *string        `input:"query,str-field"`
 	StrHeaderPrtField  *string        `input:"header,x-oss-str-field"`
-	StructBodyPrtField *xmlBodyConfig `input:"xmlbody,BodyConfiguration"`
+	StructBodyPrtField *xmlBodyConfig `input:"body,BodyConfiguration,xml"`
 }
 
 type xmlBodyConfig struct {
@@ -161,10 +162,10 @@ func TestMarshalInput_xmlbody(t *testing.T) {
 }
 
 type commonStubRequest struct {
-	StrHostPrtField    *string        `input:"host,bucket,required"`
+	StrHostPrtField    *string        `input:"host,bucket"`
 	StrQueryPrtField   *string        `input:"query,str-field"`
 	StrHeaderPrtField  *string        `input:"header,x-oss-str-field"`
-	StructBodyPrtField *xmlBodyConfig `input:"xmlbody,BodyConfiguration"`
+	StructBodyPrtField *xmlBodyConfig `input:"body,BodyConfiguration,xml"`
 	RequestCommon
 }
 
@@ -308,8 +309,8 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 type usermetaRequest struct {
 	StrQueryPrtField  *string           `input:"query,str-field"`
 	StrHeaderPrtField *string           `input:"header,x-oss-str-field"`
-	UserMetaField1    map[string]string `input:"usermeta,x-oss-meta-"`
-	UserMetaField2    map[string]string `input:"usermeta,x-oss-meta1-"`
+	UserMetaField1    map[string]string `input:"header,x-oss-meta-,usermeta"`
+	UserMetaField2    map[string]string `input:"header,x-oss-meta1-,usermeta"`
 }
 
 func TestMarshalInput_usermeta(t *testing.T) {
@@ -361,6 +362,64 @@ func TestMarshalInput_usermeta(t *testing.T) {
 	assert.Equal(t, "value2", input.Parameters["input-param"])
 	assert.Equal(t, "value2-1", input.Parameters["input-param1"])
 	assert.Equal(t, "query", input.Parameters["str-field"])
+}
+
+type requiredRequest struct {
+	StrHostPtrField   *string `input:"host,bucket,required"`
+	StrPathField      string  `input:"path,key,required"`
+	BoolQueryPtrField *bool   `input:"query,bool-ptr-field,required"`
+	IntHeaderField    int     `input:"header,x-oss-str-field,required"`
+}
+
+func TestMarshalInput_required(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var input *OperationInput
+	var request *requiredRequest
+	var err error
+
+	input = &OperationInput{}
+	request = &requiredRequest{}
+	err = c.marshalInput(request, input)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "StrHostPtrField")
+
+	input = &OperationInput{}
+	request = &requiredRequest{
+		StrHostPtrField: Ptr("host"),
+	}
+	err = c.marshalInput(request, input)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "StrPathField")
+
+	input = &OperationInput{}
+	request = &requiredRequest{
+		StrHostPtrField: Ptr("host"),
+		StrPathField:    "path",
+	}
+	err = c.marshalInput(request, input)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "BoolQueryPtrField")
+
+	input = &OperationInput{}
+	request = &requiredRequest{
+		StrHostPtrField:   Ptr("host"),
+		StrPathField:      "path",
+		BoolQueryPtrField: Ptr(false),
+	}
+	err = c.marshalInput(request, input)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "IntHeaderField")
+
+	input = &OperationInput{}
+	request = &requiredRequest{
+		StrHostPtrField:   Ptr("host"),
+		StrPathField:      "path",
+		BoolQueryPtrField: Ptr(true),
+		IntHeaderField:    int(32),
+	}
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
 }
 
 type stubResult struct {
@@ -438,6 +497,128 @@ func TestUnmarshalOutput(t *testing.T) {
 	assert.Equal(t, "OK", xmlresult.Status)
 	assert.Equal(t, "StrField1", *xmlresult.StrField1)
 	assert.Equal(t, "StrField2", *xmlresult.StrField2)
+}
+
+type headerStubResult struct {
+	Int64PtrField  *int64  `output:"header,int64-ptr-field"`
+	Int64Field     int64   `output:"header,Int64-Field"`
+	StringPtrField *string `output:"header,String-Ptr-Field"`
+	StringField    string  `output:"header,String-Field"`
+	BoolPtrField   *bool   `output:"header,Bool-Ptr-Field"`
+	BoolField      bool    `output:"header,Bool-Field"`
+	EmptyFiled     *string `output:"header,Empty-Field"`
+	NoTagField     *string
+	TimePrtFiled   *time.Time `output:"header,Time-Ptr-Field,time"`
+	TimeFiled      time.Time  `output:"header,Time-Field,time"`
+
+	ResultCommon
+}
+
+func TestUnmarshalOutput_header(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var result *headerStubResult
+	var err error
+
+	// has header
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"Int64-Ptr-Field":  {"-1"},
+			"Int64-Field":      {"1000"},
+			"String-Ptr-Field": {"text"},
+			"String-Field":     {"xml"},
+			"Bool-Ptr-Field":   {"false"},
+			"Bool-Field":       {"true"},
+			"Time-Ptr-Field":   {"Fri, 24 Feb 2012 08:43:27 GMT"},
+			"Time-Field":       {"Fri, 24 Feb 2013 08:43:27 GMT"},
+		},
+	}
+	result = &headerStubResult{}
+	err = c.unmarshalOutput(result, output, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Nil(t, result.EmptyFiled)
+	assert.Nil(t, result.NoTagField)
+
+	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, "OK", result.Status)
+	assert.Equal(t, int64(-1), *result.Int64PtrField)
+	assert.Equal(t, int64(1000), result.Int64Field)
+	assert.Equal(t, "text", *result.StringPtrField)
+	assert.Equal(t, "xml", result.StringField)
+	assert.Equal(t, false, *result.BoolPtrField)
+	assert.Equal(t, true, result.BoolField)
+
+	assert.Equal(t, "2012-02-24T08:43:27Z", (*result.TimePrtFiled).Format(time.RFC3339))
+	assert.Equal(t, "2013-02-24T08:43:27Z", result.TimeFiled.Format(time.RFC3339))
+
+	//low case
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"int64-ptr-field":  {"-1"},
+			"int64-field":      {"10001"},
+			"string-ptr-field": {"text1"},
+			"string-field":     {"xml1"},
+			"bool-Ptr-Field":   {"false"},
+			"BOOL-FIELD":       {"true"},
+			"TIME-Ptr-Field":   {"Fri, 24 Feb 2014 08:43:27 GMT"},
+			"Time-FIELD":       {"Fri, 24 Feb 2010 08:43:27 GMT"},
+		},
+	}
+	result = &headerStubResult{}
+	err = c.unmarshalOutput(result, output, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Nil(t, result.EmptyFiled)
+	assert.Nil(t, result.NoTagField)
+
+	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, "OK", result.Status)
+	assert.Equal(t, int64(-1), *result.Int64PtrField)
+	assert.Equal(t, int64(10001), result.Int64Field)
+	assert.Equal(t, "text1", *result.StringPtrField)
+	assert.Equal(t, "xml1", result.StringField)
+	assert.Equal(t, false, *result.BoolPtrField)
+	assert.Equal(t, true, result.BoolField)
+
+	assert.Equal(t, "2014-02-24T08:43:27Z", (*result.TimePrtFiled).Format(time.RFC3339))
+	assert.Equal(t, "2010-02-24T08:43:27Z", result.TimeFiled.Format(time.RFC3339))
+
+	//primitive type
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"Int64-Ptr-Field":  {"-1"},
+			"Int64-Field":      {"1000"},
+			"String-Ptr-Field": {"text"},
+			"String-Field":     {"xml"},
+			"Bool-Ptr-Field":   {"false"},
+			"Bool-Field":       {"true"},
+			"Time-Ptr-Field":   {"Fri, 24 Feb 2012 08:43:27 GMT"},
+			"Time-Field":       {"Fri, 24 Feb 2013 08:43:27 GMT"},
+		},
+	}
+	result = &headerStubResult{}
+	err = c.unmarshalOutput(result, output, unmarshalHeaderLite)
+	assert.Nil(t, err)
+	assert.Nil(t, result.EmptyFiled)
+	assert.Nil(t, result.NoTagField)
+
+	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, "OK", result.Status)
+	assert.Equal(t, int64(-1), *result.Int64PtrField)
+	assert.Equal(t, int64(1000), result.Int64Field)
+	assert.Equal(t, "text", *result.StringPtrField)
+	assert.Equal(t, "xml", result.StringField)
+	assert.Equal(t, false, *result.BoolPtrField)
+	assert.Equal(t, true, result.BoolField)
+
+	assert.Nil(t, result.TimePrtFiled)
+	assert.Empty(t, result.TimeFiled)
 }
 
 func TestUnmarshalOutput_error(t *testing.T) {

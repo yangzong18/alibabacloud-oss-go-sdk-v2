@@ -383,6 +383,21 @@ func applyOperationOpt(c *Options, op *Options) {
 	c.ResponseHandlers = handlers
 }
 
+// fieldInfo holds details for the input/output of a single field.
+type fieldInfo struct {
+	idx   int
+	flags int
+}
+
+const (
+	fRequire int = 1 << iota
+
+	fTypeUsermeta
+	fTypeXml
+	fTypeTime
+)
+
+/*
 func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
 	// merge common fields
 	if cm, ok := request.(RequestCommonInterface); ok {
@@ -476,12 +491,137 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput) error 
 	}
 	return nil
 }
+*/
+
+func parseFiledFlags(tokens []string) int {
+	var flags int = 0
+	for _, token := range tokens {
+		switch token {
+		case "required":
+			flags |= fRequire
+		case "time":
+			flags |= fTypeTime
+		case "xml":
+			flags |= fTypeXml
+		case "usermeta":
+			flags |= fTypeUsermeta
+		}
+	}
+	return flags
+}
+
+func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
+	// merge common fields
+	if cm, ok := request.(RequestCommonInterface); ok {
+		h, p, b := cm.GetCommonFileds()
+		// headers
+		if len(h) > 0 {
+			if input.Headers == nil {
+				input.Headers = map[string]string{}
+			}
+			for k, v := range h {
+				input.Headers[k] = v
+			}
+		}
+
+		// parameters
+		if len(p) > 0 {
+			if input.Parameters == nil {
+				input.Parameters = map[string]string{}
+			}
+			for k, v := range p {
+				input.Parameters[k] = v
+			}
+		}
+
+		// body
+		input.Body = b
+	}
+
+	val := reflect.ValueOf(request)
+	switch val.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct || input == nil {
+		return nil
+	}
+
+	t := val.Type()
+	for k := 0; k < t.NumField(); k++ {
+		if tag, ok := t.Field(k).Tag.Lookup("input"); ok {
+			// header|query|body,filed_name,[require,time,usermeta...]
+			v := val.Field(k)
+			var flags int = 0
+			tokens := strings.Split(tag, ",")
+			if len(tokens) < 2 {
+				continue
+			}
+
+			// parse field flags
+			if len(tokens) > 2 {
+				flags = parseFiledFlags(tokens[2:])
+			}
+
+			// check required flag
+			if isEmptyValue(v) {
+				if flags&fRequire != 0 {
+					return NewErrParamRequired(t.Field(k).Name)
+				}
+				continue
+			}
+
+			switch tokens[0] {
+			case "query":
+				if input.Parameters == nil {
+					input.Parameters = map[string]string{}
+				}
+				if v.Kind() == reflect.Pointer {
+					v = v.Elem()
+				}
+				input.Parameters[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+			case "header":
+				if input.Headers == nil {
+					input.Headers = map[string]string{}
+				}
+				if v.Kind() == reflect.Pointer {
+					v = v.Elem()
+				}
+				if flags&fTypeUsermeta != 0 {
+					if m, ok := v.Interface().(map[string]string); ok {
+						for k, v := range m {
+							input.Headers[tokens[1]+k] = v
+						}
+					}
+				} else {
+					input.Headers[tokens[1]] = fmt.Sprintf("%v", v.Interface())
+				}
+			case "body":
+				if flags&fTypeXml != 0 {
+					var b bytes.Buffer
+					if err := xml.NewEncoder(&b).EncodeElement(
+						v.Interface(),
+						xml.StartElement{Name: xml.Name{Local: tokens[1]}}); err != nil {
+						return &SerializationError{
+							Err: err,
+						}
+					}
+					input.Body = bytes.NewReader(b.Bytes())
+				}
+			}
+		}
+	}
+	return nil
+}
 
 func discardBody(result interface{}, output *OperationOutput) error {
 	var err error
 	if output.Body != nil {
 		defer output.Body.Close()
-		_, err = io.ReadAll(output.Body)
+		_, err = io.Copy(io.Discard, output.Body)
 	}
 	return err
 }
@@ -539,6 +679,90 @@ func unmarshalBodyDefault(result interface{}, output *OperationOutput) error {
 }
 
 func unmarshalHeader(result interface{}, output *OperationOutput) error {
+	val := reflect.ValueOf(result)
+	switch val.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct || output == nil {
+		return nil
+	}
+
+	filedInfos := map[string]fieldInfo{}
+
+	t := val.Type()
+	for k := 0; k < t.NumField(); k++ {
+		if tag, ok := t.Field(k).Tag.Lookup("output"); ok {
+			tokens := strings.Split(tag, ",")
+			if len(tokens) < 2 {
+				continue
+			}
+			// header|query|body,filed_name,[require,time,usermeta...]
+			switch tokens[0] {
+			case "header":
+				lowkey := strings.ToLower(tokens[1])
+				var flags int = 0
+				if len(tokens) >= 3 {
+					flags = parseFiledFlags(tokens[2:])
+				}
+				filedInfos[lowkey] = fieldInfo{idx: k, flags: flags}
+			}
+		}
+	}
+
+	var err error
+	for key, vv := range output.Headers {
+		lkey := strings.ToLower(key)
+		if field, ok := filedInfos[lkey]; ok {
+			if field.flags&fTypeTime != 0 {
+				if t, err := http.ParseTime(vv[0]); err == nil {
+					err = setTimeReflectValue(val.Field(field.idx), t)
+				}
+			} else {
+				err = setReflectValue(val.Field(field.idx), vv[0])
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func unmarshalHeaderLite(result interface{}, output *OperationOutput) error {
+	val := reflect.ValueOf(result)
+	switch val.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if val.IsNil() {
+			return nil
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct || output == nil {
+		return nil
+	}
+
+	t := val.Type()
+	for k := 0; k < t.NumField(); k++ {
+		if tag := t.Field(k).Tag.Get("output"); tag != "" {
+			tokens := strings.Split(tag, ",")
+			if len(tokens) != 2 {
+				continue
+			}
+			switch tokens[0] {
+			case "header":
+				if src := output.Headers.Get(tokens[1]); src != "" {
+					if err := setReflectValue(val.Field(k), src); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
 	return nil
 }
 
