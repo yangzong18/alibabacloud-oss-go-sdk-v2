@@ -15,14 +15,14 @@ func main() {
 
 	var body []byte
 	BucketName := "bucket-name"
-	provider, _ := credentials.NewEnvironmentVariableCredentialsProvider()
+	provider := credentials.NewEnvironmentVariableCredentialsProvider()
 
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(provider).
 		WithRegion("cn-hangzhou").
 		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
 
-	client := oss.New(cfg)
+	client := oss.NewClient(cfg)
 
 	// 子资源在缺省子资源列表
 	input := &oss.OperationInput{

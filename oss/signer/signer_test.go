@@ -41,7 +41,7 @@ func TestV1(t *testing.T) {
 	var signer Signer
 	var signCtx *SigningContext
 
-	provider = credentials.NewStaticCredentialsProvider("ak", "sk", "")
+	provider = credentials.NewStaticCredentialsProvider("ak", "sk")
 	cred, _ = provider.GetCredentials(context.TODO())
 
 	//case 1
@@ -137,7 +137,7 @@ func TestV1InvalidArgument(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "SigningContext.Credentials is null or empty")
 
-	provider := credentials.NewStaticCredentialsProvider("", "sk", "")
+	provider := credentials.NewStaticCredentialsProvider("", "sk")
 	cred, _ := provider.GetCredentials(context.TODO())
 	signCtx = &SigningContext{
 		Credentials: &cred,
@@ -146,7 +146,7 @@ func TestV1InvalidArgument(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "SigningContext.Credentials is null or empty")
 
-	provider = credentials.NewStaticCredentialsProvider("ak", "sk", "")
+	provider = credentials.NewStaticCredentialsProvider("ak", "sk")
 	cred, _ = provider.GetCredentials(context.TODO())
 	signCtx = &SigningContext{
 		Credentials: &cred,

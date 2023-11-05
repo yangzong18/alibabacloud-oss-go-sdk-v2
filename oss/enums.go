@@ -155,23 +155,22 @@ const (
 	AuthV4 AuthVersionType = "v4"
 )
 
-type UrlRequestStyle int
+type UrlStyleType int
 
 const (
-	VirtualHostedStyle UrlRequestStyle = iota
-	PathStyle
-	CNameStyle
+	UrlStyleVirtualHosted UrlStyleType = iota
+	UrlStylePath
+	UrlStyleCName
 )
 
-func (f UrlRequestStyle) String() string {
+func (f UrlStyleType) String() string {
 	switch f {
-	case VirtualHostedStyle:
+	case UrlStyleVirtualHosted:
 		return "virtual-hosted–style"
-	case PathStyle:
+	case UrlStylePath:
 		return "path-style"
-	case CNameStyle:
+	case UrlStyleCName:
 		return "cname-style"
-	default:
-		return ""
 	}
+	return "virtual-hosted–style"
 }

@@ -2,10 +2,10 @@ package oss
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"testing"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -66,7 +66,7 @@ func TestUnmarshalOutput_encodetype(t *testing.T) {
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
-		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"Content-Type": {"application/xml"},
 		},
@@ -107,7 +107,7 @@ func TestUnmarshalOutput_encodetype1(t *testing.T) {
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
-		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"Content-Type": {"application/xml"},
 		},

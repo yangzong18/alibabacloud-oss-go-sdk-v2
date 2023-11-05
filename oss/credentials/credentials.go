@@ -29,6 +29,10 @@ type CredentialsProvider interface {
 
 type AnonymousCredentialsProvider struct{}
 
-func (AnonymousCredentialsProvider) GetCredentials(ctx context.Context) (Credentials, error) {
+func NewAnonymousCredentialsProvider() CredentialsProvider {
+	return &AnonymousCredentialsProvider{}
+}
+
+func (*AnonymousCredentialsProvider) GetCredentials(_ context.Context) (Credentials, error) {
 	return Credentials{AccessKeyID: "", AccessKeySecret: ""}, nil
 }

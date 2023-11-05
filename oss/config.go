@@ -12,7 +12,7 @@ type Config struct {
 	Region string
 
 	// The domain names that other services can use to access OSS.
-	Endpoint string
+	Endpoint *string
 
 	// RetryMaxAttempts specifies the maximum number attempts an API client will call
 	// an operation that fails with a retryable error.
@@ -21,15 +21,19 @@ type Config struct {
 	// Retryer guides how HTTP requests should be retried in case of recoverable failures.
 	Retryer retry.Retryer
 
-	// Allows you to enable the client to use path-style addressing, i.e., https://oss-cn-hangzhou.aliyuncs.com/bucket/key.
-	// By default, the oss client will use virtual hosted addressing i.e., https://bucket.oss-cn-hangzhou.aliyuncs.com/key.
-	UsePathStyle bool
-
 	// The HTTP client to invoke API calls with. Defaults to client's default HTTP
 	// implementation if nil.
 	HTTPClient *http.Client
 
+	// The credentials provider to use when signing requests.
 	CredentialsProvider credentials.CredentialsProvider
+
+	// Allows you to enable the client to use path-style addressing, i.e., https://oss-cn-hangzhou.aliyuncs.com/bucket/key.
+	// By default, the oss client will use virtual hosted addressing i.e., https://bucket.oss-cn-hangzhou.aliyuncs.com/key.
+	UsePathStyle *bool
+
+	// If the endpoint is s CName, set this flag to true
+	UseCName *bool
 }
 
 func NewConfig() *Config {
@@ -43,11 +47,8 @@ func (c Config) Copy() Config {
 
 func LoadDefaultConfig() *Config {
 	config := &Config{
-		Region:           "cn-hangzhou",
 		RetryMaxAttempts: 3,
-		UsePathStyle:     false,
 	}
-
 	return config
 }
 
@@ -57,7 +58,7 @@ func (c *Config) WithRegion(region string) *Config {
 }
 
 func (c *Config) WithEndpoint(endpoint string) *Config {
-	c.Endpoint = endpoint
+	c.Endpoint = Ptr(endpoint)
 	return c
 }
 
@@ -71,11 +72,6 @@ func (c *Config) WithRetryer(retryer retry.Retryer) *Config {
 	return c
 }
 
-func (c *Config) WithUsePathStyle(enable bool) *Config {
-	c.UsePathStyle = enable
-	return c
-}
-
 func (c *Config) WithHTTPClient(client *http.Client) *Config {
 	c.HTTPClient = client
 	return c
@@ -83,5 +79,15 @@ func (c *Config) WithHTTPClient(client *http.Client) *Config {
 
 func (c *Config) WithCredentialsProvider(provider credentials.CredentialsProvider) *Config {
 	c.CredentialsProvider = provider
+	return c
+}
+
+func (c *Config) WithUsePathStyle(enable bool) *Config {
+	c.UsePathStyle = Ptr(enable)
+	return c
+}
+
+func (c *Config) WithUseCName(enable bool) *Config {
+	c.UseCName = Ptr(enable)
 	return c
 }

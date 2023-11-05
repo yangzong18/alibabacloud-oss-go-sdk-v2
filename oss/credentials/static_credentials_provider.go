@@ -8,7 +8,11 @@ type StaticCredentialsProvider struct {
 	credentials Credentials
 }
 
-func NewStaticCredentialsProvider(id, secret, token string) CredentialsProvider {
+func NewStaticCredentialsProvider(id, secret string, tokens ...string) CredentialsProvider {
+	token := ""
+	if len(tokens) > 0 {
+		token = tokens[0]
+	}
 	return StaticCredentialsProvider{
 		credentials: Credentials{
 			AccessKeyID:     id,
@@ -17,6 +21,6 @@ func NewStaticCredentialsProvider(id, secret, token string) CredentialsProvider 
 		}}
 }
 
-func (s StaticCredentialsProvider) GetCredentials(ctx context.Context) (Credentials, error) {
+func (s StaticCredentialsProvider) GetCredentials(_ context.Context) (Credentials, error) {
 	return s.credentials, nil
 }

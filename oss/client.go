@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -38,6 +39,8 @@ type Options struct {
 	HttpClient *http.Client
 
 	ResponseHandlers []func(*http.Response) error
+
+	UrlStyle UrlStyleType
 }
 
 func (c Options) Copy() Options {
@@ -51,7 +54,7 @@ type Client struct {
 	options Options
 }
 
-func New(cfg *Config, optFns ...func(*Options)) *Client {
+func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 	options := Options{
 		Region:              cfg.Region,
 		RetryMaxAttempts:    cfg.RetryMaxAttempts,
@@ -63,6 +66,7 @@ func New(cfg *Config, optFns ...func(*Options)) *Client {
 	resolveRetryer(cfg, &options)
 	resolveHTTPClient(cfg, &options)
 	resolveSigner(cfg, &options)
+	resolveUrlStyle(cfg, &options)
 
 	for _, fn := range optFns {
 		fn(&options)
@@ -76,21 +80,19 @@ func New(cfg *Config, optFns ...func(*Options)) *Client {
 }
 
 func resolveEndpoint(cfg *Config, o *Options) {
-	var scheme string
-	var endpoint string
-	if strings.HasPrefix(cfg.Endpoint, "http://") {
+	if cfg.Endpoint == nil {
+		return
+	}
+	scheme := "http"
+	endpoint := *cfg.Endpoint
+	if strings.HasPrefix(endpoint, "http://") {
 		scheme = "http"
-		endpoint = cfg.Endpoint[len("http://"):]
+		endpoint = endpoint[len("http://"):]
 	} else if strings.HasPrefix(endpoint, "https://") {
 		scheme = "https"
-		endpoint = cfg.Endpoint[len("https://"):]
-	} else {
-		scheme = "http"
-		endpoint = cfg.Endpoint
+		endpoint = endpoint[len("https://"):]
 	}
-
-	strUrl := fmt.Sprintf("%s://%s", scheme, endpoint)
-	o.Endpoint, _ = url.Parse(strUrl)
+	o.Endpoint, _ = url.Parse(fmt.Sprintf("%s://%s", scheme, endpoint))
 }
 
 func resolveRetryer(cfg *Config, o *Options) {
@@ -119,6 +121,23 @@ func resolveSigner(cfg *Config, o *Options) {
 	}
 
 	o.Signer = signer.SignerV1{}
+}
+
+func resolveUrlStyle(cfg *Config, o *Options) {
+	if cfg.UseCName != nil && *cfg.UseCName {
+		o.UrlStyle = UrlStyleCName
+	} else if cfg.UsePathStyle != nil && *cfg.UsePathStyle {
+		o.UrlStyle = UrlStylePath
+	} else {
+		o.UrlStyle = UrlStyleVirtualHosted
+	}
+
+	// if the endpoint is ip, set to path-style
+	if o.Endpoint != nil {
+		if ip := net.ParseIP(o.Endpoint.Host); ip != nil {
+			o.UrlStyle = UrlStylePath
+		}
+	}
 }
 
 func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
@@ -300,18 +319,26 @@ func buildURL(input *OperationInput, opts *Options) (host string, path string) {
 		return host, path
 	}
 
+	var paths []string
 	if input.Bucket == nil {
 		host = opts.Endpoint.Host
 	} else {
-		host = fmt.Sprintf("%s.%s", *input.Bucket, opts.Endpoint.Host)
+		switch opts.UrlStyle {
+		default: // UrlStyleVirtualHosted
+			host = fmt.Sprintf("%s.%s", *input.Bucket, opts.Endpoint.Host)
+		case UrlStylePath:
+			host = opts.Endpoint.Host
+			paths = append(paths, *input.Bucket)
+		case UrlStyleCName:
+			host = opts.Endpoint.Host
+		}
 	}
 
-	path = "/"
 	if input.Key != nil {
-		path += escapePath(*input.Key, false)
+		paths = append(paths, escapePath(*input.Key, false))
 	}
 
-	return host, path
+	return host, ("/" + strings.Join(paths, "/"))
 }
 
 func serviceErrorResponseHandler(response *http.Response) error {
@@ -414,7 +441,27 @@ func parseFiledFlags(tokens []string) int {
 	return flags
 }
 
-func (c *Client) marshalInput(request interface{}, input *OperationInput) error {
+func validateInput(input *OperationInput) error {
+	if input == nil {
+		return NewErrParamNull("OperationInput")
+	}
+
+	if input.Bucket != nil && !isValidBucketName(input.Bucket) {
+		return NewErrParamInvalid("OperationInput.Bucket")
+	}
+
+	if input.Key != nil && !isValidObjectName(input.Key) {
+		return NewErrParamInvalid("OperationInput.Key")
+	}
+
+	if !isValidMethod(input.Method) {
+		return NewErrParamInvalid("OperationInput.Method")
+	}
+
+	return nil
+}
+
+func (c *Client) marshalInput(request interface{}, input *OperationInput, handlers ...func(*OperationInput) error) error {
 	// merge common fields
 	if cm, ok := request.(RequestCommonInterface); ok {
 		h, p, b := cm.GetCommonFileds()
@@ -518,6 +565,13 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput) error 
 			}
 		}
 	}
+
+	for _, h := range handlers {
+		if err := h(input); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

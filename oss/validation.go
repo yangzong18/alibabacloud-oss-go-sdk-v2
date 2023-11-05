@@ -100,6 +100,21 @@ func isValidObjectName(objectName *string) bool {
 	return true
 }
 
+var supportedMethod = map[string]interface{}{
+	"GET":    nil,
+	"PUT":    nil,
+	"POST":   nil,
+	"DELETE": nil,
+	"OPTION": nil,
+}
+
+func isValidMethod(method string) bool {
+	if _, ok := supportedMethod[method]; ok {
+		return true
+	}
+	return false
+}
+
 func validateBucketOpsInput(input *OperationInput) error {
 	if input == nil {
 		return nil
