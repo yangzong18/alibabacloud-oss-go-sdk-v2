@@ -114,31 +114,3 @@ func isValidMethod(method string) bool {
 	}
 	return false
 }
-
-func validateBucketOpsInput(input *OperationInput) error {
-	if input == nil {
-		return nil
-	}
-
-	if !isValidBucketName(input.Bucket) {
-		return NewErrParamInvalid("Bucket")
-	}
-
-	return nil
-}
-
-func validateObjectOpsInput(input *OperationInput) error {
-	if input == nil {
-		return nil
-	}
-
-	if !isValidBucketName(input.Bucket) {
-		return NewErrParamInvalid("Bucket")
-	}
-
-	if !isValidObjectName(input.Key) {
-		return NewErrParamInvalid("Key")
-	}
-
-	return nil
-}

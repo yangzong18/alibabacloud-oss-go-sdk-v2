@@ -91,12 +91,10 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 		Key:    request.Key,
 		Body:   request.Body,
 	}
-	if err = validateObjectOpsInput(input); err != nil {
-		return nil, err
-	}
 	if err = c.marshalInput(request, input); err != nil {
 		return nil, err
 	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
@@ -246,12 +244,10 @@ func (c *Client) GetObject(ctx context.Context, request *GetObjectRequest, optFn
 		Bucket: request.Bucket,
 		Key:    request.Key,
 	}
-	if err = validateObjectOpsInput(input); err != nil {
-		return nil, err
-	}
 	if err = c.marshalInput(request, input); err != nil {
 		return nil, err
 	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
@@ -260,7 +256,6 @@ func (c *Client) GetObject(ctx context.Context, request *GetObjectRequest, optFn
 	result := &GetObjectResult{
 		Body: output.Body,
 	}
-
 	if err = c.unmarshalOutput(result, output, unmarshalHeader); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}

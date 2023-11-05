@@ -90,7 +90,7 @@ func (c *Client) ListBuckets(ctx context.Context, request *ListBucketsRequest, o
 			HTTPHeaderContentType: contentTypeDefault,
 		},
 	}
-	if err = c.marshalInput(request, input); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

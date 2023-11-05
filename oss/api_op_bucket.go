@@ -52,15 +52,10 @@ func (c *Client) PutBucket(ctx context.Context, request *PutBucketRequest, optFn
 		},
 		Bucket: request.Bucket,
 	}
-	if err = validateBucketOpsInput(input); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
-	if err = c.marshalInput(request, input); err != nil {
-		return nil, err
-	}
-	if err = c.updateContentMd5(input); err != nil {
-		return nil, err
-	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
@@ -101,22 +96,16 @@ func (c *Client) DeleteBucket(ctx context.Context, request *DeleteBucketRequest,
 		},
 		Bucket: request.Bucket,
 	}
-	if err = validateBucketOpsInput(input); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
-	if err = c.marshalInput(request, input); err != nil {
-		return nil, err
-	}
-	if err = c.updateContentMd5(input); err != nil {
-		return nil, err
-	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &DeleteBucketResult{}
-
 	if err = c.unmarshalOutput(result, output, discardBody); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
@@ -240,15 +229,10 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 		},
 		Bucket: request.Bucket,
 	}
-	if err = validateBucketOpsInput(input); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
-	if err = c.marshalInput(request, input); err != nil {
-		return nil, err
-	}
-	if err = c.updateContentMd5(input); err != nil {
-		return nil, err
-	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err

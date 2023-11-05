@@ -45,12 +45,15 @@ func TestMarshalInput(t *testing.T) {
 	request = &stubRequest{}
 
 	err = c.marshalInput(request, input)
-	assert.Nil(t, err)
-	assert.Equal(t, 0, len(input.Headers))
-	assert.Equal(t, 0, len(input.Parameters))
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "OperationInput.Method")
+	//assert.Equal(t, 0, len(input.Headers))
+	//assert.Equal(t, 0, len(input.Parameters))
 
 	// query ptr
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 
 	request = &stubRequest{
 		StrPrtField:  Ptr("str1"),
@@ -67,7 +70,9 @@ func TestMarshalInput(t *testing.T) {
 	assert.Equal(t, "true", input.Parameters["bool-field"])
 
 	// query value
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 
 	request = &stubRequest{
 		StrField:     "str2",
@@ -84,7 +89,9 @@ func TestMarshalInput(t *testing.T) {
 	assert.Equal(t, "false", input.Parameters["bool-field"])
 
 	// header ptr
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 
 	request = &stubRequest{
 		HStrPrtField:  Ptr("str1"),
@@ -101,7 +108,9 @@ func TestMarshalInput(t *testing.T) {
 	assert.Equal(t, "true", input.Headers["x-oss-bool-field"])
 
 	// header value
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 
 	request = &stubRequest{
 		HStrField:     "str2",
@@ -137,7 +146,9 @@ func TestMarshalInput_xmlbody(t *testing.T) {
 	var request *xmlbodyRequest
 	var err error
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &xmlbodyRequest{
 		StrHostPrtField:   Ptr("bucket"),
 		StrQueryPrtField:  Ptr("query"),
@@ -178,7 +189,9 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 
 	//default
 	request = &commonStubRequest{}
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	err = c.marshalInput(request, input)
 	assert.Nil(t, err)
 	assert.Nil(t, input.Body)
@@ -194,7 +207,9 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 		"p": "",
 	}
 	request.Body = bytes.NewReader([]byte("hello"))
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	err = c.marshalInput(request, input)
 	assert.Nil(t, err)
 	assert.NotNil(t, input.Headers)
@@ -211,6 +226,7 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	// priority
 	// request commmn > input default
 	input = &OperationInput{
+		Method: "GET",
 		Headers: map[string]string{
 			"key": "value1",
 		},
@@ -236,7 +252,9 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	assert.Nil(t, input.Body)
 
 	// reuqest filed parametr > request commmn
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &commonStubRequest{
 		StrQueryPrtField:  Ptr("query"),
 		StrHeaderPrtField: Ptr("header"),
@@ -268,6 +286,7 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	// merge, replace
 	//reuqest filed parametr > request commmn > input
 	input = &OperationInput{
+		Method: "GET",
 		Headers: map[string]string{
 			"input-key": "value1",
 		},
@@ -320,13 +339,16 @@ func TestMarshalInput_usermeta(t *testing.T) {
 	var request *usermetaRequest
 	var err error
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &usermetaRequest{}
 	err = c.marshalInput(request, input)
 	assert.Nil(t, err)
 	assert.Nil(t, input.Headers)
 
 	input = &OperationInput{
+		Method: "GET",
 		Headers: map[string]string{
 			"input-key": "value1",
 		},
@@ -378,13 +400,17 @@ func TestMarshalInput_required(t *testing.T) {
 	var request *requiredRequest
 	var err error
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &requiredRequest{}
 	err = c.marshalInput(request, input)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "StrHostPtrField")
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &requiredRequest{
 		StrHostPtrField: Ptr("host"),
 	}
@@ -392,7 +418,9 @@ func TestMarshalInput_required(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "StrPathField")
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &requiredRequest{
 		StrHostPtrField: Ptr("host"),
 		StrPathField:    "path",
@@ -401,7 +429,9 @@ func TestMarshalInput_required(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "BoolQueryPtrField")
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &requiredRequest{
 		StrHostPtrField:   Ptr("host"),
 		StrPathField:      "path",
@@ -411,7 +441,9 @@ func TestMarshalInput_required(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "IntHeaderField")
 
-	input = &OperationInput{}
+	input = &OperationInput{
+		Method: "GET",
+	}
 	request = &requiredRequest{
 		StrHostPtrField:   Ptr("host"),
 		StrPathField:      "path",

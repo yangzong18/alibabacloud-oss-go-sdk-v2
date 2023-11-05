@@ -566,6 +566,10 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput, handle
 		}
 	}
 
+	if err := validateInput(input); err != nil {
+		return err
+	}
+
 	for _, h := range handlers {
 		if err := h(input); err != nil {
 			return err
@@ -739,7 +743,7 @@ func (c *Client) unmarshalOutput(result interface{}, output *OperationOutput, ha
 	return err
 }
 
-func (c *Client) updateContentMd5(input *OperationInput) error {
+func updateContentMd5(input *OperationInput) error {
 	var err error
 	var contentMd5 string
 	if input.Body != nil {
