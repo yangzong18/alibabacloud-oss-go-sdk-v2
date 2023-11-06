@@ -216,8 +216,8 @@ func TestInvokeOperation_Anonymous(t *testing.T) {
 		cfg := LoadDefaultConfig().
 			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
 			WithRegion("cn-hangzhou").
-			WithEndpoint(server.URL).
-			WithUsePathStyle(true)
+			WithEndpoint(server.URL)
+			//WithUsePathStyle(true)
 
 		client := NewClient(cfg)
 		assert.NotNil(t, c)

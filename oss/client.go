@@ -137,7 +137,7 @@ func resolveUrlStyle(cfg *Config, o *Options) {
 
 	// if the endpoint is ip, set to path-style
 	if o.Endpoint != nil {
-		if ip := net.ParseIP(o.Endpoint.Host); ip != nil {
+		if ip := net.ParseIP(o.Endpoint.Hostname()); ip != nil {
 			o.UrlStyle = UrlStylePath
 		}
 	}
