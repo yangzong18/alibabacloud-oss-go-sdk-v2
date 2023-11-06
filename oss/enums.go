@@ -165,12 +165,13 @@ const (
 
 func (f UrlStyleType) String() string {
 	switch f {
-	case UrlStyleVirtualHosted:
-		return "virtual-hosted–style"
+	default:
+		return "virtual-hosted-style"
 	case UrlStylePath:
 		return "path-style"
 	case UrlStyleCName:
 		return "cname-style"
 	}
-	return "virtual-hosted–style"
 }
+
+type FeatureFlagsType int

@@ -41,6 +41,8 @@ type Options struct {
 	ResponseHandlers []func(*http.Response) error
 
 	UrlStyle UrlStyleType
+
+	FeatureFlags FeatureFlagsType
 }
 
 func (c Options) Copy() Options {
@@ -67,6 +69,7 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 	resolveHTTPClient(cfg, &options)
 	resolveSigner(cfg, &options)
 	resolveUrlStyle(cfg, &options)
+	resolveFeatureFlags(cfg, &options)
 
 	for _, fn := range optFns {
 		fn(&options)
@@ -138,6 +141,10 @@ func resolveUrlStyle(cfg *Config, o *Options) {
 			o.UrlStyle = UrlStylePath
 		}
 	}
+}
+
+func resolveFeatureFlags(cfg *Config, o *Options) {
+	//TODO
 }
 
 func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
