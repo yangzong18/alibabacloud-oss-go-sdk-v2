@@ -2,6 +2,7 @@ package oss
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
@@ -23,7 +24,7 @@ type Config struct {
 
 	// The HTTP client to invoke API calls with. Defaults to client's default HTTP
 	// implementation if nil.
-	HTTPClient *http.Client
+	HttpClient *http.Client
 
 	// The credentials provider to use when signing requests.
 	CredentialsProvider credentials.CredentialsProvider
@@ -34,6 +35,26 @@ type Config struct {
 
 	// If the endpoint is s CName, set this flag to true
 	UseCName *bool
+
+	// Connect timeout
+	ConnectTimeout *time.Duration
+
+	// read & write timeout
+	ReadWriteTimeout *time.Duration
+
+	// Skip server certificate verification
+	InsecureSkipVerify *bool
+
+	// Enable http redirect or not. Default is disable
+	EnabledRedirect *bool
+
+	// Flag of using proxy host.
+	ProxyHost *string
+
+	// Read the proxy setting from the environment variables.
+	// HTTP_PROXY, HTTPS_PROXY and NO_PROXY (or the lowercase versions thereof).
+	// HTTPS_PROXY takes precedence over HTTP_PROXY for https requests.
+	ProxyFromEnvironment *bool
 }
 
 func NewConfig() *Config {
@@ -72,8 +93,8 @@ func (c *Config) WithRetryer(retryer retry.Retryer) *Config {
 	return c
 }
 
-func (c *Config) WithHTTPClient(client *http.Client) *Config {
-	c.HTTPClient = client
+func (c *Config) WithHttpClient(client *http.Client) *Config {
+	c.HttpClient = client
 	return c
 }
 
@@ -89,5 +110,35 @@ func (c *Config) WithUsePathStyle(enable bool) *Config {
 
 func (c *Config) WithUseCName(enable bool) *Config {
 	c.UseCName = Ptr(enable)
+	return c
+}
+
+func (c *Config) WithConnectTimeout(value time.Duration) *Config {
+	c.ConnectTimeout = Ptr(value)
+	return c
+}
+
+func (c *Config) WithReadWriteTimeout(value time.Duration) *Config {
+	c.ReadWriteTimeout = Ptr(value)
+	return c
+}
+
+func (c *Config) WithInsecureSkipVerify(value bool) *Config {
+	c.InsecureSkipVerify = Ptr(value)
+	return c
+}
+
+func (c *Config) WithEnabledRedirect(value bool) *Config {
+	c.EnabledRedirect = Ptr(value)
+	return c
+}
+
+func (c *Config) WithProxyHost(value string) *Config {
+	c.ProxyHost = Ptr(value)
+	return c
+}
+
+func (c *Config) WithProxyFromEnvironment(value bool) *Config {
+	c.ProxyFromEnvironment = Ptr(value)
 	return c
 }

@@ -1,99 +1,50 @@
 package transport
 
 import (
-	"context"
 	"crypto/tls"
-	"net"
 	"net/http"
+	"net/url"
 	"time"
 )
 
 // Defaults for the Transport
 var (
-	DefaultTransportConnectTimeout        = 5 * time.Second
-	DefaultTransportReadWriteTimeout      = 10 * time.Second
-	DefaultTransportIdleConnectionTimeout = 50 * time.Second
-	DefaultTransportExpectContinueTimeout = 1 * time.Second
-	DefaultDialKeepAliveTimeout           = 30 * time.Second
+	DefaultConnectTimeout        = 5 * time.Second
+	DefaultReadWriteTimeout      = 10 * time.Second
+	DefaultIdleConnectionTimeout = 50 * time.Second
+	DefaultExpectContinueTimeout = 1 * time.Second
+	DefaultKeepAliveTimeout      = 30 * time.Second
 
-	DefaultTransportMaxConnections = 100
+	DefaultMaxConnections = 100
 
 	// Default to TLS 1.2 for all HTTPS requests.
-	DefaultTransportTLSMinVersion uint16 = tls.VersionTLS12
+	DefaultTLSMinVersion uint16 = tls.VersionTLS12
 )
 
-// Dialer
-type Dialer struct {
-	net.Dialer
-	timeout time.Duration
+var DefaultConfig = Config{
+	ConnectTimeout:        &DefaultConnectTimeout,
+	ReadWriteTimeout:      &DefaultReadWriteTimeout,
+	IdleConnectionTimeout: &DefaultIdleConnectionTimeout,
+	KeepAliveTimeout:      &DefaultKeepAliveTimeout,
 }
 
-func newDialer() *Dialer {
-	dialer := &Dialer{
-		Dialer: net.Dialer{
-			Timeout:   DefaultTransportConnectTimeout,
-			KeepAlive: DefaultDialKeepAliveTimeout,
-		},
-		timeout: DefaultTransportReadWriteTimeout,
-	}
-	return dialer
+type Config struct {
+	ConnectTimeout        *time.Duration
+	ReadWriteTimeout      *time.Duration
+	IdleConnectionTimeout *time.Duration
+	KeepAliveTimeout      *time.Duration
+	EnabledRedirect       *bool
 }
 
-func (d *Dialer) Dial(network, address string) (net.Conn, error) {
-	return d.DialContext(context.Background(), network, address)
-}
-
-func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	c, err := d.Dialer.DialContext(ctx, network, address)
-	if err != nil {
-		return c, err
-	}
-
-	t := &timeoutConn{
-		Conn:    c,
-		timeout: d.timeout,
-	}
-	return t, t.nudgeDeadline()
-}
-
-// A net.Conn with Read/Write timeout
-type timeoutConn struct {
-	net.Conn
-	timeout time.Duration
-}
-
-func (c *timeoutConn) nudgeDeadline() error {
-	if c.timeout > 0 {
-		return c.SetDeadline(time.Now().Add(c.timeout))
-	}
-	return nil
-}
-
-func (c *timeoutConn) Read(b []byte) (n int, err error) {
-	n, err = c.Conn.Read(b)
-	if err == nil && n > 0 && c.timeout > 0 {
-		err = c.nudgeDeadline()
-	}
-	return n, err
-}
-
-func (c *timeoutConn) Write(b []byte) (n int, err error) {
-	n, err = c.Conn.Write(b)
-	if err == nil && n > 0 && c.timeout > 0 {
-		err = c.nudgeDeadline()
-	}
-	return n, err
-}
-
-func NewTransportCustom(fns ...func(*http.Transport)) http.RoundTripper {
+func newTransportCustom(cfg *Config, fns ...func(*http.Transport)) http.RoundTripper {
 	tr := &http.Transport{
-		DialContext:           newDialer().DialContext,
-		TLSHandshakeTimeout:   DefaultTransportConnectTimeout,
-		MaxConnsPerHost:       DefaultTransportMaxConnections,
-		IdleConnTimeout:       DefaultTransportConnectTimeout,
-		ExpectContinueTimeout: DefaultTransportExpectContinueTimeout,
+		DialContext:           newDialer(cfg).DialContext,
+		TLSHandshakeTimeout:   *cfg.ConnectTimeout,
+		IdleConnTimeout:       *cfg.IdleConnectionTimeout,
+		MaxConnsPerHost:       DefaultMaxConnections,
+		ExpectContinueTimeout: DefaultExpectContinueTimeout,
 		TLSClientConfig: &tls.Config{
-			MinVersion: DefaultTransportTLSMinVersion,
+			MinVersion: DefaultTLSMinVersion,
 		},
 	}
 
@@ -102,4 +53,112 @@ func NewTransportCustom(fns ...func(*http.Transport)) http.RoundTripper {
 	}
 
 	return tr
+}
+
+func (c *Config) mergeIn(cfgs ...*Config) {
+	for _, other := range cfgs {
+		mergeInConfig(c, other)
+	}
+}
+
+func (c *Config) copy(cfgs ...*Config) *Config {
+	dst := &Config{}
+	dst.mergeIn(c)
+
+	for _, cfg := range cfgs {
+		dst.mergeIn(cfg)
+	}
+
+	return dst
+}
+
+func mergeInConfig(dst *Config, other *Config) {
+	if other == nil {
+		return
+	}
+
+	if other.ConnectTimeout != nil {
+		dst.ConnectTimeout = other.ConnectTimeout
+	}
+
+	if other.ReadWriteTimeout != nil {
+		dst.ReadWriteTimeout = other.ReadWriteTimeout
+	}
+
+	if other.IdleConnectionTimeout != nil {
+		dst.IdleConnectionTimeout = other.IdleConnectionTimeout
+	}
+
+	if other.KeepAliveTimeout != nil {
+		dst.KeepAliveTimeout = other.KeepAliveTimeout
+	}
+
+	if other.EnabledRedirect != nil {
+		dst.EnabledRedirect = other.EnabledRedirect
+	}
+}
+
+func InsecureSkipVerify(enabled bool) func(*http.Transport) {
+	return func(t *http.Transport) {
+		if t.TLSClientConfig != nil {
+			t.TLSClientConfig.InsecureSkipVerify = enabled
+		} else {
+			t.TLSClientConfig = &tls.Config{
+				InsecureSkipVerify: enabled,
+			}
+		}
+	}
+}
+
+func MaxConnections(value int) func(*http.Transport) {
+	return func(t *http.Transport) {
+		t.MaxConnsPerHost = value
+	}
+}
+
+func ExpectContinueTimeout(value time.Duration) func(*http.Transport) {
+	return func(t *http.Transport) {
+		t.ExpectContinueTimeout = value
+	}
+}
+
+func TLSMinVersion(value int) func(*http.Transport) {
+	return func(t *http.Transport) {
+		if t.TLSClientConfig != nil {
+			t.TLSClientConfig.MinVersion = uint16(value)
+		} else {
+			t.TLSClientConfig = &tls.Config{
+				MinVersion: uint16(value),
+			}
+		}
+	}
+}
+
+func HttpProxy(fixedURL *url.URL) func(*http.Transport) {
+	return func(t *http.Transport) {
+		t.Proxy = http.ProxyURL(fixedURL)
+	}
+}
+
+func ProxyFromEnvironment() func(*http.Transport) {
+	return func(t *http.Transport) {
+		t.Proxy = http.ProxyFromEnvironment
+	}
+}
+
+func NewHttpClient(cfg *Config, fns ...func(*http.Transport)) *http.Client {
+	cfg = DefaultConfig.copy(cfg)
+	client := &http.Client{
+		Transport: newTransportCustom(cfg, fns...),
+		//Disalbe Redirect
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	if cfg.EnabledRedirect != nil && *cfg.EnabledRedirect {
+		client.CheckRedirect = nil
+	}
+
+	return client
 }

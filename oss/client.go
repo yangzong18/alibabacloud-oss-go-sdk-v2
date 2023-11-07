@@ -43,6 +43,8 @@ type Options struct {
 	UrlStyle UrlStyleType
 
 	FeatureFlags FeatureFlagsType
+
+	OpReadWriteTimeout *time.Duration
 }
 
 func (c Options) Copy() Options {
@@ -62,7 +64,7 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 		RetryMaxAttempts:    cfg.RetryMaxAttempts,
 		Retryer:             cfg.Retryer,
 		CredentialsProvider: cfg.CredentialsProvider,
-		HttpClient:          cfg.HTTPClient,
+		HttpClient:          cfg.HttpClient,
 	}
 	resolveEndpoint(cfg, &options)
 	resolveRetryer(cfg, &options)
@@ -111,11 +113,33 @@ func resolveHTTPClient(cfg *Config, o *Options) {
 		return
 	}
 
-	//TODO timeouts from config
-
-	o.HttpClient = &http.Client{
-		Transport: transport.NewTransportCustom(),
+	//config in http.Transport
+	custom := []func(*http.Transport){}
+	if cfg.InsecureSkipVerify != nil {
+		custom = append(custom, transport.InsecureSkipVerify(*cfg.InsecureSkipVerify))
 	}
+	if cfg.ProxyFromEnvironment != nil && *cfg.ProxyFromEnvironment {
+		custom = append(custom, transport.ProxyFromEnvironment())
+	}
+	if cfg.ProxyHost != nil {
+		if url, err := url.Parse(*cfg.ProxyHost); err == nil {
+			custom = append(custom, transport.HttpProxy(url))
+		}
+	}
+
+	//config in transport  package
+	tcfg := &transport.Config{}
+	if cfg.ConnectTimeout != nil {
+		tcfg.ConnectTimeout = cfg.ConnectTimeout
+	}
+	if cfg.ReadWriteTimeout != nil {
+		tcfg.ReadWriteTimeout = cfg.ReadWriteTimeout
+	}
+	if cfg.EnabledRedirect != nil {
+		tcfg.EnabledRedirect = cfg.EnabledRedirect
+	}
+
+	o.HttpClient = transport.NewHttpClient(tcfg, custom...)
 }
 
 func resolveSigner(cfg *Config, o *Options) {
@@ -156,6 +180,8 @@ func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, opt
 	}
 
 	applyOperationOpt(&options, &opOpt)
+
+	ctx = applyOperationContext(ctx, &options)
 
 	output, err = c.sendRequest(ctx, input, &options)
 
@@ -408,6 +434,10 @@ func applyOperationOpt(c *Options, op *Options) {
 		c.Retryer = retry.NopRetryer{}
 	}
 
+	if op.OpReadWriteTimeout != nil {
+		c.OpReadWriteTimeout = op.OpReadWriteTimeout
+	}
+
 	//response handler
 	handlers := []func(*http.Response) error{
 		serviceErrorResponseHandler,
@@ -415,6 +445,13 @@ func applyOperationOpt(c *Options, op *Options) {
 	handlers = append(handlers, c.ResponseHandlers...)
 	handlers = append(handlers, op.ResponseHandlers...)
 	c.ResponseHandlers = handlers
+}
+
+func applyOperationContext(ctx context.Context, c *Options) context.Context {
+	if ctx == nil || c.OpReadWriteTimeout == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, "OpReadWriteTimeout", c.OpReadWriteTimeout)
 }
 
 // fieldInfo holds details for the input/output of a single field.

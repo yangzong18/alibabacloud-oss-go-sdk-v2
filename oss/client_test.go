@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
+	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -688,4 +689,51 @@ func TestUnmarshalOutput_error(t *testing.T) {
 	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "XML syntax error on line 1")
+}
+
+func TestResolveHTTPClient(t *testing.T) {
+	cfg := NewConfig()
+	opt := &Options{}
+	assert.Nil(t, cfg.HttpClient)
+	assert.Nil(t, opt.HttpClient)
+	resolveHTTPClient(cfg, opt)
+	assert.NotNil(t, opt.HttpClient)
+
+	tr := opt.HttpClient.Transport
+	assert.NotNil(t, tr)
+	tran, ok := tr.(*http.Transport)
+	assert.True(t, ok)
+	assert.NotNil(t, tran)
+	assert.Equal(t, transport.DefaultConnectTimeout, tran.TLSHandshakeTimeout)
+	assert.Equal(t, transport.DefaultIdleConnectionTimeout, tran.IdleConnTimeout)
+	assert.Equal(t, transport.DefaultMaxConnections, tran.MaxConnsPerHost)
+	assert.Equal(t, transport.DefaultExpectContinueTimeout, tran.ExpectContinueTimeout)
+	assert.Equal(t, transport.DefaultTLSMinVersion, tran.TLSClientConfig.MinVersion)
+	assert.Equal(t, false, tran.TLSClientConfig.InsecureSkipVerify)
+	assert.NotNil(t, opt.HttpClient.CheckRedirect)
+	assert.Nil(t, tran.Proxy)
+
+	cfg = &Config{
+		ConnectTimeout:       Ptr(101 * time.Second),
+		ReadWriteTimeout:     Ptr(101 * time.Second),
+		InsecureSkipVerify:   Ptr(true),
+		EnabledRedirect:      Ptr(true),
+		ProxyFromEnvironment: Ptr(true),
+	}
+	opt = &Options{}
+	resolveHTTPClient(cfg, opt)
+	assert.NotNil(t, opt.HttpClient)
+	tr = opt.HttpClient.Transport
+	assert.NotNil(t, tr)
+	tran, ok = tr.(*http.Transport)
+	assert.True(t, ok)
+	assert.NotNil(t, tran)
+	assert.Equal(t, 101*time.Second, tran.TLSHandshakeTimeout)
+	assert.Equal(t, transport.DefaultIdleConnectionTimeout, tran.IdleConnTimeout)
+	assert.Equal(t, transport.DefaultMaxConnections, tran.MaxConnsPerHost)
+	assert.Equal(t, transport.DefaultExpectContinueTimeout, tran.ExpectContinueTimeout)
+	assert.Equal(t, transport.DefaultTLSMinVersion, tran.TLSClientConfig.MinVersion)
+	assert.Equal(t, true, tran.TLSClientConfig.InsecureSkipVerify)
+	assert.Nil(t, opt.HttpClient.CheckRedirect)
+	assert.NotNil(t, tran.Proxy)
 }
