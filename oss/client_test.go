@@ -696,7 +696,7 @@ func TestResolveHTTPClient(t *testing.T) {
 	opt := &Options{}
 	assert.Nil(t, cfg.HttpClient)
 	assert.Nil(t, opt.HttpClient)
-	resolveHTTPClient(cfg, opt)
+	resolveHTTPClient(cfg, opt, nil)
 	assert.NotNil(t, opt.HttpClient)
 
 	tr := opt.HttpClient.Transport
@@ -721,7 +721,7 @@ func TestResolveHTTPClient(t *testing.T) {
 		ProxyFromEnvironment: Ptr(true),
 	}
 	opt = &Options{}
-	resolveHTTPClient(cfg, opt)
+	resolveHTTPClient(cfg, opt, nil)
 	assert.NotNil(t, opt.HttpClient)
 	tr = opt.HttpClient.Transport
 	assert.NotNil(t, tr)

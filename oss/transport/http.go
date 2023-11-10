@@ -34,6 +34,9 @@ type Config struct {
 	IdleConnectionTimeout *time.Duration
 	KeepAliveTimeout      *time.Duration
 	EnabledRedirect       *bool
+
+	PostRead  []func(n int, err error)
+	PostWrite []func(n int, err error)
 }
 
 func newTransportCustom(cfg *Config, fns ...func(*http.Transport)) http.RoundTripper {
@@ -95,6 +98,16 @@ func mergeInConfig(dst *Config, other *Config) {
 
 	if other.EnabledRedirect != nil {
 		dst.EnabledRedirect = other.EnabledRedirect
+	}
+
+	if other.PostRead != nil {
+		dst.PostRead = make([]func(n int, err error), len(other.PostRead))
+		copy(dst.PostRead, other.PostRead)
+	}
+
+	if other.PostWrite != nil {
+		dst.PostWrite = make([]func(n int, err error), len(other.PostWrite))
+		copy(dst.PostWrite, other.PostWrite)
 	}
 }
 

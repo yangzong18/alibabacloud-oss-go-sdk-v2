@@ -254,6 +254,12 @@ func TestInvokeOperation_Anonymous(t *testing.T) {
 		output, err := client.InvokeOperation(context.TODO(), c.Input)
 		assert.Nil(t, err)
 		c.CheckOutputFn(t, output)
+
+		var fns []func(*Options)
+		fns = append(fns, func(c *Options) { c.OpReadWriteTimeout = Ptr(1 * time.Second) })
+		output, err = client.InvokeOperation(context.TODO(), c.Input, fns...)
+		assert.Nil(t, err)
+		c.CheckOutputFn(t, output)
 	}
 }
 

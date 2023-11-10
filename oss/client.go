@@ -54,8 +54,13 @@ func (c Options) Copy() Options {
 	return to
 }
 
+type innerOptions struct {
+	BwTokenBuckets BwTokenBuckets
+}
+
 type Client struct {
 	options Options
+	inner   innerOptions
 }
 
 func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
@@ -66,9 +71,11 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 		CredentialsProvider: cfg.CredentialsProvider,
 		HttpClient:          cfg.HttpClient,
 	}
+	inner := innerOptions{}
+
 	resolveEndpoint(cfg, &options)
 	resolveRetryer(cfg, &options)
-	resolveHTTPClient(cfg, &options)
+	resolveHTTPClient(cfg, &options, &inner)
 	resolveSigner(cfg, &options)
 	resolveUrlStyle(cfg, &options)
 	resolveFeatureFlags(cfg, &options)
@@ -79,6 +86,7 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 
 	client := &Client{
 		options: options,
+		inner:   inner,
 	}
 
 	return client
@@ -108,7 +116,7 @@ func resolveRetryer(cfg *Config, o *Options) {
 	o.Retryer = retry.NewStandard()
 }
 
-func resolveHTTPClient(cfg *Config, o *Options) {
+func resolveHTTPClient(cfg *Config, o *Options, inner *innerOptions) {
 	if o.HttpClient != nil {
 		return
 	}
@@ -137,6 +145,22 @@ func resolveHTTPClient(cfg *Config, o *Options) {
 	}
 	if cfg.EnabledRedirect != nil {
 		tcfg.EnabledRedirect = cfg.EnabledRedirect
+	}
+	if cfg.UploadBandwidthlimit != nil {
+		value := *cfg.UploadBandwidthlimit * 1024
+		tb := newBwTokenBucket(value)
+		tcfg.PostWrite = append(tcfg.PostWrite, func(n int, _ error) {
+			tb.LimitBandwidth(n)
+		})
+		inner.BwTokenBuckets[BwTokenBucketSlotTx] = tb
+	}
+	if cfg.DownloadBandwidthlimit != nil {
+		value := *cfg.DownloadBandwidthlimit * 1024
+		tb := newBwTokenBucket(value)
+		tcfg.PostRead = append(tcfg.PostRead, func(n int, _ error) {
+			tb.LimitBandwidth(n)
+		})
+		inner.BwTokenBuckets[BwTokenBucketSlotRx] = tb
 	}
 
 	o.HttpClient = transport.NewHttpClient(tcfg, custom...)

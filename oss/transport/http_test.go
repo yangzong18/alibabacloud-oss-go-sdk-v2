@@ -111,6 +111,28 @@ func TestMerge(t *testing.T) {
 	assert.Equal(t, 10*time.Second, *cfg.ReadWriteTimeout)
 	assert.Equal(t, 50*time.Second, *cfg.IdleConnectionTimeout)
 	assert.Equal(t, 30*time.Second, *cfg.KeepAliveTimeout)
+
+	//read and write
+	cfg = copyTestConfig.copy()
+	cfg.mergeIn(&Config{
+		PostRead: []func(n int, err error){
+			func(n int, err error) {},
+			func(n int, err error) {},
+		},
+	})
+	cfg.mergeIn(&DefaultConfig)
+	assert.Len(t, cfg.PostRead, 2)
+	assert.Nil(t, cfg.PostWrite)
+
+	cfg = copyTestConfig.copy()
+	cfg.mergeIn(&Config{
+		PostWrite: []func(n int, err error){
+			func(n int, err error) {},
+		},
+	})
+	cfg.mergeIn(&DefaultConfig)
+	assert.Len(t, cfg.PostWrite, 1)
+	assert.Nil(t, cfg.PostRead)
 }
 
 func TestDefaultConfig(t *testing.T) {
@@ -171,6 +193,36 @@ func TestDialer(t *testing.T) {
 	conn, ok = c.(*timeoutConn)
 	assert.True(t, ok)
 	assert.Equal(t, DefaultReadWriteTimeout, conn.timeout)
+
+	cfg = DefaultConfig.copy()
+	d = newDialer(cfg)
+	assert.NotNil(t, d)
+	assert.Equal(t, DefaultConnectTimeout, d.Dialer.Timeout)
+	assert.Equal(t, DefaultKeepAliveTimeout, d.Dialer.KeepAlive)
+	assert.Nil(t, d.postWrite)
+	assert.Nil(t, d.postWrite)
+
+	cfg = DefaultConfig.copy()
+	cfg.PostRead = []func(n int, err error){
+		func(n int, err error) {},
+	}
+	d = newDialer(cfg)
+	assert.NotNil(t, d)
+	assert.Equal(t, DefaultConnectTimeout, d.Dialer.Timeout)
+	assert.Equal(t, DefaultKeepAliveTimeout, d.Dialer.KeepAlive)
+	assert.Len(t, d.postRead, 1)
+	assert.Nil(t, d.postWrite)
+
+	cfg = DefaultConfig.copy()
+	cfg.PostWrite = []func(n int, err error){
+		func(n int, err error) {},
+	}
+	d = newDialer(cfg)
+	assert.NotNil(t, d)
+	assert.Equal(t, DefaultConnectTimeout, d.Dialer.Timeout)
+	assert.Equal(t, DefaultKeepAliveTimeout, d.Dialer.KeepAlive)
+	assert.Len(t, d.postWrite, 1)
+	assert.Nil(t, d.postRead)
 }
 
 func TestTransport(t *testing.T) {

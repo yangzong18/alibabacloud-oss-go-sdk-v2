@@ -10,7 +10,9 @@ import (
 type Dialer struct {
 	net.Dialer
 	// Read/Write timeout
-	timeout time.Duration
+	timeout   time.Duration
+	postRead  []func(n int, err error)
+	postWrite []func(n int, err error)
 }
 
 func newDialer(cfg *Config) *Dialer {
@@ -19,7 +21,9 @@ func newDialer(cfg *Config) *Dialer {
 			Timeout:   *cfg.ConnectTimeout,
 			KeepAlive: *cfg.KeepAliveTimeout,
 		},
-		timeout: *cfg.ReadWriteTimeout,
+		timeout:   *cfg.ReadWriteTimeout,
+		postRead:  cfg.PostRead,
+		postWrite: cfg.PostWrite,
 	}
 	return dialer
 }
@@ -42,14 +46,16 @@ func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.
 	t := &timeoutConn{
 		Conn:    c,
 		timeout: timeout,
+		dialer:  d,
 	}
 	return t, t.nudgeDeadline()
 }
 
-// A net.Conn with Read/Write timeout
+// A net.Conn with Read/Write timeout and rate limiting,
 type timeoutConn struct {
 	net.Conn
 	timeout time.Duration
+	dialer  *Dialer
 }
 
 func (c *timeoutConn) nudgeDeadline() error {
@@ -61,6 +67,9 @@ func (c *timeoutConn) nudgeDeadline() error {
 
 func (c *timeoutConn) Read(b []byte) (n int, err error) {
 	n, err = c.Conn.Read(b)
+	for _, fn := range c.dialer.postRead {
+		fn(n, err)
+	}
 	if err == nil && n > 0 && c.timeout > 0 {
 		err = c.nudgeDeadline()
 	}
@@ -69,6 +78,9 @@ func (c *timeoutConn) Read(b []byte) (n int, err error) {
 
 func (c *timeoutConn) Write(b []byte) (n int, err error) {
 	n, err = c.Conn.Write(b)
+	for _, fn := range c.dialer.postWrite {
+		fn(n, err)
+	}
 	if err == nil && n > 0 && c.timeout > 0 {
 		err = c.nudgeDeadline()
 	}

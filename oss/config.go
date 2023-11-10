@@ -55,6 +55,12 @@ type Config struct {
 	// HTTP_PROXY, HTTPS_PROXY and NO_PROXY (or the lowercase versions thereof).
 	// HTTPS_PROXY takes precedence over HTTP_PROXY for https requests.
 	ProxyFromEnvironment *bool
+
+	// Upload bandwidth limit in kBytes/s for all request
+	UploadBandwidthlimit *int64
+
+	// Download bandwidth limit in kBytes/s for all request
+	DownloadBandwidthlimit *int64
 }
 
 func NewConfig() *Config {
@@ -140,5 +146,15 @@ func (c *Config) WithProxyHost(value string) *Config {
 
 func (c *Config) WithProxyFromEnvironment(value bool) *Config {
 	c.ProxyFromEnvironment = Ptr(value)
+	return c
+}
+
+func (c *Config) WithUploadBandwidthlimit(value int64) *Config {
+	c.UploadBandwidthlimit = Ptr(value)
+	return c
+}
+
+func (c *Config) WithDownloadBandwidthlimit(value int64) *Config {
+	c.DownloadBandwidthlimit = Ptr(value)
 	return c
 }
