@@ -38,7 +38,7 @@ type PutBucketResult struct {
 	ResultCommon
 }
 
-// Creates a bucket.
+// PutBucket Creates a bucket.
 func (c *Client) PutBucket(ctx context.Context, request *PutBucketRequest, optFns ...func(*Options)) (*PutBucketResult, error) {
 	var err error
 	if request == nil {
@@ -70,7 +70,6 @@ func (c *Client) PutBucket(ctx context.Context, request *PutBucketRequest, optFn
 	return result, err
 }
 
-// Deletes creates a bucket.
 type DeleteBucketRequest struct {
 	// The name of the bucket to delete.
 	Bucket *string `input:"host,bucket,required"`
@@ -82,7 +81,7 @@ type DeleteBucketResult struct {
 	ResultCommon
 }
 
-// Deletes a bucket.
+// DeleteBucket Deletes a bucket.
 func (c *Client) DeleteBucket(ctx context.Context, request *DeleteBucketRequest, optFns ...func(*Options)) (*DeleteBucketResult, error) {
 	var err error
 	if request == nil {
@@ -178,22 +177,22 @@ type ListObjectsResult struct {
 
 type ObjectProperties struct {
 	// The name of the object.
-	Key string `xml:"Key"`
+	Key *string `xml:"Key"`
 
 	// The type of the object. Valid values: Normal, Multipart and Appendable
-	Type string `xml:"Type"`
+	Type *string `xml:"Type"`
 
 	// The size of the returned object. Unit: bytes.
 	Size int64 `xml:"Size"`
 
 	// The entity tag (ETag). An ETag is created when an object is created to identify the content of the object.
-	ETag string `xml:"ETag"`
+	ETag *string `xml:"ETag"`
 
 	// The time when the returned objects were last modified.
-	LastModified time.Time `xml:"LastModified"`
+	LastModified *time.Time `xml:"LastModified"`
 
 	// The storage class of the object.
-	StorageClass string `xml:"StorageClass"`
+	StorageClass *string `xml:"StorageClass"`
 
 	// The container that stores information about the bucket owner.
 	Owner *Owner `xml:"Owner"`
@@ -204,18 +203,18 @@ type ObjectProperties struct {
 
 type Owner struct {
 	// The ID of the bucket owner.
-	ID string `xml:"ID"`
+	ID *string `xml:"ID"`
 
 	// The name of the object owner.
-	DisplayName string `xml:"DisplayName"`
+	DisplayName *string `xml:"DisplayName"`
 }
 
 type CommonPrefix struct {
 	// The prefix contained in the returned object names.
-	Prefix string `xml:"Prefix"`
+	Prefix *string `xml:"Prefix"`
 }
 
-// Queries information about objects in a bucket.
+// ListObjects Lists the information about all objects in a bucket.
 func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, optFns ...func(*Options)) (*ListObjectsResult, error) {
 	var err error
 	if request == nil {
@@ -246,7 +245,6 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 	return result, err
 }
 
-// private function
 func unmarshalEncodeType(result interface{}, output *OperationOutput) error {
 	switch r := result.(type) {
 	case *ListObjectsResult:
@@ -263,16 +261,508 @@ func unmarshalEncodeType(result interface{}, output *OperationOutput) error {
 				}
 			}
 			for i := 0; i < len(r.Contents); i++ {
-				if r.Contents[i].Key, err = url.QueryUnescape(r.Contents[i].Key); err != nil {
+				if *r.Contents[i].Key, err = url.QueryUnescape(*r.Contents[i].Key); err != nil {
 					return err
 				}
 			}
 			for i := 0; i < len(r.CommonPrefixes); i++ {
-				if r.CommonPrefixes[i].Prefix, err = url.QueryUnescape(r.CommonPrefixes[i].Prefix); err != nil {
+				if *r.CommonPrefixes[i].Prefix, err = url.QueryUnescape(*r.CommonPrefixes[i].Prefix); err != nil {
+					return err
+				}
+			}
+		}
+	case *ListObjectsResultV2:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			fields := []**string{&r.Prefix, &r.StartAfter, &r.Delimiter, &r.ContinuationToken, &r.NextContinuationToken}
+			var s string
+			var err error
+			for _, pp := range fields {
+				if pp != nil && *pp != nil {
+					if s, err = url.QueryUnescape(**pp); err != nil {
+						return err
+					}
+					*pp = Ptr(s)
+				}
+			}
+			for i := 0; i < len(r.Contents); i++ {
+				if *r.Contents[i].Key, err = url.QueryUnescape(*r.Contents[i].Key); err != nil {
+					return err
+				}
+			}
+			for i := 0; i < len(r.CommonPrefixes); i++ {
+				if *r.CommonPrefixes[i].Prefix, err = url.QueryUnescape(*r.CommonPrefixes[i].Prefix); err != nil {
 					return err
 				}
 			}
 		}
 	}
 	return nil
+}
+
+type ListObjectsRequestV2 struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	// The character that is used to group objects by name. If you specify the delimiter parameter in the request,
+	// the response contains the CommonPrefixes parameter. The objects whose names contain the same string from
+	// the prefix to the next occurrence of the delimiter are grouped as a single result element in CommonPrefixes.
+	Delimiter *string `input:"query,delimiter"`
+
+	// The name of the object after which the ListObjectsV2 (GetBucketV2) operation starts.
+	// The objects are returned in alphabetical order of their names. The start-after parameter
+	// is used to list the returned objects by page.
+	// The value of the parameter must be less than 1,024 bytes in length.
+	// Even if the specified start-after value does not exist during a conditional query,
+	// the ListObjectsV2 (GetBucketV2) operation starts from the object whose name is alphabetically greater than the start-after value.
+	// By default, this parameter is left empty.
+	StartAfter *string `input:"query,start-after"`
+
+	// The token from which the ListObjectsV2 (GetBucketV2) operation must start.
+	// You can obtain the token from the NextContinuationToken parameter in the ListObjectsV2 (GetBucketV2) response.
+	ContinuationToken *string `input:"query,continuation-token"`
+
+	// The maximum number of objects that you want to return. If the list operation cannot be complete at a time
+	// because the max-keys parameter is specified, the NextMarker element is included in the response as the marker
+	// for the next list operation.
+	MaxKeys int32 `input:"query,max-keys"`
+
+	// The prefix that the names of the returned objects must contain.
+	Prefix *string `input:"query,prefix"`
+
+	// The encoding type of the content in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	// Specifies whether to include information about the object owner in the response.
+	FetchOwner bool `input:"query,fetch-owner"`
+
+	RequestCommon
+}
+
+type ListObjectsResultV2 struct {
+	// The name of the bucket.
+	Name *string `xml:"Name"`
+
+	// The prefix contained in the returned object names.
+	Prefix *string `xml:"Prefix"`
+
+	// If the StartAfter parameter is specified in the request, the response contains the StartAfter parameter.
+	StartAfter *string `xml:"StartAfter"`
+
+	// The maximum number of returned objects in the response.
+	MaxKeys int32 `xml:"MaxKeys"`
+
+	// The character that is used to group objects by name.
+	Delimiter *string `xml:"Delimiter"`
+
+	// Indicates whether the returned results are truncated.
+	// true indicates that not all results are returned this time.
+	// false indicates that all results are returned this time.
+	IsTruncated bool `xml:"IsTruncated"`
+
+	// If the ContinuationToken parameter is specified in the request, the response contains the ContinuationToken parameter.
+	ContinuationToken *string `xml:"ContinuationToken"`
+
+	// The name of the object from which the next ListObjectsV2 (GetBucketV2) operation starts.
+	// The NextContinuationToken value is used as the ContinuationToken value to query subsequent results.
+	NextContinuationToken *string `xml:"NextContinuationToken"`
+
+	// The encoding type of the content in the response.
+	EncodingType *string `xml:"EncodingType"`
+
+	// The container that stores the metadata of the returned objects.
+	Contents []ObjectProperties `xml:"Contents"`
+
+	// If the Delimiter parameter is specified in the request, the response contains the CommonPrefixes element.
+	CommonPrefixes []CommonPrefix `xml:"CommonPrefixes"`
+
+	// The number of objects returned for this request. If Delimiter is specified, KeyCount is the sum of the values of Key and CommonPrefixes.
+	KeyCount int `xml:"KeyCount"`
+
+	ResultCommon
+}
+
+// ListObjectsV2 Queries information about all objects in a bucket.
+func (c *Client) ListObjectsV2(ctx context.Context, request *ListObjectsRequestV2, optFns ...func(*Options)) (*ListObjectsResultV2, error) {
+	var err error
+	if request == nil {
+		request = &ListObjectsRequestV2{}
+	}
+	input := &OperationInput{
+		OpName: "ListObjectsV2",
+		Method: "GET",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"list-type": "2",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ListObjectsResultV2{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetBucketInfoRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+	RequestCommon
+}
+
+type GetBucketInfoResult struct {
+	// The container that stores the bucket information.
+	BucketInfo BucketInfo `xml:"Bucket"`
+	ResultCommon
+}
+
+// BucketInfo defines Bucket information
+type BucketInfo struct {
+	// The name of the bucket.
+	Name *string `xml:"Name"`
+
+	// Indicates whether access tracking is enabled for the bucket.
+	AccessMonitor *string `xml:"AccessMonitor"`
+
+	// The region in which the bucket is located.
+	Location *string `xml:"Location"`
+
+	// The time when the bucket is created. The time is in UTC.
+	CreationDate *time.Time `xml:"CreationDate"`
+
+	// The public endpoint that is used to access the bucket over the Internet.
+	ExtranetEndpoint *string `xml:"ExtranetEndpoint"`
+
+	// The internal endpoint that is used to access the bucket from Elastic
+	IntranetEndpoint *string `xml:"IntranetEndpoint"`
+
+	// The container that stores the access control list (ACL) information about the bucket.
+	ACL *string `xml:"AccessControlList>Grant"`
+
+	// The disaster recovery type of the bucket.
+	RedundancyType *string `xml:"DataRedundancyType"`
+
+	// The container that stores the information about the bucket owner.
+	Owner *Owner `xml:"Owner"`
+
+	// The storage class of the bucket.
+	StorageClass *string `xml:"StorageClass"`
+
+	// The ID of the resource group to which the bucket belongs.
+	ResourceGroupId *string `xml:"ResourceGroupId"`
+
+	// The container that stores the server-side encryption method.
+	SseRule SSERule `xml:"ServerSideEncryptionRule"`
+
+	// Indicates whether versioning is enabled for the bucket.
+	Versioning *string `xml:"Versioning"`
+
+	// Indicates whether transfer acceleration is enabled for the bucket.
+	TransferAcceleration *string `xml:"TransferAcceleration"`
+
+	// Indicates whether cross-region replication (CRR) is enabled for the bucket.
+	CrossRegionReplication *string `xml:"CrossRegionReplication"`
+
+	// The container that stores the logs.
+	BucketPolicy BucketPolicy `xml:"BucketPolicy"`
+}
+
+type SSERule struct {
+	// The customer master key (CMK) ID in use. A valid value is returned only if you set SSEAlgorithm to KMS
+	// and specify the CMK ID. In other cases, an empty value is returned.
+	KMSMasterKeyID *string `xml:"KMSMasterKeyID"`
+
+	// The server-side encryption method that is used by default.
+	SSEAlgorithm *string `xml:"SSEAlgorithm"`
+
+	// Object's encryption algorithm. If this element is not included in the response,
+	// it indicates that the object is using the AES256 encryption algorithm.
+	// This option is only valid if the SSEAlgorithm value is KMS.
+	KMSDataEncryption *string `xml:"KMSDataEncryption"`
+}
+
+type BucketPolicy struct {
+	// The name of the bucket that stores the logs.
+	LogBucket *string `xml:"LogBucket"`
+
+	// The directory in which logs are stored.
+	LogPrefix *string `xml:"LogPrefix"`
+}
+
+// GetBucketInfo Queries information about a bucket.
+func (c *Client) GetBucketInfo(ctx context.Context, request *GetBucketInfoRequest, optFns ...func(*Options)) (*GetBucketInfoResult, error) {
+	var err error
+	if request == nil {
+		request = &GetBucketInfoRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetBucketInfo",
+		Method: "GET",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"bucketInfo": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &GetBucketInfoResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalSseRule); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+func unmarshalSseRule(result interface{}, output *OperationOutput) error {
+	switch r := result.(type) {
+	case *GetBucketInfoResult:
+		fields := []*string{r.BucketInfo.SseRule.KMSMasterKeyID, r.BucketInfo.SseRule.SSEAlgorithm, r.BucketInfo.SseRule.KMSDataEncryption}
+		for _, pp := range fields {
+			if pp != nil && *pp == "None" {
+				*pp = ""
+			}
+		}
+	}
+	return nil
+}
+
+type GetBucketLocationRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+	RequestCommon
+}
+
+type GetBucketLocationResult struct {
+	// The region in which the bucket is located.
+	LocationConstraint *string `xml:",chardata"`
+	ResultCommon
+}
+
+// GetBucketLocation Queries the region of an Object Storage Service (OSS) bucket.
+func (c *Client) GetBucketLocation(ctx context.Context, request *GetBucketLocationRequest, optFns ...func(*Options)) (*GetBucketLocationResult, error) {
+	var err error
+	if request == nil {
+		request = &GetBucketLocationRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetBucketLocation",
+		Method: "GET",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"location": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &GetBucketLocationResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type GetBucketStatRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+	RequestCommon
+}
+
+type GetBucketStatResult struct {
+	// The storage capacity of the bucket. Unit: bytes.
+	Storage int64 `xml:"Storage"`
+
+	// The total number of objects that are stored in the bucket.
+	ObjectCount int64 `xml:"ObjectCount"`
+
+	// The number of multipart upload tasks that have been initiated but are not completed or canceled.
+	MultipartUploadCount int64 `xml:"MultipartUploadCount"`
+
+	// The number of LiveChannels in the bucket.
+	LiveChannelCount int64 `xml:"LiveChannelCount"`
+
+	// The time when the obtained information is last modified. The value of this element is a UNIX timestamp. Unit: seconds.
+	LastModifiedTime int64 `xml:"LastModifiedTime"`
+
+	// The storage usage of Standard objects in the bucket. Unit: bytes.
+	StandardStorage int64 `xml:"StandardStorage"`
+
+	// The number of Standard objects in the bucket.
+	StandardObjectCount int64 `xml:"StandardObjectCount"`
+
+	// The billed storage usage of Infrequent Access (IA) objects in the bucket. Unit: bytes.
+	InfrequentAccessStorage int64 `xml:"InfrequentAccessStorage"`
+
+	// The actual storage usage of IA objects in the bucket. Unit: bytes.
+	InfrequentAccessRealStorage int64 `xml:"InfrequentAccessRealStorage"`
+
+	// The number of IA objects in the bucket.
+	InfrequentAccessObjectCount int64 `xml:"InfrequentAccessObjectCount"`
+
+	// The billed storage usage of Archive objects in the bucket. Unit: bytes.
+	ArchiveStorage int64 `xml:"ArchiveStorage"`
+
+	// The actual storage usage of Archive objects in the bucket. Unit: bytes.
+	ArchiveRealStorage int64 `xml:"ArchiveRealStorage"`
+
+	// The number of Archive objects in the bucket.
+	ArchiveObjectCount int64 `xml:"ArchiveObjectCount"`
+
+	// The billed storage usage of Cold Archive objects in the bucket. Unit: bytes.
+	ColdArchiveStorage int64 `xml:"ColdArchiveStorage"`
+
+	// The actual storage usage of Cold Archive objects in the bucket. Unit: bytes.
+	ColdArchiveRealStorage int64 `xml:"ColdArchiveRealStorage"`
+
+	// The number of Cold Archive objects in the bucket.
+	ColdArchiveObjectCount int64 `xml:"ColdArchiveObjectCount"`
+	ResultCommon
+}
+
+// GetBucketStat Queries the storage capacity of a specified bucket and the number of objects that are stored in the bucket.
+func (c *Client) GetBucketStat(ctx context.Context, request *GetBucketStatRequest, optFns ...func(*Options)) (*GetBucketStatResult, error) {
+	var err error
+	if request == nil {
+		request = &GetBucketStatRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetBucketStat",
+		Method: "GET",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"stat": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &GetBucketStatResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type PutBucketAclRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	// The access control list (ACL) of the object.
+	Acl BucketACLType `input:"header,x-oss-acl,required"`
+	RequestCommon
+}
+
+type PutBucketAclResult struct {
+	ResultCommon
+}
+
+// PutBucketAcl You can call this operation to configure or modify the ACL of a bucket.
+func (c *Client) PutBucketAcl(ctx context.Context, request *PutBucketAclRequest, optFns ...func(*Options)) (*PutBucketAclResult, error) {
+	var err error
+	if request == nil {
+		request = &PutBucketAclRequest{}
+	}
+	input := &OperationInput{
+		OpName: "PutBucketAcl",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"acl": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &PutBucketAclResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type GetBucketAclRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	RequestCommon
+}
+
+type GetBucketAclResult struct {
+	// The container that stores the access control list (ACL) information about the bucket.
+	ACL *string `xml:"AccessControlList>Grant"`
+
+	// The container that stores information about the bucket owner.
+	Owner *Owner `xml:"Owner"`
+
+	ResultCommon
+}
+
+// GetBucketAcl You can call this operation to query the ACL of a bucket.
+func (c *Client) GetBucketAcl(ctx context.Context, request *GetBucketAclRequest, optFns ...func(*Options)) (*GetBucketAclResult, error) {
+	var err error
+	if request == nil {
+		request = &GetBucketAclRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetBucketAcl",
+		Method: "GET",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeDefault,
+		},
+		Parameters: map[string]string{
+			"acl": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &GetBucketAclResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
 }

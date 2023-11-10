@@ -13,6 +13,14 @@ func TestPtr(t *testing.T) {
 	assert.Equal(t, b, *pb)
 }
 
+func TestPta(t *testing.T) {
+	isTrue := true
+	b := &isTrue
+	pb := Pta(b)
+	assert.NotNil(t, pb)
+	assert.Equal(t, pb, isTrue)
+}
+
 func TestSliceOfPtrs(t *testing.T) {
 	arr := SliceOfPtrs[int]()
 	assert.Equal(t, len(arr), 0)

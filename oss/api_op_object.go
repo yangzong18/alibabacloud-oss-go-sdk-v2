@@ -78,7 +78,7 @@ type PutObjectResult struct {
 	ResultCommon
 }
 
-// Uploads a object.
+// PutObject Uploads a object.
 func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFns ...func(*Options)) (*PutObjectResult, error) {
 	var err error
 	if request == nil {

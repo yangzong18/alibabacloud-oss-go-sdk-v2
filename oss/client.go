@@ -792,7 +792,8 @@ func updateContentMd5(input *OperationInput) error {
 	var contentMd5 string
 	if input.Body != nil {
 		var r io.ReadSeeker
-		if r, ok := input.Body.(io.ReadSeeker); !ok {
+		var ok bool
+		if r, ok = input.Body.(io.ReadSeeker); !ok {
 			buf, _ := io.ReadAll(input.Body)
 			r = bytes.NewReader(buf)
 			input.Body = r

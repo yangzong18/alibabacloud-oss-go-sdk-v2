@@ -51,24 +51,24 @@ type ListBucketsResult struct {
 
 type BucketProperties struct {
 	// The name of the bucket.
-	Name string `xml:"Name"`
+	Name *string `xml:"Name"`
 
 	// The data center in which the bucket is located.
-	Location string `xml:"Location"`
+	Location *string `xml:"Location"`
 
 	// The time when the bucket was created. Format: yyyy-mm-ddThh:mm:ss.timezone.
-	CreationDate time.Time `xml:"CreationDate"`
+	CreationDate *time.Time `xml:"CreationDate"`
 
 	// The storage class of the bucket. Valid values:
 	// Standard, IA, Archive, ColdArchive and DeepColdArchive.
-	StorageClass string `xml:"StorageClass"`
+	StorageClass *string `xml:"StorageClass"`
 
 	// The public endpoint used to access the bucket over the Internet.
-	ExtranetEndpoint string `xml:"ExtranetEndpoint"`
+	ExtranetEndpoint *string `xml:"ExtranetEndpoint"`
 
 	// The internal endpoint that is used to access the bucket from ECS instances
 	// that reside in the same region as the bucket.
-	IntranetEndpoint string `xml:"IntranetEndpoint"`
+	IntranetEndpoint *string `xml:"IntranetEndpoint"`
 
 	// The region in which the bucket is located.
 	Region *string `xml:"Region"`
@@ -77,7 +77,7 @@ type BucketProperties struct {
 	ResourceGroupId *string `xml:"ResourceGroupId"`
 }
 
-// Lists buckets that belong to the current account.
+// ListBuckets Lists buckets that belong to the current account.
 func (c *Client) ListBuckets(ctx context.Context, request *ListBucketsRequest, optFns ...func(*Options)) (*ListBucketsResult, error) {
 	var err error
 	if request == nil {
