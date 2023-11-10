@@ -2271,11 +2271,7 @@ var testMockPutBucketAclErrorCases = []struct {
 		},
 		&PutBucketAclRequest{
 			Bucket: Ptr("bucket"),
-			RequestCommon: RequestCommon{
-				Headers: map[string]string{
-					"x-oss-acl": string(BucketACLPrivate),
-				},
-			},
+			Acl:    BucketACLPrivate,
 		},
 		func(t *testing.T, o *PutBucketAclResult, err error) {
 			assert.Nil(t, o)
@@ -2312,11 +2308,7 @@ var testMockPutBucketAclErrorCases = []struct {
 		},
 		&PutBucketAclRequest{
 			Bucket: Ptr("bucket"),
-			RequestCommon: RequestCommon{
-				Headers: map[string]string{
-					"x-oss-acl": string(BucketACLPrivate),
-				},
-			},
+			Acl:    BucketACLPrivate,
 		},
 		func(t *testing.T, o *PutBucketAclResult, err error) {
 			assert.Nil(t, o)
