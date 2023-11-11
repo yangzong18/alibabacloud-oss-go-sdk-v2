@@ -113,7 +113,7 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 
 	//CanonicalizedOSSHeaders
 	var headers []string
-	for k, _ := range request.Header {
+	for k := range request.Header {
 		lowerCaseKey := strings.ToLower(k)
 		if strings.HasPrefix(lowerCaseKey, ossHeaderPreifx) {
 			headers = append(headers, lowerCaseKey)
@@ -133,7 +133,7 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 	//CanonicalizedResource
 	query := request.URL.Query()
 	var params []string
-	for k, _ := range query {
+	for k := range query {
 		if _, ok := requiredSignedParametersMap[k]; ok {
 			params = append(params, k)
 		} else if strings.HasPrefix(k, ossHeaderPreifx) {
