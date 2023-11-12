@@ -26,15 +26,15 @@ func TestSigningContext(t *testing.T) {
 	assert.Empty(t, r.Credentials)
 	assert.Empty(t, r.StringToSign)
 	assert.Empty(t, r.SignedHeaders)
+	assert.Empty(t, r.Time)
 }
 
 func TestNopSigner(t *testing.T) {
 	r := NopSigner{}
-	assert.Nil(t, r.Presign(context.TODO(), nil))
 	assert.Nil(t, r.Sign(context.TODO(), nil))
 }
 
-func TestV1(t *testing.T) {
+func TestV1AuthHeader(t *testing.T) {
 	var provider credentials.CredentialsProvider
 	var cred credentials.Credentials
 	var signTime time.Time
@@ -158,4 +158,52 @@ func TestV1InvalidArgument(t *testing.T) {
 	err = signer.Sign(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "SigningContext is null")
+}
+
+func TestV1AuthQuery(t *testing.T) {
+	var provider credentials.CredentialsProvider
+	var cred credentials.Credentials
+	var signTime time.Time
+	var signer Signer
+	var signCtx *SigningContext
+
+	//case 1
+	provider = credentials.NewStaticCredentialsProvider("ak", "sk")
+	cred, _ = provider.GetCredentials(context.TODO())
+	requst, _ := http.NewRequest("GET", "http://bucket.oss-cn-hangzhou.aliyuncs.com/key?versionId=versionId", nil)
+	requst.Header = http.Header{}
+	signTime, _ = http.ParseTime("Sun, 12 Nov 2023 16:43:40 GMT")
+	signCtx = &SigningContext{
+		Bucket:          ptr("bucket"),
+		Key:             ptr("key"),
+		Request:         requst,
+		Credentials:     &cred,
+		Time:            signTime,
+		AuthMethodQuery: true,
+	}
+
+	signer = &SignerV1{}
+	signer.Sign(context.TODO(), signCtx)
+	signUrl := "http://bucket.oss-cn-hangzhou.aliyuncs.com/key?Expires=1699807420&OSSAccessKeyId=ak&Signature=dcLTea%2BYh9ApirQ8o8dOPqtvJXQ%3D&versionId=versionId"
+	assert.Equal(t, signUrl, requst.URL.String())
+
+	//case 2
+	provider = credentials.NewStaticCredentialsProvider("ak", "sk", "token")
+	cred, _ = provider.GetCredentials(context.TODO())
+	requst, _ = http.NewRequest("GET", "http://bucket.oss-cn-hangzhou.aliyuncs.com/key%2B123?versionId=versionId", nil)
+	requst.Header = http.Header{}
+	signTime, _ = http.ParseTime("Sun, 12 Nov 2023 16:56:44 GMT")
+	signCtx = &SigningContext{
+		Bucket:          ptr("bucket"),
+		Key:             ptr("key+123"),
+		Request:         requst,
+		Credentials:     &cred,
+		Time:            signTime,
+		AuthMethodQuery: true,
+	}
+
+	signer = &SignerV1{}
+	signer.Sign(context.TODO(), signCtx)
+	signUrl = "http://bucket.oss-cn-hangzhou.aliyuncs.com/key%2B123?Expires=1699808204&OSSAccessKeyId=ak&Signature=jzKYRrM5y6Br0dRFPaTGOsbrDhY%3D&security-token=token&versionId=versionId"
+	assert.Equal(t, signUrl, requst.URL.String())
 }

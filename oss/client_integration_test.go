@@ -3,7 +3,6 @@ package oss
 import (
 	"context"
 	"errors"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"os"
 	"strconv"
@@ -11,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
 )

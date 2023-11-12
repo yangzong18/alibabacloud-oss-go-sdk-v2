@@ -8,6 +8,10 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
 )
 
+type HTTPClient interface {
+	Do(*http.Request) (*http.Response, error)
+}
+
 type Config struct {
 	// The region in which the bucket is located.
 	Region string
@@ -24,7 +28,7 @@ type Config struct {
 
 	// The HTTP client to invoke API calls with. Defaults to client's default HTTP
 	// implementation if nil.
-	HttpClient *http.Client
+	HttpClient HTTPClient
 
 	// The credentials provider to use when signing requests.
 	CredentialsProvider credentials.CredentialsProvider
@@ -61,6 +65,9 @@ type Config struct {
 
 	// Download bandwidth limit in kBytes/s for all request
 	DownloadBandwidthlimit *int64
+
+	// Authentication with OSS Signature Version
+	SignatureVersion SignatureVersionType
 }
 
 func NewConfig() *Config {
@@ -75,6 +82,7 @@ func (c Config) Copy() Config {
 func LoadDefaultConfig() *Config {
 	config := &Config{
 		RetryMaxAttempts: 3,
+		SignatureVersion: SignatureVersionV1,
 	}
 	return config
 }
@@ -156,5 +164,10 @@ func (c *Config) WithUploadBandwidthlimit(value int64) *Config {
 
 func (c *Config) WithDownloadBandwidthlimit(value int64) *Config {
 	c.DownloadBandwidthlimit = Ptr(value)
+	return c
+}
+
+func (c *Config) WithSignatureVersion(value SignatureVersionType) *Config {
+	c.SignatureVersion = value
 	return c
 }

@@ -10,6 +10,7 @@ import (
 
 const (
 	SubResource = "SubResource"
+	SignTime    = "SignTime"
 )
 
 type SigningContext struct {
@@ -24,23 +25,22 @@ type SigningContext struct {
 
 	Credentials *credentials.Credentials
 
+	AuthMethodQuery bool
+
+	// input and output
+	Time time.Time
+
 	// output
 	SignedHeaders map[string]string
-	Time          time.Time
 	StringToSign  string
 }
 
 type Signer interface {
 	Sign(ctx context.Context, signingCtx *SigningContext) error
-	Presign(ctx context.Context, signingCtx *SigningContext) error
 }
 
 type NopSigner struct{}
 
-func (NopSigner) Sign(ctx context.Context, signingCtx *SigningContext) error {
-	return nil
-}
-
-func (NopSigner) Presign(ctx context.Context, signingCtx *SigningContext) error {
+func (*NopSigner) Sign(ctx context.Context, signingCtx *SigningContext) error {
 	return nil
 }

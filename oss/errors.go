@@ -21,10 +21,15 @@ type ServiceError struct {
 }
 
 func (e *ServiceError) Error() string {
-	return fmt.Sprintf(`Error returned by Service. Http Status Code: %d. Error Code: %s. Request Id: %s. Message: %s.
-	EC: %s.
-	Timestamp: %s.
-	Request Endpoint: %s.`,
+	return fmt.Sprintf(
+		`Error returned by Service. 
+Http Status Code: %d. 
+Error Code: %s. 
+Request Id: %s. 
+Message: %s.
+EC: %s.
+Timestamp: %s.
+Request Endpoint: %s.`,
 		e.StatusCode, e.Code, e.RequestID, e.Message, e.EC, e.Timestamp, e.RequestTarget)
 }
 

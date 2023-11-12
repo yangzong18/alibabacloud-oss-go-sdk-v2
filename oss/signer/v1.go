@@ -9,6 +9,7 @@ import (
 	"hash"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -47,6 +48,7 @@ var requiredSignedParametersMap = map[string]struct{}{
 }
 
 const (
+	// headers
 	authorizationHeader = "Authorization"
 	securityTokenHeader = "x-oss-security-token"
 
@@ -55,6 +57,14 @@ const (
 	contentMd5Header  = "Content-MD5"
 	ossHeaderPreifx   = "x-oss-"
 	ossDateHeader     = "x-oss-date"
+
+	//Query
+	securityTokenQuery = "security-token"
+	expiresQuery       = "Expires"
+	accessKeyIdQuery   = "OSSAccessKeyId"
+	signatureQuery     = "Signature"
+
+	defaultExpiresDuration = 15 * time.Minute
 )
 
 type SignerV1 struct {
@@ -69,7 +79,14 @@ func isSubResource(list []string, key string) bool {
 	return false
 }
 
-func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
+func formatDate(time time.Time, unix bool) string {
+	if unix {
+		return fmt.Sprintf("%v", time.Unix())
+	}
+	return time.Format(http.TimeFormat)
+}
+
+func (*SignerV1) calcStringToSign(signingCtx *SigningContext) string {
 	/*
 		SignToString =
 			VERB + "\n"
@@ -80,36 +97,11 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 			+ CanonicalizedResource
 		Signature = base64(hmac-sha1(AccessKeySecret, SignToString))
 	*/
-	if signingCtx == nil {
-		return fmt.Errorf("SigningContext is null.")
-	}
-
-	if signingCtx.Credentials == nil || !signingCtx.Credentials.HasKeys() {
-		return fmt.Errorf("SigningContext.Credentials is null or empty.")
-	}
-
-	if signingCtx.Request == nil {
-		return fmt.Errorf("SigningContext.Request is null.")
-	}
-
 	request := signingCtx.Request
-	cred := signingCtx.Credentials
-
-	date := request.Header.Get(ossDateHeader)
-	if len(date) == 0 {
-		signingCtx.Time = time.Now().UTC()
-		date = signingCtx.Time.Format(http.TimeFormat)
-	} else {
-		signingCtx.Time, _ = http.ParseTime(date)
-	}
-	request.Header.Set(dateHeader, date)
-
-	if cred.SessionToken != "" {
-		request.Header.Set(securityTokenHeader, cred.SessionToken)
-	}
 
 	contentMd5 := request.Header.Get(contentMd5Header)
 	contentType := request.Header.Get(contentTypeHeader)
+	date := formatDate(signingCtx.Time, signingCtx.AuthMethodQuery)
 
 	//CanonicalizedOSSHeaders
 	var headers []string
@@ -173,24 +165,108 @@ func (SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
 			canonicalizedOSSHeaders +
 			canonicalizedResource
 
-	// sign
-	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(cred.AccessKeySecret))
-	_, err := io.WriteString(h, stringToSign)
+	//fmt.Printf("stringToSign:%s\n", stringToSign)
+	return stringToSign
+}
 
-	if err != nil {
-		return err
+func (s *SignerV1) authHeader(ctx context.Context, signingCtx *SigningContext) error {
+	request := signingCtx.Request
+	cred := signingCtx.Credentials
+
+	// Date
+	time := time.Now().UTC()
+	date := request.Header.Get(ossDateHeader)
+	if len(date) > 0 {
+		time, _ = http.ParseTime(date)
+	}
+	request.Header.Set(dateHeader, formatDate(time, false))
+	signingCtx.Time = time
+
+	// Credentials information
+	if cred.SessionToken != "" {
+		request.Header.Set(securityTokenHeader, cred.SessionToken)
 	}
 
-	authorizationStr := "OSS " + cred.AccessKeyID + ":" + base64.StdEncoding.EncodeToString(h.Sum(nil))
-	request.Header.Set(authorizationHeader, authorizationStr)
-
-	//save sign info
+	// StringToSign
+	stringToSign := s.calcStringToSign(signingCtx)
 	signingCtx.StringToSign = stringToSign
 
-	//fmt.Printf("StringToSign=%s", stringToSign)
+	// Signature
+	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(cred.AccessKeySecret))
+	if _, err := io.WriteString(h, stringToSign); err != nil {
+		return err
+	}
+	signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	// Authorization header
+	request.Header.Set(authorizationHeader, fmt.Sprintf("OSS %s:%s", cred.AccessKeyID, signature))
+
 	return nil
 }
 
-func (SignerV1) Presign(ctx context.Context, signingCtx *SigningContext) error {
+func (s *SignerV1) authQuery(ctx context.Context, signingCtx *SigningContext) error {
+	request := signingCtx.Request
+	cred := signingCtx.Credentials
+
+	// Date
+	if signingCtx.Time.IsZero() {
+		signingCtx.Time = time.Now().Add(defaultExpiresDuration)
+	}
+
+	// Credentials information
+	query, _ := url.ParseQuery(request.URL.RawQuery)
+	if cred.SessionToken != "" {
+		query.Add(securityTokenQuery, cred.SessionToken)
+		request.URL.RawQuery = query.Encode()
+	}
+
+	// StringToSign
+	stringToSign := s.calcStringToSign(signingCtx)
+	signingCtx.StringToSign = stringToSign
+
+	// Signature
+	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(cred.AccessKeySecret))
+	if _, err := io.WriteString(h, stringToSign); err != nil {
+		return err
+	}
+	signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	// Authorization query
+	query.Add(expiresQuery, fmt.Sprintf("%v", signingCtx.Time.Unix()))
+	query.Add(accessKeyIdQuery, cred.AccessKeyID)
+	query.Add(signatureQuery, signature)
+	request.URL.RawQuery = query.Encode()
+
 	return nil
+}
+
+func (s *SignerV1) Sign(ctx context.Context, signingCtx *SigningContext) error {
+	if signingCtx == nil {
+		return fmt.Errorf("SigningContext is null.")
+	}
+
+	if signingCtx.Credentials == nil || !signingCtx.Credentials.HasKeys() {
+		return fmt.Errorf("SigningContext.Credentials is null or empty.")
+	}
+
+	if signingCtx.Request == nil {
+		return fmt.Errorf("SigningContext.Request is null.")
+	}
+
+	if signingCtx.AuthMethodQuery {
+		return s.authQuery(ctx, signingCtx)
+	}
+
+	return s.authHeader(ctx, signingCtx)
+}
+
+func (*SignerV1) IsSignedHeader(h string) bool {
+	lowerCaseKey := strings.ToLower(h)
+	if strings.HasPrefix(lowerCaseKey, ossHeaderPreifx) ||
+		lowerCaseKey == "date" ||
+		lowerCaseKey == "content-type" ||
+		lowerCaseKey == "content-md5" {
+		return true
+	}
+	return false
 }

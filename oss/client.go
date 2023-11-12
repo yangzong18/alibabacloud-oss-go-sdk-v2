@@ -36,7 +36,7 @@ type Options struct {
 
 	CredentialsProvider credentials.CredentialsProvider
 
-	HttpClient *http.Client
+	HttpClient HTTPClient
 
 	ResponseHandlers []func(*http.Response) error
 
@@ -45,6 +45,8 @@ type Options struct {
 	FeatureFlags FeatureFlagsType
 
 	OpReadWriteTimeout *time.Duration
+
+	AuthMethod *AuthMethodType
 }
 
 func (c Options) Copy() Options {
@@ -171,7 +173,10 @@ func resolveSigner(cfg *Config, o *Options) {
 		return
 	}
 
-	o.Signer = signer.SignerV1{}
+	switch cfg.SignatureVersion {
+	default:
+		o.Signer = &signer.SignerV1{}
+	}
 }
 
 func resolveUrlStyle(cfg *Config, o *Options) {
@@ -272,12 +277,16 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	//signing context
 	subResource, _ := input.OpMetadata.Get(signer.SubResource).([]string)
 	signingCtx := &signer.SigningContext{
-		Product:     Ptr("oss"),
-		Region:      Ptr(opts.Region),
-		Bucket:      input.Bucket,
-		Key:         input.Key,
-		Request:     request,
-		SubResource: subResource,
+		Product:         Ptr("oss"),
+		Region:          Ptr(opts.Region),
+		Bucket:          input.Bucket,
+		Key:             input.Key,
+		Request:         request,
+		SubResource:     subResource,
+		AuthMethodQuery: (opts.AuthMethod != nil && *opts.AuthMethod == AuthMethodQuery),
+	}
+	if signTime, ok := input.OpMetadata.Get(signer.SignTime).(time.Time); ok {
+		signingCtx.Time = signTime
 	}
 
 	// send http request
@@ -289,15 +298,19 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 
 	// covert http response into output context
 	output = &OperationOutput{
-		Input:      input,
-		Status:     response.Status,
-		StatusCode: response.StatusCode,
-		Body:       response.Body,
-		Headers:    response.Header,
+		Input:       input,
+		Status:      response.Status,
+		StatusCode:  response.StatusCode,
+		Body:        response.Body,
+		Headers:     response.Header,
+		httpRequest: request,
 	}
 
 	// save other info by Metadata filed, ex. retry detail info
-	//output.Metadata.Set()
+	//output.OpMetadata.Set(...)
+	if signingCtx.AuthMethodQuery {
+		output.OpMetadata.Set(signer.SignTime, signingCtx.Time)
+	}
 
 	return output, err
 }
@@ -358,7 +371,7 @@ func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.Sig
 		}
 	}
 
-	if response, err = c.options.HttpClient.Do(signingCtx.Request); err != nil {
+	if response, err = opts.HttpClient.Do(signingCtx.Request); err != nil {
 		return response, err
 	}
 
@@ -460,6 +473,14 @@ func applyOperationOpt(c *Options, op *Options) {
 
 	if op.OpReadWriteTimeout != nil {
 		c.OpReadWriteTimeout = op.OpReadWriteTimeout
+	}
+
+	if op.HttpClient != nil {
+		c.HttpClient = op.HttpClient
+	}
+
+	if op.AuthMethod != nil {
+		c.AuthMethod = op.AuthMethod
 	}
 
 	//response handler

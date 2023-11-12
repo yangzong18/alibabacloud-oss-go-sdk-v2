@@ -175,3 +175,32 @@ func (f UrlStyleType) String() string {
 }
 
 type FeatureFlagsType int
+
+type SignatureVersionType int
+
+const (
+	SignatureVersionV1 SignatureVersionType = iota
+)
+
+func (f SignatureVersionType) String() string {
+	switch f {
+	default:
+		return "OSS Signature Version 1"
+	}
+}
+
+type AuthMethodType int
+
+const (
+	AuthMethodHeader AuthMethodType = iota
+	AuthMethodQuery
+)
+
+func (f AuthMethodType) String() string {
+	switch f {
+	case AuthMethodQuery:
+		return "authentication in query"
+	default:
+		return "authentication in header"
+	}
+}

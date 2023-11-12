@@ -699,7 +699,7 @@ func TestResolveHTTPClient(t *testing.T) {
 	resolveHTTPClient(cfg, opt, nil)
 	assert.NotNil(t, opt.HttpClient)
 
-	tr := opt.HttpClient.Transport
+	tr := opt.HttpClient.(*http.Client).Transport
 	assert.NotNil(t, tr)
 	tran, ok := tr.(*http.Transport)
 	assert.True(t, ok)
@@ -710,7 +710,7 @@ func TestResolveHTTPClient(t *testing.T) {
 	assert.Equal(t, transport.DefaultExpectContinueTimeout, tran.ExpectContinueTimeout)
 	assert.Equal(t, transport.DefaultTLSMinVersion, tran.TLSClientConfig.MinVersion)
 	assert.Equal(t, false, tran.TLSClientConfig.InsecureSkipVerify)
-	assert.NotNil(t, opt.HttpClient.CheckRedirect)
+	assert.NotNil(t, opt.HttpClient.(*http.Client).CheckRedirect)
 	assert.Nil(t, tran.Proxy)
 
 	cfg = &Config{
@@ -723,7 +723,7 @@ func TestResolveHTTPClient(t *testing.T) {
 	opt = &Options{}
 	resolveHTTPClient(cfg, opt, nil)
 	assert.NotNil(t, opt.HttpClient)
-	tr = opt.HttpClient.Transport
+	tr = opt.HttpClient.(*http.Client).Transport
 	assert.NotNil(t, tr)
 	tran, ok = tr.(*http.Transport)
 	assert.True(t, ok)
@@ -734,6 +734,6 @@ func TestResolveHTTPClient(t *testing.T) {
 	assert.Equal(t, transport.DefaultExpectContinueTimeout, tran.ExpectContinueTimeout)
 	assert.Equal(t, transport.DefaultTLSMinVersion, tran.TLSClientConfig.MinVersion)
 	assert.Equal(t, true, tran.TLSClientConfig.InsecureSkipVerify)
-	assert.Nil(t, opt.HttpClient.CheckRedirect)
+	assert.Nil(t, opt.HttpClient.(*http.Client).CheckRedirect)
 	assert.NotNil(t, tran.Proxy)
 }

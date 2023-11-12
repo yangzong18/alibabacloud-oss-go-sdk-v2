@@ -93,4 +93,6 @@ type OperationOutput struct {
 	Body       io.ReadCloser
 
 	OpMetadata OperationMetadata
+
+	httpRequest *http.Request
 }
