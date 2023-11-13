@@ -175,6 +175,9 @@ func (s *SignerV1) authHeader(ctx context.Context, signingCtx *SigningContext) e
 
 	// Date
 	time := time.Now().UTC()
+	if signingCtx.ClockOffset != 0 {
+		time = time.Add(signingCtx.ClockOffset)
+	}
 	date := request.Header.Get(ossDateHeader)
 	if len(date) > 0 {
 		time, _ = http.ParseTime(date)

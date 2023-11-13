@@ -33,6 +33,23 @@ func (*HTTPStatusCodeRetryable) IsErrorRetryable(err error) bool {
 	return false
 }
 
+type ServiceErrorCodeRetryable struct {
+}
+
+var retryServiceErrorCodes = map[string]struct{}{
+	"RequestTimeTooSkewed": {},
+}
+
+func (*ServiceErrorCodeRetryable) IsErrorRetryable(err error) bool {
+	var v interface{ ErrorCode() string }
+	if errors.As(err, &v) {
+		if _, ok := retryServiceErrorCodes[v.ErrorCode()]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 type ConnectionErrorRetryable struct{}
 
 var retriableErrorStrings = []string{

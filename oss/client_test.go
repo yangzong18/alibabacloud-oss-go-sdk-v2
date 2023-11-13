@@ -736,3 +736,40 @@ func TestResolveHTTPClient(t *testing.T) {
 	assert.Nil(t, opt.HttpClient.(*http.Client).CheckRedirect)
 	assert.NotNil(t, tran.Proxy)
 }
+
+func TestHasFeature(t *testing.T) {
+	c := &Client{}
+	assert.False(t, c.hasFeature(FeatureCorrectClockSkew))
+
+	c.options.FeatureFlags = FeatureFlagsDefault
+	assert.True(t, c.hasFeature(FeatureCorrectClockSkew))
+
+	c.options.FeatureFlags = 0xf001
+	assert.True(t, c.hasFeature(FeatureCorrectClockSkew))
+	assert.True(t, c.hasFeature(0x3))
+	assert.False(t, c.hasFeature(0x2))
+	assert.True(t, c.hasFeature(0xf000))
+
+	cfg := NewConfig()
+	c = NewClient(cfg)
+	assert.False(t, c.hasFeature(0))
+	assert.True(t, c.hasFeature(FeatureCorrectClockSkew))
+}
+
+func TestFeatureCorrectClockSkew(t *testing.T) {
+	serverTime, _ := http.ParseTime("Sun, 12 Nov 2023 16:56:44 GMT")
+
+	// current time < servertime
+	clientTime, _ := http.ParseTime("Sun, 12 Nov 2022 16:56:44 GMT")
+	clockOffset := serverTime.Sub(clientTime)
+	assert.True(t, clockOffset > 0)
+	curr := clientTime.Add(clockOffset)
+	assert.Equal(t, serverTime.UTC(), curr.UTC())
+
+	// current time > servertime
+	clientTime = time.Now()
+	clockOffset = serverTime.Sub(clientTime)
+	assert.True(t, clockOffset < 0)
+	curr = clientTime.Add(clockOffset)
+	assert.Equal(t, serverTime.UTC(), curr.UTC())
+}

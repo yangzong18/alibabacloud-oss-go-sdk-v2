@@ -143,18 +143,6 @@ const (
 	HTTPHeaderIfNoneMatch               = "If-None-Match"
 )
 
-// AuthVersion the version of auth
-type AuthVersionType string
-
-const (
-	// AuthV1 v1
-	AuthV1 AuthVersionType = "v1"
-	// AuthV2 v2
-	AuthV2 AuthVersionType = "v2"
-	// AuthV4 v4
-	AuthV4 AuthVersionType = "v4"
-)
-
 type UrlStyleType int
 
 const (
@@ -175,6 +163,15 @@ func (f UrlStyleType) String() string {
 }
 
 type FeatureFlagsType int
+
+const (
+	// If the client time is different from server time by more than about 15 minutes,
+	// the requests your application makes will be signed with the incorrect time, and the server will reject them.
+	// The feature to help to identify this case, and SDK will correct for clock skew.
+	FeatureCorrectClockSkew FeatureFlagsType = 1 << iota
+
+	FeatureFlagsDefault = FeatureCorrectClockSkew
+)
 
 type SignatureVersionType int
 

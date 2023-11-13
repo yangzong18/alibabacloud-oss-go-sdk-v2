@@ -37,6 +37,10 @@ func (e *ServiceError) HttpStatusCode() int {
 	return e.StatusCode
 }
 
+func (e *ServiceError) ErrorCode() string {
+	return e.Code
+}
+
 type ClientError struct {
 	Code    string
 	Message string

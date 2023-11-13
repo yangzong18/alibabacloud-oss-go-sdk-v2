@@ -28,7 +28,8 @@ type SigningContext struct {
 	AuthMethodQuery bool
 
 	// input and output
-	Time time.Time
+	Time        time.Time
+	ClockOffset time.Duration
 
 	// output
 	SignedHeaders map[string]string

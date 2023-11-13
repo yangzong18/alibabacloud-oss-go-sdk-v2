@@ -57,6 +57,9 @@ func (c Options) Copy() Options {
 
 type innerOptions struct {
 	BwTokenBuckets BwTokenBuckets
+
+	// A clock offset that how much client time is different from server time
+	ClockOffset time.Duration
 }
 
 type Client struct {
@@ -71,6 +74,7 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 		Retryer:             cfg.Retryer,
 		CredentialsProvider: cfg.CredentialsProvider,
 		HttpClient:          cfg.HttpClient,
+		FeatureFlags:        FeatureFlagsDefault,
 	}
 	inner := innerOptions{}
 
@@ -275,6 +279,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 
 	//signing context
 	subResource, _ := input.OpMetadata.Get(signer.SubResource).([]string)
+	clockOffset := c.inner.ClockOffset
 	signingCtx := &signer.SigningContext{
 		Product:         Ptr("oss"),
 		Region:          Ptr(opts.Region),
@@ -283,6 +288,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		Request:         request,
 		SubResource:     subResource,
 		AuthMethodQuery: (opts.AuthMethod != nil && *opts.AuthMethod == AuthMethodQuery),
+		ClockOffset:     clockOffset,
 	}
 	if signTime, ok := input.OpMetadata.Get(signer.SignTime).(time.Time); ok {
 		signingCtx.Time = signTime
@@ -309,6 +315,10 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	//output.OpMetadata.Set(...)
 	if signingCtx.AuthMethodQuery {
 		output.OpMetadata.Set(signer.SignTime, signingCtx.Time)
+	}
+
+	if signingCtx.ClockOffset != clockOffset {
+		c.inner.ClockOffset = signingCtx.ClockOffset
 	}
 
 	return output, err
@@ -338,6 +348,8 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 		if response, err = c.sendHttpRequestOnce(ctx, signingCtx, opts); err == nil {
 			break
 		}
+
+		c.postSendHttpRequestOnce(signingCtx, response, err)
 
 		if isContextError(ctx, &err) {
 			err = &CanceledError{Err: err}
@@ -381,6 +393,19 @@ func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.Sig
 	}
 
 	return response, err
+}
+
+func (c *Client) postSendHttpRequestOnce(signingCtx *signer.SigningContext, response *http.Response, err error) {
+	if err != nil {
+		switch e := err.(type) {
+		case *ServiceError:
+			if c.hasFeature(FeatureCorrectClockSkew) &&
+				e.Code == "RequestTimeTooSkewed" &&
+				!e.Timestamp.IsZero() {
+				signingCtx.ClockOffset = e.Timestamp.Sub(signingCtx.Time)
+			}
+		}
+	}
 }
 
 func buildURL(input *OperationInput, opts *Options) (host string, path string) {
@@ -876,6 +901,10 @@ func (c *Client) toClientError(err error, code string, output *OperationOutput) 
 			output.Headers.Get(HeaderOssRequestID),
 		),
 		Err: err}
+}
+
+func (c *Client) hasFeature(flag FeatureFlagsType) bool {
+	return (c.options.FeatureFlags & flag) > 0
 }
 
 // Content-Type

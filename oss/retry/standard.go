@@ -12,6 +12,7 @@ const (
 
 var DefaultErrorRetryables = []ErrorRetryable{
 	&HTTPStatusCodeRetryable{},
+	&ServiceErrorCodeRetryable{},
 	&ConnectionErrorRetryable{},
 }
 
