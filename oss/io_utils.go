@@ -1,4 +1,4 @@
-package readers
+package oss
 
 import (
 	"io"
@@ -10,19 +10,6 @@ func ReadSeekNopCloser(r io.Reader) ReadSeekerNopClose {
 
 type ReadSeekerNopClose struct {
 	r io.Reader
-}
-
-func IsReaderSeekable(r io.Reader) bool {
-	switch v := r.(type) {
-	case ReadSeekerNopClose:
-		return v.IsSeeker()
-	case *ReadSeekerNopClose:
-		return v.IsSeeker()
-	case io.ReadSeeker:
-		return true
-	default:
-		return false
-	}
 }
 
 func (r ReadSeekerNopClose) Read(p []byte) (int, error) {
@@ -91,4 +78,17 @@ func seekerLen(s io.Seeker) (int64, error) {
 	}
 
 	return endOffset - curOffset, nil
+}
+
+func isReaderSeekable(r io.Reader) bool {
+	switch v := r.(type) {
+	case ReadSeekerNopClose:
+		return v.IsSeeker()
+	case *ReadSeekerNopClose:
+		return v.IsSeeker()
+	case io.ReadSeeker:
+		return true
+	default:
+		return false
+	}
 }

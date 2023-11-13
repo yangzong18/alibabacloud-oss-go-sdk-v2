@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
 	"github.com/stretchr/testify/assert"
 )
@@ -518,7 +517,7 @@ func TestUnmarshalOutput(t *testing.T) {
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
-		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Body:       ReadSeekNopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"Content-Type": {"application/xml"},
 		},
@@ -665,7 +664,7 @@ func TestUnmarshalOutput_error(t *testing.T) {
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
-		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Body:       ReadSeekNopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"Content-Type": {"application/text"},
 		},
@@ -680,7 +679,7 @@ func TestUnmarshalOutput_error(t *testing.T) {
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
-		Body:       readers.ReadSeekNopCloser(bytes.NewReader([]byte(body))),
+		Body:       ReadSeekNopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"Content-Type": {"application/xml"},
 		},

@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/readers"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/signer"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
@@ -262,11 +261,11 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	request.Header.Set("User-Agent", defaultUserAgent())
 
 	// body
-	var body readers.ReadSeekerNopClose
+	var body ReadSeekerNopClose
 	if input.Body == nil {
-		body = readers.ReadSeekNopCloser(strings.NewReader(""))
+		body = ReadSeekNopCloser(strings.NewReader(""))
 	} else {
-		body = readers.ReadSeekNopCloser(input.Body)
+		body = ReadSeekNopCloser(input.Body)
 	}
 	len, _ := body.GetLen()
 	if len >= 0 && request.Header.Get("Content-Length") == "" {
@@ -318,7 +317,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (response *http.Response, err error) {
 	request := signingCtx.Request
 	retryer := opts.Retryer
-	body, _ := request.Body.(readers.ReadSeekerNopClose)
+	body, _ := request.Body.(ReadSeekerNopClose)
 	bodyStart, _ := body.Seek(0, io.SeekCurrent)
 	for tries := 1; tries <= retryer.MaxAttempts(); tries++ {
 		if tries > 1 {
@@ -345,7 +344,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 			break
 		}
 
-		if !readers.IsReaderSeekable(request.Body) {
+		if !isReaderSeekable(request.Body) {
 			break
 		}
 
