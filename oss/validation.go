@@ -40,6 +40,7 @@ func isValidObjectName(objectName *string) bool {
 var supportedMethod = map[string]interface{}{
 	"GET":    nil,
 	"PUT":    nil,
+	"HEAD":   nil,
 	"POST":   nil,
 	"DELETE": nil,
 	"OPTION": nil,

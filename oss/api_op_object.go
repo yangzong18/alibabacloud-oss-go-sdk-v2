@@ -141,6 +141,15 @@ type GetObjectRequest struct {
 	// and the response does not include the Content-Range parameter.
 	Range *string `input:"header,Range"`
 
+	// Specify standard behaviors to download data by range
+	// If the value is "standard", the download behavior is modified when the specified range is not within the valid range.
+	// For an object whose size is 1,000 bytes:
+	// 1) If you set Range: bytes to 500-2000, the value at the end of the range is invalid.
+	// In this case, OSS returns HTTP status code 206 and the data that is within the range of byte 500 to byte 999.
+	// 2) If you set Range: bytes to 1000-2000, the value at the start of the range is invalid.
+	// In this case, OSS returns HTTP status code 416 and the InvalidRange error code.
+	RangeBehavior *string `input:"header,x-oss-range-behavior"`
+
 	// The cache-control header to be returned in the response.
 	ResponseCacheControl *string `input:"query,response-cache-control"`
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss"
@@ -14,7 +15,8 @@ import (
 func main() {
 
 	var body []byte
-	BucketName := "bucket-name"
+	BucketName := "bucket-test"
+	Key := "key-test"
 	provider := credentials.NewEnvironmentVariableCredentialsProvider()
 
 	cfg := oss.LoadDefaultConfig().
@@ -96,6 +98,54 @@ func main() {
 	listObjectsResult, err := client.ListObjects(context.TODO(), listObjectsRequest)
 	fmt.Printf("client.ListObjects \nrequest:%+v, \nresult: %+v \nerr:%+v\n", listObjectsRequest, listObjectsResult, err)
 
-	opt := oss.Options{}
-	fmt.Printf("Options \nopt:%v", opt)
+	// 使用Pageinators
+	pageinators := client.NewListObjectsPaginator(
+		&oss.ListObjectsRequest{
+			Bucket: oss.Ptr(BucketName),
+		},
+		func(o *oss.PaginatorOptions) {
+			o.Limit = 1
+		},
+	)
+
+	for pageinators.HasNext() {
+		result, err := pageinators.NextPage(context.TODO())
+
+		if err != nil {
+			fmt.Printf("err: %v\n", err)
+			break
+		}
+
+		for _, o := range result.Contents {
+			fmt.Printf("Key:%v\n", *o.Key)
+		}
+	}
+
+	//使用File-Like 接口
+	file, err := client.OpenFile(BucketName, Key)
+	if err != nil {
+		fmt.Printf("client.OpenFile fail:%v\n", err)
+		return
+	}
+
+	wfile, err := os.Create("dump.dat")
+	if err != nil {
+		fmt.Printf("os.Create fail:%v\n", err)
+		return
+	}
+
+	stat, _ := file.Stat()
+	fmt.Printf("file name:%s, modTime:%v, size:%v\n", stat.Name(), stat.ModTime(), stat.Size())
+
+	offset, _ := file.Seek(128, io.SeekStart)
+	wfile.Seek(128, io.SeekStart)
+	fmt.Printf("new offset:%v\n", offset)
+	io.Copy(wfile, file)
+
+	file.Seek(0, io.SeekStart)
+	wfile.Seek(0, io.SeekStart)
+	io.CopyN(wfile, file, 128)
+
+	file.Close()
+	wfile.Close()
 }

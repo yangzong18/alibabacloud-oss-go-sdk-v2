@@ -188,3 +188,47 @@ func copySeekableBody(dst io.Writer, src io.ReadSeeker) (int64, error) {
 
 	return n, nil
 }
+
+func parseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
+	size = -1
+	var contentLength = headers.Get("Content-Length")
+	if len(contentLength) != 0 {
+		var err error
+		if size, err = strconv.ParseInt(contentLength, 10, 64); err != nil {
+			return 0, -1
+		}
+	}
+
+	var contentRange = headers.Get("Content-Range")
+	if len(contentRange) == 0 {
+		return 0, size
+	}
+
+	if !strings.HasPrefix(contentRange, "bytes ") {
+		return 0, -1
+	}
+
+	// start offset
+	dash := strings.IndexRune(contentRange, '-')
+	if dash < 0 {
+		return 0, -1
+	}
+	ret, err := strconv.ParseInt(contentRange[6:dash], 10, 64)
+	if err != nil {
+		return 0, -1
+	}
+	offset = ret
+
+	// total size
+	slash := strings.IndexRune(contentRange, '/')
+	if slash < 0 {
+		return 0, -1
+	}
+	ret, err = strconv.ParseInt(contentRange[slash+1:], 10, 64)
+	if err != nil {
+		return 0, -1
+	}
+	size = ret
+
+	return offset, size
+}

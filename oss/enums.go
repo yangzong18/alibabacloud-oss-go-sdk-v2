@@ -170,6 +170,8 @@ const (
 	// The feature to help to identify this case, and SDK will correct for clock skew.
 	FeatureCorrectClockSkew FeatureFlagsType = 1 << iota
 
+	FeatureEnableMD5
+
 	FeatureFlagsDefault = FeatureCorrectClockSkew
 )
 
