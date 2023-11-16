@@ -228,7 +228,7 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 		},
 		Bucket: request.Bucket,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5, enableEncodingType); err != nil {
 		return nil, err
 	}
 
@@ -295,6 +295,16 @@ func unmarshalEncodeType(result any, output *OperationOutput) error {
 				}
 			}
 		}
+	case *DeleteMultipleObjectsResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			var err error
+			for i := 0; i < len(r.DeletedObjects); i++ {
+				if *r.DeletedObjects[i].Key, err = url.QueryUnescape(*r.DeletedObjects[i].Key); err != nil {
+					return err
+				}
+			}
+		}
+
 	}
 	return nil
 }
@@ -398,7 +408,7 @@ func (c *Client) ListObjectsV2(ctx context.Context, request *ListObjectsRequestV
 		},
 		Bucket: request.Bucket,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5, enableEncodingType); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

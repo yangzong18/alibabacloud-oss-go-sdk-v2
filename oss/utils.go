@@ -13,6 +13,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
+)
+
+var (
+	escQuot = []byte("&#34;") // shorter than "&quot;"
+	escApos = []byte("&#39;") // shorter than "&apos;"
+	escAmp  = []byte("&amp;")
+	escLT   = []byte("&lt;")
+	escGT   = []byte("&gt;")
+	escTab  = []byte("&#x9;")
+	escNL   = []byte("&#xA;")
+	escCR   = []byte("&#xD;")
+	escFFFD = []byte("\uFFFD") // Unicode replacement character
 )
 
 func init() {
@@ -155,6 +168,31 @@ func setReflectValue(dst reflect.Value, data string) (err error) {
 	return nil
 }
 
+func setMapStringReflectValue(dst reflect.Value, key interface{}, data interface{}) (err error) {
+	dst0 := dst
+
+	if dst.Kind() == reflect.Pointer {
+		if dst.IsNil() {
+			dst.Set(reflect.New(dst.Type().Elem()))
+		}
+		dst = dst.Elem()
+	}
+
+	switch dst.Kind() {
+	case reflect.Invalid:
+	default:
+		return errors.New("cannot unmarshal into " + dst0.Type().String())
+	case reflect.Map:
+		if dst.IsNil() {
+			dst.Set(reflect.MakeMap(dst.Type()))
+		}
+		mapValue := reflect.ValueOf(data)
+		mapKey := reflect.ValueOf(key)
+		dst.SetMapIndex(mapKey, mapValue)
+	}
+	return nil
+}
+
 func defaultUserAgent() string {
 	return fmt.Sprintf("aliyun-sdk-go/%s (%s/%s/%s;%s)", Version(), runtime.GOOS,
 		"-", runtime.GOARCH, runtime.Version())
@@ -231,4 +269,65 @@ func parseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
 	size = ret
 
 	return offset, size
+}
+
+// escapeXml EscapeString writes to p the properly escaped XML equivalent
+// of the plain text data s.
+func escapeXml(s string) string {
+	var p strings.Builder
+	var esc []byte
+	hextable := "0123456789ABCDEF"
+	escPattern := []byte("&#x00;")
+	last := 0
+	for i := 0; i < len(s); {
+		r, width := utf8.DecodeRuneInString(s[i:])
+		i += width
+		switch r {
+		case '"':
+			esc = escQuot
+		case '\'':
+			esc = escApos
+		case '&':
+			esc = escAmp
+		case '<':
+			esc = escLT
+		case '>':
+			esc = escGT
+		case '\t':
+			esc = escTab
+		case '\n':
+			esc = escNL
+		case '\r':
+			esc = escCR
+		default:
+			if !isInCharacterRange(r) || (r == 0xFFFD && width == 1) {
+				if r >= 0x00 && r < 0x20 {
+					escPattern[3] = hextable[r>>4]
+					escPattern[4] = hextable[r&0x0f]
+					esc = escPattern
+				} else {
+					esc = escFFFD
+				}
+				break
+			}
+			continue
+		}
+		p.WriteString(s[last : i-width])
+		p.Write(esc)
+		last = i
+	}
+	p.WriteString(s[last:])
+	return p.String()
+}
+
+// Decide whether the given rune is in the XML Character Range, per
+// the Char production of https://www.xml.com/axml/testaxml.htm,
+// Section 2.2 Characters.
+func isInCharacterRange(r rune) (inrange bool) {
+	return r == 0x09 ||
+		r == 0x0A ||
+		r == 0x0D ||
+		r >= 0x20 && r <= 0xD7FF ||
+		r >= 0xE000 && r <= 0xFFFD ||
+		r >= 0x10000 && r <= 0x10FFFF
 }

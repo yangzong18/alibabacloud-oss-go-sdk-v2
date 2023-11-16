@@ -69,11 +69,9 @@ func randLowStr(n int) string {
 	return strings.ToLower(randStr(n))
 }
 
-func cleanBucket(bucketInfo BucketProperties) {
-	if *bucketInfo.Name == "" {
-		return
-	}
-
+func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
+	var err error
+	assert.NotEmpty(t, *bucketInfo.Name)
 	var c *Client
 	if strings.Contains(endpoint_, *bucketInfo.ExtranetEndpoint) ||
 		strings.Contains(endpoint_, *bucketInfo.IntranetEndpoint) {
@@ -81,45 +79,65 @@ func cleanBucket(bucketInfo BucketProperties) {
 	} else {
 		c = getClient(*bucketInfo.Region, *bucketInfo.ExtranetEndpoint)
 	}
-
-	if c == nil {
-		return
+	assert.NotNil(t, c)
+	var listRequest *ListObjectsRequest
+	var delObjRequest *DeleteObjectRequest
+	var lor *ListObjectsResult
+	marker := ""
+	for {
+		listRequest = &ListObjectsRequest{
+			Bucket: Ptr(*bucketInfo.Name),
+			Marker: Ptr(marker),
+		}
+		lor, err = c.ListObjects(context.TODO(), listRequest)
+		assert.Nil(t, err)
+		for _, object := range lor.Contents {
+			delObjRequest = &DeleteObjectRequest{
+				Bucket: Ptr(*bucketInfo.Name),
+				Key:    Ptr(*object.Key),
+			}
+			_, err = c.DeleteObject(context.TODO(), delObjRequest)
+			assert.Nil(t, err)
+		}
+		if !lor.IsTruncated {
+			break
+		}
+		if lor.NextMarker != nil {
+			marker = *lor.NextMarker
+		}
 	}
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(*bucketInfo.Name),
 	}
-	c.DeleteBucket(context.TODO(), delRequest)
+	_, err = c.DeleteBucket(context.TODO(), delRequest)
+	assert.Nil(t, err)
 }
 
-func cleanBuckets(prefix string) {
+func cleanBuckets(prefix string, t *testing.T) {
 	c := getDefaultClient()
 	for {
 		request := &ListBucketsRequest{
 			Prefix: Ptr(prefix),
 		}
 		result, err := c.ListBuckets(context.TODO(), request)
-		if err != nil {
-			return
-		}
-
+		assert.Nil(t, err)
 		if len(result.Buckets) == 0 {
 			return
 		}
-
 		for _, b := range result.Buckets {
-			cleanBucket(b)
+			cleanBucket(b, t)
 		}
 	}
 }
 
 func before(t *testing.T) func(t *testing.T) {
-	cleanBuckets(bucketNamePrefix)
-	//fmt.Println("setup test case")
 
+	//fmt.Println("setup test case")
 	return after
 }
 
 func after(t *testing.T) {
+	cleanBuckets(bucketNamePrefix, t)
 	//fmt.Println("teardown  test case")
 }
 
@@ -149,7 +167,6 @@ func TestListBuckets(t *testing.T) {
 	result, err := client.ListBuckets(context.TODO(), listRequest)
 	assert.Nil(t, err)
 	assert.Equal(t, len(result.Buckets), count)
-	cleanBuckets(bucketPrefix)
 }
 
 func TestPutBucket(t *testing.T) {
@@ -573,6 +590,521 @@ func TestGetBucketAcl(t *testing.T) {
 	result, err = client.GetBucketAcl(context.TODO(), request)
 	assert.NotNil(t, err)
 	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestPutObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(1000)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	result, err := client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 200, result.StatusCode)
+	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.HashCRC64)
+	assert.NotEmpty(t, *result.ContentMD5)
+	assert.Nil(t, result.VersionId)
+
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	request = &PutObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	result, err = client.PutObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestGetObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(1000)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	getRequest := &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.GetObject(context.TODO(), getRequest)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.HashCRC64)
+	assert.NotEmpty(t, *result.ContentMD5)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.ContentLength, int64(len(content)))
+
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	request = &PutObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestCopyObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(1000)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	objectCopyName := objectNamePrefix + randLowStr(6) + "copy"
+
+	copyRequest := &CopyObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		Source: Ptr(objectCopyName),
+	}
+	result, err := client.CopyObject(context.TODO(), copyRequest)
+	assert.NotNil(t, err)
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.Equal(t, int(400), serr.StatusCode)
+	assert.Equal(t, "InvalidArgument", serr.Code)
+	assert.Equal(t, "Copy Source must mention the source bucket and key: /sourcebucket/sourcekey.", serr.Message)
+
+	source := "/" + bucketName + "/" + objectName
+	copyRequest = &CopyObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectCopyName),
+		Source: Ptr(source),
+	}
+	result, err = client.CopyObject(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.LastModified)
+	assert.NotEmpty(t, *result.HashCRC64)
+	assert.Nil(t, result.VersionId)
+
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	copyRequest = &CopyObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectCopyName),
+		Source: Ptr(source),
+	}
+	_, err = client.CopyObject(context.TODO(), copyRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+
+	bucketCopyName := bucketNamePrefix + randLowStr(6) + "copy"
+	putRequest = &PutBucketRequest{
+		Bucket: Ptr(bucketCopyName),
+	}
+
+	client = getDefaultClient()
+	_, err = client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+
+	copyRequest = &CopyObjectRequest{
+		Bucket: Ptr(bucketCopyName),
+		Key:    Ptr(objectCopyName),
+		Source: Ptr("/" + bucketName + "/" + objectName),
+	}
+	result, err = client.CopyObject(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.LastModified)
+	assert.NotEmpty(t, *result.HashCRC64)
+	assert.Nil(t, result.VersionId)
+}
+
+func TestAppendObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	var result *AppendObjectResult
+	content := randLowStr(100)
+	request := &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.AppendObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position: Ptr(int64(0)),
+	}
+	result, err = client.AppendObject(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Nil(t, result.SSEKMSKeyId)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.NextPosition, int64(len(content)))
+	assert.NotEmpty(t, result.HashCRC64)
+
+	nextPosition := result.NextPosition
+
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position: Ptr(nextPosition),
+	}
+	result, err = client.AppendObject(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Nil(t, result.SSEKMSKeyId)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.NextPosition, int64(len(content)*2))
+	assert.NotEmpty(t, result.HashCRC64)
+
+	nextPosition = result.NextPosition
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position:                 Ptr(nextPosition),
+		ServerSideDataEncryption: Ptr("SM4"),
+		ServerSideEncryption:     Ptr("KMS"),
+	}
+	result, err = client.AppendObject(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Nil(t, result.SSEKMSKeyId)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.NextPosition, int64(len(content)*3))
+	assert.NotEmpty(t, result.HashCRC64)
+
+	objectName2 := objectName + "-kms-sm4"
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName2),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position:                 Ptr(int64(0)),
+		ServerSideDataEncryption: Ptr("SM4"),
+		ServerSideEncryption:     Ptr("KMS"),
+	}
+	result, err = client.AppendObject(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Equal(t, *result.ServerSideEncryption, "KMS")
+	assert.Equal(t, *result.ServerSideDataEncryption, "SM4")
+	assert.NotEmpty(t, result.SSEKMSKeyId)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.NextPosition, int64(len(content)))
+	assert.NotEmpty(t, result.HashCRC64)
+
+	nextPosition = result.NextPosition
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName2),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position:                 Ptr(nextPosition),
+		ServerSideDataEncryption: Ptr("SM4"),
+		ServerSideEncryption:     Ptr("KMS"),
+	}
+	result, err = client.AppendObject(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Equal(t, *result.ServerSideEncryption, "KMS")
+	assert.Equal(t, *result.ServerSideDataEncryption, "SM4")
+	assert.NotEmpty(t, result.SSEKMSKeyId)
+	assert.Nil(t, result.VersionId)
+	assert.Equal(t, result.NextPosition, int64(len(content)*2))
+	assert.NotEmpty(t, result.HashCRC64)
+
+	var serr *ServiceError
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position: Ptr(int64(0)),
+	}
+	_, err = client.AppendObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(409), serr.StatusCode)
+	assert.Equal(t, "PositionNotEqualToLength", serr.Code)
+	assert.NotEmpty(t, serr.RequestID)
+
+	bucketNameNotExist := bucketName + "-not-exist"
+	request = &AppendObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Position: Ptr(int64(0)),
+	}
+	_, err = client.AppendObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestDeleteObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(1000)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	delRequest := &DeleteObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.DeleteObject(context.TODO(), delRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 204, result.StatusCode)
+	assert.Equal(t, "204 No Content", result.Status)
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+	assert.NotEmpty(t, result.Headers.Get("Date"))
+	assert.Nil(t, result.VersionId)
+	assert.False(t, result.DeleteMarker)
+
+	objectNameNotExist := objectNamePrefix + randLowStr(6) + "-not-exist"
+	delRequest = &DeleteObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameNotExist),
+	}
+	result, err = client.DeleteObject(context.TODO(), delRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 204, result.StatusCode)
+	assert.Equal(t, "204 No Content", result.Status)
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+	assert.NotEmpty(t, result.Headers.Get("Date"))
+	assert.Nil(t, result.VersionId)
+	assert.False(t, result.DeleteMarker)
+
+	delRequest = &DeleteObjectRequest{
+		Bucket:    Ptr(bucketName),
+		Key:       Ptr(objectName),
+		VersionId: Ptr("null"),
+	}
+	result, err = client.DeleteObject(context.TODO(), delRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 204, result.StatusCode)
+	assert.Equal(t, "204 No Content", result.Status)
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+	assert.NotEmpty(t, result.Headers.Get("Date"))
+	assert.Nil(t, result.VersionId)
+	assert.False(t, result.DeleteMarker)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	delRequest = &DeleteObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectNamePrefix),
+	}
+	_, err = client.DeleteObject(context.TODO(), delRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestDeleteMultipleObjects(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(10)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	delRequest := &DeleteMultipleObjectsRequest{
+		Bucket:  Ptr(bucketName),
+		Objects: []DeleteObject{{Key: Ptr(objectName)}},
+	}
+	result, err := client.DeleteMultipleObjects(context.TODO(), delRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, "200 OK", result.Status)
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+	assert.NotEmpty(t, result.Headers.Get("Date"))
+	assert.Len(t, result.DeletedObjects, 1)
+	assert.Equal(t, *result.DeletedObjects[0].Key, objectName)
+
+	str := "\x01\x02\x03\x04\x05\x06\a\b\t\n\v\f\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
+	objectNameSpecial := objectNamePrefix + randLowStr(6) + str
+	content = randLowStr(10)
+	request = &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	delRequest = &DeleteMultipleObjectsRequest{
+		Bucket:       Ptr(bucketName),
+		Objects:      []DeleteObject{{Key: Ptr(objectNameSpecial)}},
+		EncodingType: Ptr("url"),
+	}
+	result, err = client.DeleteMultipleObjects(context.TODO(), delRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, result.StatusCode)
+	assert.Equal(t, "200 OK", result.Status)
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+	assert.NotEmpty(t, result.Headers.Get("Date"))
+	assert.Len(t, result.DeletedObjects, 1)
+	assert.Equal(t, *result.DeletedObjects[0].Key, objectNameSpecial)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	delRequest = &DeleteMultipleObjectsRequest{
+		Bucket:  Ptr(bucketNameNotExist),
+		Objects: []DeleteObject{{Key: Ptr(objectNameSpecial)}},
+	}
+	_, err = client.DeleteMultipleObjects(context.TODO(), delRequest)
+	assert.NotNil(t, err)
 	errors.As(err, &serr)
 	assert.Equal(t, int(404), serr.StatusCode)
 	assert.Equal(t, "NoSuchBucket", serr.Code)

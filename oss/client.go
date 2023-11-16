@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -629,7 +630,6 @@ func (c *Client) marshalInput(request any, input *OperationInput, handlers ...fu
 			if len(tokens) > 2 {
 				flags = parseFiledFlags(tokens[2:])
 			}
-
 			// check required flag
 			if isEmptyValue(v) {
 				if flags&fRequire != 0 {
@@ -689,6 +689,36 @@ func (c *Client) marshalInput(request any, input *OperationInput, handlers ...fu
 		}
 	}
 
+	return nil
+}
+
+func marshalDeleteObjects(request any, input *OperationInput) error {
+	var builder strings.Builder
+	delRequest := request.(*DeleteMultipleObjectsRequest)
+	builder.WriteString("<Delete>")
+	builder.WriteString("<Quiet>")
+	builder.WriteString(strconv.FormatBool(delRequest.Quiet))
+	builder.WriteString("</Quiet>")
+	if len(delRequest.Objects) > 0 {
+		for _, object := range delRequest.Objects {
+			builder.WriteString("<Object>")
+			if object.Key != nil {
+				builder.WriteString("<Key>")
+				builder.WriteString(escapeXml(*object.Key))
+				builder.WriteString("</Key>")
+			}
+			if object.VersionId != nil {
+				builder.WriteString("<VersionId>")
+				builder.WriteString(*object.VersionId)
+				builder.WriteString("</VersionId>")
+			}
+			builder.WriteString("</Object>")
+		}
+	} else {
+		return NewErrParamRequired("Objects")
+	}
+	builder.WriteString("</Delete>")
+	input.Body = strings.NewReader(builder.String())
 	return nil
 }
 
@@ -779,6 +809,7 @@ func unmarshalHeader(result any, output *OperationOutput) error {
 			switch tokens[0] {
 			case "header":
 				lowkey := strings.ToLower(tokens[1])
+
 				var flags int = 0
 				if len(tokens) >= 3 {
 					flags = parseFiledFlags(tokens[2:])
@@ -787,10 +818,18 @@ func unmarshalHeader(result any, output *OperationOutput) error {
 			}
 		}
 	}
-
 	var err error
+	var userMeta = "x-oss-meta-"
 	for key, vv := range output.Headers {
 		lkey := strings.ToLower(key)
+		if strings.Contains(lkey, userMeta) {
+			if field, ok := filedInfos[userMeta]; ok {
+				if field.flags&fTypeUsermeta != 0 {
+					mapKey := strings.TrimPrefix(lkey, userMeta)
+					err = setMapStringReflectValue(val.Field(field.idx), mapKey, vv[0])
+				}
+			}
+		}
 		if field, ok := filedInfos[lkey]; ok {
 			if field.flags&fTypeTime != 0 {
 				if t, err := http.ParseTime(vv[0]); err == nil {
@@ -886,6 +925,20 @@ func updateContentMd5(_ any, input *OperationInput) error {
 	}
 
 	return err
+}
+
+func enableEncodingType(_ any, input *OperationInput) error {
+	mapKey := "encoding-type"
+	if input.Parameters == nil {
+		input.Parameters = map[string]string{}
+	}
+	value, exists := input.Parameters[mapKey]
+	if exists || value != "url" {
+		input.Parameters["encoding-type"] = "url"
+	} else {
+		input.Parameters["encoding-type"] = "url"
+	}
+	return nil
 }
 
 func (c *Client) toClientError(err error, code string, output *OperationOutput) error {
