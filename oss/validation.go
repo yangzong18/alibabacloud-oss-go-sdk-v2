@@ -37,13 +37,13 @@ func isValidObjectName(objectName *string) bool {
 	return true
 }
 
-var supportedMethod = map[string]interface{}{
-	"GET":    nil,
-	"PUT":    nil,
-	"HEAD":   nil,
-	"POST":   nil,
-	"DELETE": nil,
-	"OPTION": nil,
+var supportedMethod = map[string]struct{}{
+	"GET":    {},
+	"PUT":    {},
+	"HEAD":   {},
+	"POST":   {},
+	"DELETE": {},
+	"OPTION": {},
 }
 
 func isValidMethod(method string) bool {

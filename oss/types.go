@@ -6,15 +6,15 @@ import (
 )
 
 type OperationMetadata struct {
-	values map[interface{}]interface{}
+	values map[any]any
 }
 
-func (m OperationMetadata) Get(key interface{}) interface{} {
+func (m OperationMetadata) Get(key any) any {
 	return m.values[key]
 }
 
 func (m OperationMetadata) Clone() OperationMetadata {
-	vs := make(map[interface{}]interface{}, len(m.values))
+	vs := make(map[any]any, len(m.values))
 	for k, v := range m.values {
 		vs[k] = v
 	}
@@ -24,14 +24,14 @@ func (m OperationMetadata) Clone() OperationMetadata {
 	}
 }
 
-func (m *OperationMetadata) Set(key, value interface{}) {
+func (m *OperationMetadata) Set(key, value any) {
 	if m.values == nil {
-		m.values = map[interface{}]interface{}{}
+		m.values = map[any]any{}
 	}
 	m.values[key] = value
 }
 
-func (m OperationMetadata) Has(key interface{}) bool {
+func (m OperationMetadata) Has(key any) bool {
 	if m.values == nil {
 		return false
 	}

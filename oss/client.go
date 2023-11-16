@@ -574,7 +574,7 @@ func validateInput(input *OperationInput) error {
 	return nil
 }
 
-func (c *Client) marshalInput(request interface{}, input *OperationInput, handlers ...func(*OperationInput) error) error {
+func (c *Client) marshalInput(request any, input *OperationInput, handlers ...func(any, *OperationInput) error) error {
 	// merge common fields
 	if cm, ok := request.(RequestCommonInterface); ok {
 		h, p, b := cm.GetCommonFileds()
@@ -684,7 +684,7 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput, handle
 	}
 
 	for _, h := range handlers {
-		if err := h(input); err != nil {
+		if err := h(request, input); err != nil {
 			return err
 		}
 	}
@@ -692,7 +692,7 @@ func (c *Client) marshalInput(request interface{}, input *OperationInput, handle
 	return nil
 }
 
-func discardBody(result interface{}, output *OperationOutput) error {
+func discardBody(result any, output *OperationOutput) error {
 	var err error
 	if output.Body != nil {
 		defer output.Body.Close()
@@ -701,7 +701,7 @@ func discardBody(result interface{}, output *OperationOutput) error {
 	return err
 }
 
-func unmarshalBodyXml(result interface{}, output *OperationOutput) error {
+func unmarshalBodyXml(result any, output *OperationOutput) error {
 	var err error
 	var body []byte
 	if output.Body != nil {
@@ -721,7 +721,7 @@ func unmarshalBodyXml(result interface{}, output *OperationOutput) error {
 	return err
 }
 
-func unmarshalBodyDefault(result interface{}, output *OperationOutput) error {
+func unmarshalBodyDefault(result any, output *OperationOutput) error {
 	var err error
 	var body []byte
 	if output.Body != nil {
@@ -753,7 +753,7 @@ func unmarshalBodyDefault(result interface{}, output *OperationOutput) error {
 	return err
 }
 
-func unmarshalHeader(result interface{}, output *OperationOutput) error {
+func unmarshalHeader(result any, output *OperationOutput) error {
 	val := reflect.ValueOf(result)
 	switch val.Kind() {
 	case reflect.Pointer, reflect.Interface:
@@ -808,7 +808,7 @@ func unmarshalHeader(result interface{}, output *OperationOutput) error {
 	return nil
 }
 
-func unmarshalHeaderLite(result interface{}, output *OperationOutput) error {
+func unmarshalHeaderLite(result any, output *OperationOutput) error {
 	val := reflect.ValueOf(result)
 	switch val.Kind() {
 	case reflect.Pointer, reflect.Interface:
@@ -841,7 +841,7 @@ func unmarshalHeaderLite(result interface{}, output *OperationOutput) error {
 	return nil
 }
 
-func (c *Client) unmarshalOutput(result interface{}, output *OperationOutput, handlers ...func(interface{}, *OperationOutput) error) error {
+func (c *Client) unmarshalOutput(result any, output *OperationOutput, handlers ...func(any, *OperationOutput) error) error {
 	// Common
 	if cm, ok := result.(ResultCommonInterface); ok {
 		cm.CopyIn(output.Status, output.StatusCode, output.Headers, output.OpMetadata)
@@ -856,7 +856,7 @@ func (c *Client) unmarshalOutput(result interface{}, output *OperationOutput, ha
 	return err
 }
 
-func updateContentMd5(input *OperationInput) error {
+func updateContentMd5(_ any, input *OperationInput) error {
 	var err error
 	var contentMd5 string
 	if input.Body != nil {

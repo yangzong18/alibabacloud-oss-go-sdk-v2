@@ -245,7 +245,7 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 	return result, err
 }
 
-func unmarshalEncodeType(result interface{}, output *OperationOutput) error {
+func unmarshalEncodeType(result any, output *OperationOutput) error {
 	switch r := result.(type) {
 	case *ListObjectsResult:
 		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
@@ -531,7 +531,7 @@ func (c *Client) GetBucketInfo(ctx context.Context, request *GetBucketInfoReques
 	return result, err
 }
 
-func unmarshalSseRule(result interface{}, output *OperationOutput) error {
+func unmarshalSseRule(result any, output *OperationOutput) error {
 	switch r := result.(type) {
 	case *GetBucketInfoResult:
 		fields := []*string{r.BucketInfo.SseRule.KMSMasterKeyID, r.BucketInfo.SseRule.SSEAlgorithm, r.BucketInfo.SseRule.KMSDataEncryption}
