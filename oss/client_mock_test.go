@@ -1040,7 +1040,7 @@ var testMockListObjectsSuccessCases = []struct {
 </ListBucketResult>`),
 		func(t *testing.T, r *http.Request) {
 			strUrl := sortQuery(r)
-			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=url&marker&max-keys=3&prefix", strUrl)
+			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=URL&marker&max-keys=3&prefix", strUrl)
 		},
 		&ListObjectsRequest{
 			Bucket:       Ptr("bucket"),
@@ -1159,7 +1159,7 @@ var testMockListObjectsErrorCases = []struct {
 </Error>`),
 		func(t *testing.T, r *http.Request) {
 			strUrl := sortQuery(r)
-			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=url&marker&max-keys=3&prefix", strUrl)
+			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=URL&marker&max-keys=3&prefix", strUrl)
 		},
 		&ListObjectsRequest{
 			Bucket:       Ptr("bucket"),

@@ -226,9 +226,12 @@ func (c *Client) ListObjects(ctx context.Context, request *ListObjectsRequest, o
 		Headers: map[string]string{
 			HTTPHeaderContentType: contentTypeDefault,
 		},
+		Parameters: map[string]string{
+			"encoding-type": "url",
+		},
 		Bucket: request.Bucket,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5, enableEncodingType); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 
@@ -404,11 +407,12 @@ func (c *Client) ListObjectsV2(ctx context.Context, request *ListObjectsRequestV
 			HTTPHeaderContentType: contentTypeDefault,
 		},
 		Parameters: map[string]string{
-			"list-type": "2",
+			"list-type":     "2",
+			"encoding-type": "url",
 		},
 		Bucket: request.Bucket,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5, enableEncodingType); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

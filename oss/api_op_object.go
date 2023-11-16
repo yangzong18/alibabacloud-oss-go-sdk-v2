@@ -660,10 +660,13 @@ func (c *Client) DeleteMultipleObjects(ctx context.Context, request *DeleteMulti
 		Headers: map[string]string{
 			HTTPHeaderContentType: contentTypeXML,
 		},
-		Parameters: map[string]string{"delete": ""},
-		Bucket:     request.Bucket,
+		Parameters: map[string]string{
+			"delete":        "",
+			"encoding-type": "url",
+		},
+		Bucket: request.Bucket,
 	}
-	if err = c.marshalInput(request, input, marshalDeleteObjects, updateContentMd5, enableEncodingType); err != nil {
+	if err = c.marshalInput(request, input, marshalDeleteObjects, updateContentMd5); err != nil {
 		return nil, err
 	}
 

@@ -799,6 +799,7 @@ func unmarshalHeader(result any, output *OperationOutput) error {
 	filedInfos := map[string]fieldInfo{}
 
 	t := val.Type()
+	var usermetaKeys []string
 	for k := 0; k < t.NumField(); k++ {
 		if tag, ok := t.Field(k).Tag.Lookup("output"); ok {
 			tokens := strings.Split(tag, ",")
@@ -815,18 +816,22 @@ func unmarshalHeader(result any, output *OperationOutput) error {
 					flags = parseFiledFlags(tokens[2:])
 				}
 				filedInfos[lowkey] = fieldInfo{idx: k, flags: flags}
+				if flags&fTypeUsermeta != 0 {
+					usermetaKeys = append(usermetaKeys, lowkey)
+				}
 			}
 		}
 	}
 	var err error
-	var userMeta = "x-oss-meta-"
 	for key, vv := range output.Headers {
 		lkey := strings.ToLower(key)
-		if strings.Contains(lkey, userMeta) {
-			if field, ok := filedInfos[userMeta]; ok {
-				if field.flags&fTypeUsermeta != 0 {
-					mapKey := strings.TrimPrefix(lkey, userMeta)
-					err = setMapStringReflectValue(val.Field(field.idx), mapKey, vv[0])
+		for _, prefix := range usermetaKeys {
+			if strings.HasPrefix(lkey, prefix) {
+				if field, ok := filedInfos[prefix]; ok {
+					if field.flags&fTypeUsermeta != 0 {
+						mapKey := strings.TrimPrefix(lkey, prefix)
+						err = setMapStringReflectValue(val.Field(field.idx), mapKey, vv[0])
+					}
 				}
 			}
 		}

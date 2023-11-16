@@ -168,7 +168,7 @@ func setReflectValue(dst reflect.Value, data string) (err error) {
 	return nil
 }
 
-func setMapStringReflectValue(dst reflect.Value, key interface{}, data interface{}) (err error) {
+func setMapStringReflectValue(dst reflect.Value, key any, data any) (err error) {
 	dst0 := dst
 
 	if dst.Kind() == reflect.Pointer {
