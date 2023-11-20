@@ -227,6 +227,10 @@ func copySeekableBody(dst io.Writer, src io.ReadSeeker) (int64, error) {
 	return n, nil
 }
 
+func ParseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
+	return parseOffsetAndSizeFromHeaders(headers)
+}
+
 func parseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
 	size = -1
 	var contentLength = headers.Get("Content-Length")
@@ -330,4 +334,13 @@ func isInCharacterRange(r rune) (inrange bool) {
 		r >= 0x20 && r <= 0xD7FF ||
 		r >= 0xE000 && r <= 0xFFFD ||
 		r >= 0x10000 && r <= 0x10FFFF
+}
+
+func readFill(r io.Reader, buf []byte) (n int, err error) {
+	var nn int
+	for n < len(buf) && err == nil {
+		nn, err = r.Read(buf[n:])
+		n += nn
+	}
+	return n, err
 }

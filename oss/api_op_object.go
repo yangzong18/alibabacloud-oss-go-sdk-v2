@@ -2,7 +2,9 @@ package oss
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strconv"
 	"time"
 )
 
@@ -109,6 +111,23 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	}
 
 	return result, err
+}
+
+type HTTPRange struct {
+	Offset int64
+	Count  int64
+}
+
+func (r HTTPRange) FormatHTTPRange() *string {
+	if r.Offset == 0 && r.Count == 0 {
+		return nil // No specified range
+	}
+	endOffset := "" // if count == CountToEnd (0)
+	if r.Count > 0 {
+		endOffset = strconv.FormatInt((r.Offset+r.Count)-1, 10)
+	}
+	dataRange := fmt.Sprintf("bytes=%v-%s", r.Offset, endOffset)
+	return &dataRange
 }
 
 type GetObjectRequest struct {

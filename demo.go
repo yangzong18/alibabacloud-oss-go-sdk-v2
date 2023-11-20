@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss"
 	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
@@ -16,7 +18,7 @@ func main() {
 
 	var body []byte
 	BucketName := "bucket-test"
-	Key := "key-test"
+	Key := "dump.tif"
 	provider := credentials.NewEnvironmentVariableCredentialsProvider()
 
 	cfg := oss.LoadDefaultConfig().
@@ -25,7 +27,6 @@ func main() {
 		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
 
 	client := oss.NewClient(cfg)
-
 	// 子资源在缺省子资源列表
 	input := &oss.OperationInput{
 		OpName: "GetBucketAcl",
@@ -121,14 +122,14 @@ func main() {
 		}
 	}
 
-	//使用File-Like 接口
+	//使用File-Like 顺序读模式
 	file, err := client.OpenFile(BucketName, Key)
 	if err != nil {
 		fmt.Printf("client.OpenFile fail:%v\n", err)
 		return
 	}
 
-	wfile, err := os.Create("dump.dat")
+	wfile, err := os.Create("dump-seq.dat")
 	if err != nil {
 		fmt.Printf("os.Create fail:%v\n", err)
 		return
@@ -137,15 +138,99 @@ func main() {
 	stat, _ := file.Stat()
 	fmt.Printf("file name:%s, modTime:%v, size:%v\n", stat.Name(), stat.ModTime(), stat.Size())
 
-	offset, _ := file.Seek(128, io.SeekStart)
-	wfile.Seek(128, io.SeekStart)
-	fmt.Printf("new offset:%v\n", offset)
-	io.Copy(wfile, file)
+	start := time.Now()
 
+	hash := oss.NewCRC64(0)
+	offset, _ := file.Seek(128, io.SeekStart)
+	fmt.Printf("new offset:%v\n", offset)
+	wfile.Seek(128, io.SeekStart)
+	io.Copy(io.MultiWriter(wfile, hash), file)
+
+	hash1 := oss.NewCRC64(0)
 	file.Seek(0, io.SeekStart)
 	wfile.Seek(0, io.SeekStart)
-	io.CopyN(wfile, file, 128)
+	io.CopyN(io.MultiWriter(wfile, hash1), file, 128)
 
 	file.Close()
 	wfile.Close()
+
+	crc64 := oss.CRC64Combine(hash1.Sum64(), hash.Sum64(), uint64(stat.Size())-128)
+
+	duration := time.Now().Sub(start)
+	averSpeed := float64(stat.Size()/1024) / float64(duration.Seconds())
+
+	fmt.Printf("averSpeed :%.2f(KB/s), duration:%v\n", averSpeed, duration)
+	fmt.Printf("File-Like seq read done, src file crc64:%v, dest file crc64:%v\n", (stat.Sys().(http.Header)).Get(oss.HeaderOssCRC64), crc64)
+
+	//使用Async Reader 接口
+	getFn := func(ctx context.Context, httpRange oss.HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+		request := &oss.GetObjectRequest{
+			Bucket: oss.Ptr(BucketName),
+			Key:    oss.Ptr(Key),
+		}
+		rangeStr := httpRange.FormatHTTPRange()
+		if rangeStr != nil {
+			request.Range = rangeStr
+			request.RangeBehavior = oss.Ptr("standard")
+		}
+		result, err := client.GetObject(ctx, request)
+		if err != nil {
+			return nil, 0, "", err
+		}
+		offset, _ = oss.ParseOffsetAndSizeFromHeaders(result.Headers)
+		return result.Body, offset, result.Headers.Get("ETag"), nil
+	}
+
+	//part 1
+	hash = oss.NewCRC64(0)
+	reader, err := oss.NewAsyncReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 0, Count: 15597568}, "", 4)
+	if err != nil {
+		fmt.Printf("error")
+	}
+
+	wfile, err = os.Create("dump-async-reader.dat")
+	io.Copy(io.MultiWriter(wfile, hash), reader)
+
+	//part 2
+	hash1 = oss.NewCRC64(hash.Sum64())
+	reader1, err := oss.NewAsyncReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 15597568, Count: 8362724}, "", 4)
+	if err != nil {
+		fmt.Printf("error")
+	}
+	io.Copy(io.MultiWriter(wfile, hash1), reader1)
+	reader.Close()
+	wfile.Close()
+
+	fmt.Printf("Async Reader done, dest file crc64:%v", hash1.Sum64())
+
+	//使用File-Like异步并发读模式
+	file, err = client.OpenFile(BucketName, Key, func(oo *oss.OpenOptions) {
+		oo.EnableParallel = true
+		oo.ReadAheadThreshold = int64(0)
+	})
+	if err != nil {
+		fmt.Printf("client.OpenFile fail:%v\n", err)
+		return
+	}
+
+	wfile, err = os.Create("dump-parallel.dat")
+	if err != nil {
+		fmt.Printf("os.Create fail:%v\n", err)
+		return
+	}
+
+	stat, _ = file.Stat()
+	fmt.Printf("file name:%s, modTime:%v, size:%v\n", stat.Name(), stat.ModTime(), stat.Size())
+
+	start = time.Now()
+
+	hash = oss.NewCRC64(0)
+	io.Copy(io.MultiWriter(wfile, hash), file)
+
+	file.Close()
+	wfile.Close()
+	duration = time.Now().Sub(start)
+	averSpeed = float64(stat.Size()/1024) / float64(duration.Seconds())
+	fmt.Printf("averSpeed :%.2f(KB/s), duration:%v\n", averSpeed, duration)
+	fmt.Printf("File-Like parallel read done, src file crc64:%v, dest file crc64:%v\n", (stat.Sys().(http.Header)).Get(oss.HeaderOssCRC64), hash.Sum64())
 }

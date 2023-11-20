@@ -9,10 +9,21 @@ import (
 	"time"
 )
 
+const (
+	defaultReadAheadThreshold = int64(20 * 1024 * 1024)
+	defaultChunkSize          = int64(8 * 1024 * 1024)
+	defaultParallelNum        = 3
+)
+
 type OpenOptions struct {
 	Context   context.Context
 	Offset    int64
 	VersionId *string
+
+	EnableParallel     bool
+	ParallelNum        int
+	ChunkSize          int64
+	ReadAheadThreshold int64
 }
 
 type ReadOnlyFile struct {
@@ -36,18 +47,46 @@ type ReadOnlyFile struct {
 	// read
 	reader        io.ReadCloser
 	readBufOffset int64
+
+	// parallel read
+	enableParallel     bool
+	chunkSize          int64
+	parallelNum        int
+	readAheadThreshold int64
+
+	asyncReaders  []*AsyncReader
+	seqReadAmount int64
+	numOOORead    int64 // number of out of order read
 }
 
 // Open opens the named file for reading.
 // If successful, methods on the returned file can be used for reading.
 func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
 	options := OpenOptions{
-		Context: context.Background(),
-		Offset:  0,
+		Context:            context.Background(),
+		Offset:             0,
+		EnableParallel:     false,
+		ParallelNum:        defaultParallelNum,
+		ChunkSize:          defaultChunkSize,
+		ReadAheadThreshold: defaultReadAheadThreshold,
 	}
 
 	for _, fn := range optFns {
 		fn(&options)
+	}
+
+	if options.EnableParallel {
+		var chunkSize int64
+		if options.ChunkSize > 0 {
+			chunkSize = (options.ChunkSize + AsyncReadeBufferSize - 1) / AsyncReadeBufferSize * AsyncReadeBufferSize
+		} else {
+			chunkSize = defaultChunkSize
+		}
+		options.ChunkSize = chunkSize
+
+		if options.ParallelNum <= 0 {
+			options.ParallelNum = defaultParallelNum
+		}
 	}
 
 	f := &ReadOnlyFile{
@@ -59,6 +98,11 @@ func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*Re
 		versionId: options.VersionId,
 
 		offset: options.Offset,
+
+		enableParallel:     options.EnableParallel,
+		parallelNum:        options.ParallelNum,
+		chunkSize:          options.ChunkSize,
+		readAheadThreshold: options.ReadAheadThreshold,
 	}
 
 	var query map[string]string
@@ -188,6 +232,7 @@ func (f *ReadOnlyFile) readInternal(offset int64, p []byte) (bytesRead int, err 
 	defer func() {
 		if bytesRead > 0 {
 			f.readBufOffset += int64(bytesRead)
+			f.seqReadAmount += int64(bytesRead)
 		}
 	}()
 
@@ -198,9 +243,41 @@ func (f *ReadOnlyFile) readInternal(offset int64, p []byte) (bytesRead int, err 
 
 	if f.readBufOffset != offset {
 		f.readBufOffset = offset
+		f.seqReadAmount = 0
+
 		if f.reader != nil {
 			f.reader.Close()
 			f.reader = nil
+		}
+
+		if f.asyncReaders != nil {
+			f.numOOORead++
+		}
+
+		for _, ar := range f.asyncReaders {
+			ar.Close()
+		}
+		f.asyncReaders = nil
+	}
+
+	if f.enableParallel && f.seqReadAmount >= f.readAheadThreshold && f.numOOORead < 3 {
+		//swith to async reader
+		if f.reader != nil {
+			f.reader.Close()
+			f.reader = nil
+		}
+
+		err = f.readAhead(offset, len(p))
+		if err == nil {
+			bytesRead, err = f.readFromReadAhead(offset, p)
+			return
+		} else {
+			// fall back to read serially
+			f.seqReadAmount = 0
+			for _, ar := range f.asyncReaders {
+				ar.Close()
+			}
+			f.asyncReaders = nil
 		}
 	}
 
@@ -253,6 +330,85 @@ func (f *ReadOnlyFile) checkFileChanged(offset int64, header http.Header) error 
 	if modTime != f.modTime || etag != f.etag {
 		return fmt.Errorf("Source file is changed, origin info [%v,%v], new info [%v,%v]",
 			f.modTime, f.etag, modTime, etag)
+	}
+	return nil
+}
+
+func (f *ReadOnlyFile) readFromReadAhead(offset int64, buf []byte) (bytesRead int, err error) {
+	var nread int
+	for len(f.asyncReaders) != 0 {
+		readAheadBuf := f.asyncReaders[0]
+		nread, err = readAheadBuf.Read(buf)
+		bytesRead += nread
+		if err != nil {
+			if err == io.EOF {
+				fmt.Printf("readAheadBuf done\n")
+				readAheadBuf.Close()
+				f.asyncReaders = f.asyncReaders[1:]
+				err = nil
+			} else {
+				return
+			}
+		}
+		buf = buf[nread:]
+		if len(buf) == 0 {
+			return
+		}
+	}
+
+	return
+}
+
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	} else {
+		return b
+	}
+}
+
+func (f *ReadOnlyFile) readAhead(offset int64, needAtLeast int) (err error) {
+	off := offset
+	for _, ar := range f.asyncReaders {
+		off = ar.oriHttpRange.Offset + ar.oriHttpRange.Count
+	}
+	//fmt.Printf("readAhead:offset %v, needAtLeast:%v, off:%v\n", offset, needAtLeast, off)
+	for len(f.asyncReaders) < f.parallelNum {
+		remaining := f.sizeInBytes - off
+		size := minInt64(remaining, f.chunkSize)
+		cnt := (size + (AsyncReadeBufferSize - 1)) / AsyncReadeBufferSize
+		//fmt.Printf("f.sizeInBytes:%v, off:%v, size:%v, cnt:%v\n", f.sizeInBytes, off, size, cnt)
+		if size != 0 {
+			getFn := func(ctx context.Context, httpRange HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+				request := &GetObjectRequest{
+					Bucket:    Ptr(f.bucket),
+					Key:       Ptr(f.key),
+					VersionId: f.versionId,
+				}
+				rangeStr := httpRange.FormatHTTPRange()
+				if rangeStr != nil {
+					request.Range = rangeStr
+					request.RangeBehavior = Ptr("standard")
+				}
+				result, err := f.client.GetObject(f.context, request)
+				if err != nil {
+					return nil, 0, "", err
+				}
+				//fmt.Printf("result.Headers:%#v\n", result.Headers)
+				offset, _ = parseOffsetAndSizeFromHeaders(result.Headers)
+				return result.Body, offset, result.Headers.Get("ETag"), nil
+			}
+			ar, err := NewAsyncReader(f.context, getFn, &HTTPRange{off, size}, f.etag, int(cnt))
+			if err != nil {
+				break
+			}
+			f.asyncReaders = append(f.asyncReaders, ar)
+			off += size
+		}
+
+		if size != f.chunkSize {
+			break
+		}
 	}
 	return nil
 }
