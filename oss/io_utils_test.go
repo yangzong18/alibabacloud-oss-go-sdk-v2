@@ -340,7 +340,7 @@ func TestAsyncReaderRangeGetError(t *testing.T) {
 	dst = make([]byte, 100)
 	n, err := ar.Read(dst)
 	assert.Equal(t, 1, n)
-	assert.Equal(t, 1, ar.offset)
+	assert.Equal(t, int64(1), ar.offset)
 	n, err = ar.Read(dst[n:])
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "range get fail")

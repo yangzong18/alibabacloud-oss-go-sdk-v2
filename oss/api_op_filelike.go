@@ -12,7 +12,7 @@ import (
 const (
 	defaultReadAheadThreshold = int64(20 * 1024 * 1024)
 	defaultChunkSize          = int64(8 * 1024 * 1024)
-	defaultParallelNum        = 3
+	defaultPrefetchNum        = 3
 )
 
 type OpenOptions struct {
@@ -20,8 +20,8 @@ type OpenOptions struct {
 	Offset    int64
 	VersionId *string
 
-	EnableParallel     bool
-	ParallelNum        int
+	EnablePrefetch     bool
+	PrefetchNum        int
 	ChunkSize          int64
 	ReadAheadThreshold int64
 }
@@ -48,10 +48,10 @@ type ReadOnlyFile struct {
 	reader        io.ReadCloser
 	readBufOffset int64
 
-	// parallel read
-	enableParallel     bool
+	// prefetch
+	enablePrefetch     bool
 	chunkSize          int64
-	parallelNum        int
+	PrefetchNum        int
 	readAheadThreshold int64
 
 	asyncReaders  []*AsyncReader
@@ -65,8 +65,8 @@ func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*Re
 	options := OpenOptions{
 		Context:            context.Background(),
 		Offset:             0,
-		EnableParallel:     false,
-		ParallelNum:        defaultParallelNum,
+		EnablePrefetch:     false,
+		PrefetchNum:        defaultPrefetchNum,
 		ChunkSize:          defaultChunkSize,
 		ReadAheadThreshold: defaultReadAheadThreshold,
 	}
@@ -75,7 +75,7 @@ func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*Re
 		fn(&options)
 	}
 
-	if options.EnableParallel {
+	if options.EnablePrefetch {
 		var chunkSize int64
 		if options.ChunkSize > 0 {
 			chunkSize = (options.ChunkSize + AsyncReadeBufferSize - 1) / AsyncReadeBufferSize * AsyncReadeBufferSize
@@ -84,8 +84,8 @@ func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*Re
 		}
 		options.ChunkSize = chunkSize
 
-		if options.ParallelNum <= 0 {
-			options.ParallelNum = defaultParallelNum
+		if options.PrefetchNum <= 0 {
+			options.PrefetchNum = defaultPrefetchNum
 		}
 	}
 
@@ -99,8 +99,8 @@ func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*Re
 
 		offset: options.Offset,
 
-		enableParallel:     options.EnableParallel,
-		parallelNum:        options.ParallelNum,
+		enablePrefetch:     options.EnablePrefetch,
+		PrefetchNum:        options.PrefetchNum,
 		chunkSize:          options.ChunkSize,
 		readAheadThreshold: options.ReadAheadThreshold,
 	}
@@ -260,7 +260,7 @@ func (f *ReadOnlyFile) readInternal(offset int64, p []byte) (bytesRead int, err 
 		f.asyncReaders = nil
 	}
 
-	if f.enableParallel && f.seqReadAmount >= f.readAheadThreshold && f.numOOORead < 3 {
+	if f.enablePrefetch && f.seqReadAmount >= f.readAheadThreshold && f.numOOORead < 3 {
 		//swith to async reader
 		if f.reader != nil {
 			f.reader.Close()
@@ -373,7 +373,7 @@ func (f *ReadOnlyFile) readAhead(offset int64, needAtLeast int) (err error) {
 		off = ar.oriHttpRange.Offset + ar.oriHttpRange.Count
 	}
 	//fmt.Printf("readAhead:offset %v, needAtLeast:%v, off:%v\n", offset, needAtLeast, off)
-	for len(f.asyncReaders) < f.parallelNum {
+	for len(f.asyncReaders) < f.PrefetchNum {
 		remaining := f.sizeInBytes - off
 		size := minInt64(remaining, f.chunkSize)
 		cnt := (size + (AsyncReadeBufferSize - 1)) / AsyncReadeBufferSize
