@@ -123,7 +123,7 @@ func main() {
 	}
 
 	//使用File-Like 顺序读模式
-	file, err := client.OpenFile(BucketName, Key)
+	file, err := client.OpenFile(context.TODO(), BucketName, Key)
 	if err != nil {
 		fmt.Printf("client.OpenFile fail:%v\n", err)
 		return
@@ -204,9 +204,9 @@ func main() {
 	fmt.Printf("Async Reader done, dest file crc64:%v", hash1.Sum64())
 
 	//使用File-Like异步并发读模式
-	file, err = client.OpenFile(BucketName, Key, func(oo *oss.OpenOptions) {
-		oo.EnableParallel = true
-		oo.ReadAheadThreshold = int64(0)
+	file, err = client.OpenFile(context.TODO(), BucketName, Key, func(oo *oss.OpenOptions) {
+		oo.EnablePrefetch = true
+		oo.PrefetchThreshold = int64(0)
 	})
 	if err != nil {
 		fmt.Printf("client.OpenFile fail:%v\n", err)

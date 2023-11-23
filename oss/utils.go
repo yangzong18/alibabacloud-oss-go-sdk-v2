@@ -13,19 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
-)
-
-var (
-	escQuot = []byte("&#34;") // shorter than "&quot;"
-	escApos = []byte("&#39;") // shorter than "&apos;"
-	escAmp  = []byte("&amp;")
-	escLT   = []byte("&lt;")
-	escGT   = []byte("&gt;")
-	escTab  = []byte("&#x9;")
-	escNL   = []byte("&#xA;")
-	escCR   = []byte("&#xD;")
-	escFFFD = []byte("\uFFFD") // Unicode replacement character
 )
 
 func init() {
@@ -275,72 +262,10 @@ func parseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
 	return offset, size
 }
 
-// escapeXml EscapeString writes to p the properly escaped XML equivalent
-// of the plain text data s.
-func escapeXml(s string) string {
-	var p strings.Builder
-	var esc []byte
-	hextable := "0123456789ABCDEF"
-	escPattern := []byte("&#x00;")
-	last := 0
-	for i := 0; i < len(s); {
-		r, width := utf8.DecodeRuneInString(s[i:])
-		i += width
-		switch r {
-		case '"':
-			esc = escQuot
-		case '\'':
-			esc = escApos
-		case '&':
-			esc = escAmp
-		case '<':
-			esc = escLT
-		case '>':
-			esc = escGT
-		case '\t':
-			esc = escTab
-		case '\n':
-			esc = escNL
-		case '\r':
-			esc = escCR
-		default:
-			if !isInCharacterRange(r) || (r == 0xFFFD && width == 1) {
-				if r >= 0x00 && r < 0x20 {
-					escPattern[3] = hextable[r>>4]
-					escPattern[4] = hextable[r&0x0f]
-					esc = escPattern
-				} else {
-					esc = escFFFD
-				}
-				break
-			}
-			continue
-		}
-		p.WriteString(s[last : i-width])
-		p.Write(esc)
-		last = i
+func minInt64(a, b int64) int64 {
+	if a < b {
+		return a
+	} else {
+		return b
 	}
-	p.WriteString(s[last:])
-	return p.String()
-}
-
-// Decide whether the given rune is in the XML Character Range, per
-// the Char production of https://www.xml.com/axml/testaxml.htm,
-// Section 2.2 Characters.
-func isInCharacterRange(r rune) (inrange bool) {
-	return r == 0x09 ||
-		r == 0x0A ||
-		r == 0x0D ||
-		r >= 0x20 && r <= 0xD7FF ||
-		r >= 0xE000 && r <= 0xFFFD ||
-		r >= 0x10000 && r <= 0x10FFFF
-}
-
-func readFill(r io.Reader, buf []byte) (n int, err error) {
-	var nn int
-	for n < len(buf) && err == nil {
-		nn, err = r.Read(buf[n:])
-		n += nn
-	}
-	return n, err
 }

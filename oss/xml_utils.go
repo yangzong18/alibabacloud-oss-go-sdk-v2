@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 type XmlDecoderLite struct {
@@ -168,4 +170,77 @@ func trimNonGraphic(s string) string {
 	}
 
 	return string([]rune(s)[*first : last+1])
+}
+
+var (
+	escQuot = []byte("&#34;") // shorter than "&quot;"
+	escApos = []byte("&#39;") // shorter than "&apos;"
+	escAmp  = []byte("&amp;")
+	escLT   = []byte("&lt;")
+	escGT   = []byte("&gt;")
+	escTab  = []byte("&#x9;")
+	escNL   = []byte("&#xA;")
+	escCR   = []byte("&#xD;")
+	escFFFD = []byte("\uFFFD") // Unicode replacement character
+)
+
+// escapeXml EscapeString writes to p the properly escaped XML equivalent
+// of the plain text data s.
+func escapeXml(s string) string {
+	var p strings.Builder
+	var esc []byte
+	hextable := "0123456789ABCDEF"
+	escPattern := []byte("&#x00;")
+	last := 0
+	for i := 0; i < len(s); {
+		r, width := utf8.DecodeRuneInString(s[i:])
+		i += width
+		switch r {
+		case '"':
+			esc = escQuot
+		case '\'':
+			esc = escApos
+		case '&':
+			esc = escAmp
+		case '<':
+			esc = escLT
+		case '>':
+			esc = escGT
+		case '\t':
+			esc = escTab
+		case '\n':
+			esc = escNL
+		case '\r':
+			esc = escCR
+		default:
+			if !isInCharacterRange(r) || (r == 0xFFFD && width == 1) {
+				if r >= 0x00 && r < 0x20 {
+					escPattern[3] = hextable[r>>4]
+					escPattern[4] = hextable[r&0x0f]
+					esc = escPattern
+				} else {
+					esc = escFFFD
+				}
+				break
+			}
+			continue
+		}
+		p.WriteString(s[last : i-width])
+		p.Write(esc)
+		last = i
+	}
+	p.WriteString(s[last:])
+	return p.String()
+}
+
+// Decide whether the given rune is in the XML Character Range, per
+// the Char production of https://www.xml.com/axml/testaxml.htm,
+// Section 2.2 Characters.
+func isInCharacterRange(r rune) (inrange bool) {
+	return r == 0x09 ||
+		r == 0x0A ||
+		r == 0x0D ||
+		r >= 0x20 && r <= 0xD7FF ||
+		r >= 0xE000 && r <= 0xFFFD ||
+		r >= 0x10000 && r <= 0x10FFFF
 }

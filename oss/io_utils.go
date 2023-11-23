@@ -167,6 +167,11 @@ type AsyncReader struct {
 	modTime string
 }
 
+// NewAsyncReader returns a reader that will asynchronously read from
+// the Reader returued by getter from the given offset into a number of buffers each of size AsyncReadeBufferSize
+// The input can be read from the returned reader.
+// When done use Close to release the buffers and close the supplied input.
+// The etag is used to identify the content of the object. If not set, the first ETag returned value will be used instead.
 func NewAsyncReader(ctx context.Context,
 	rangeGet AsyncReaderRangeGet, httpRange *HTTPRange, etag string, buffers int) (*AsyncReader, error) {
 
@@ -391,4 +396,13 @@ func (a *AsyncReader) getBuffer() *buffer {
 	return &buffer{
 		buf: bufferPool.Get().([]byte),
 	}
+}
+
+func readFill(r io.Reader, buf []byte) (n int, err error) {
+	var nn int
+	for n < len(buf) && err == nil {
+		nn, err = r.Read(buf[n:])
+		n += nn
+	}
+	return n, err
 }
