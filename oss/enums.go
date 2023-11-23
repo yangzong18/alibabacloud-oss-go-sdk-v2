@@ -84,6 +84,7 @@ const (
 	HeaderOssMetaPrefix                         = "X-Oss-Meta-"
 	HeaderOssACL                                = "X-Oss-Acl"
 	HeaderOssObjectACL                          = "X-Oss-Object-Acl"
+	HeaderOssObjectType                         = "X-Oss-Object-Type"
 	HeaderOssSecurityToken                      = "X-Oss-Security-Token"
 	HeaderOssServerSideEncryption               = "X-Oss-Server-Side-Encryption"
 	HeaderOssServerSideEncryptionKeyID          = "X-Oss-Server-Side-Encryption-Key-Id"

@@ -205,7 +205,7 @@ func main() {
 
 	//使用File-Like异步并发读模式
 	file, err = client.OpenFile(BucketName, Key, func(oo *oss.OpenOptions) {
-		oo.EnableParallel = true
+		oo.EnablePrefetch = true
 		oo.ReadAheadThreshold = int64(0)
 	})
 	if err != nil {

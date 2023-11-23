@@ -59,7 +59,7 @@ type ReadOnlyFile struct {
 	numOOORead    int64 // number of out of order read
 }
 
-// Open opens the named file for reading.
+// OpenFile opens the named file for reading.
 // If successful, methods on the returned file can be used for reading.
 func (c *Client) OpenFile(bucket, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
 	options := OpenOptions{
