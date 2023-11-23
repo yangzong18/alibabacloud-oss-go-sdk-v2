@@ -1,8 +1,11 @@
 package oss
 
 import (
+	"bufio"
 	"context"
+	"encoding/base64"
 	"errors"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"strconv"
@@ -105,6 +108,34 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		if lor.NextMarker != nil {
 			marker = *lor.NextMarker
 		}
+	}
+	var listUploadRequest *ListMultipartUploadsRequest
+	var abortRequest *AbortMultipartUploadRequest
+	var lsRes *ListMultipartUploadsResult
+	keyMarker := ""
+	uploadIdMarker := ""
+	for {
+		listUploadRequest = &ListMultipartUploadsRequest{
+			Bucket:         Ptr(*bucketInfo.Name),
+			KeyMarker:      Ptr(keyMarker),
+			UploadIdMarker: Ptr(uploadIdMarker),
+		}
+		lsRes, err = c.ListMultipartUploads(context.TODO(), listUploadRequest)
+		assert.Nil(t, err)
+		for _, upload := range lsRes.Uploads {
+			abortRequest = &AbortMultipartUploadRequest{
+				Bucket:   Ptr(*bucketInfo.Name),
+				Key:      Ptr(*upload.Key),
+				UploadId: Ptr(*upload.UploadId),
+			}
+			_, err = c.AbortMultipartUpload(context.TODO(), abortRequest)
+			assert.Nil(t, err)
+		}
+		if !lsRes.IsTruncated {
+			break
+		}
+		keyMarker = *lsRes.NextKeyMarker
+		uploadIdMarker = *lsRes.NextUploadIdMarker
 	}
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(*bucketInfo.Name),
@@ -629,6 +660,23 @@ func TestPutObject(t *testing.T) {
 	assert.NotEmpty(t, *result.HashCRC64)
 	assert.NotEmpty(t, *result.ContentMD5)
 	assert.Nil(t, result.VersionId)
+	var serr *ServiceError
+	request = &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
+	}
+	result, err = client.PutObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, 203, serr.StatusCode)
+	assert.Equal(t, "CallbackFailed", serr.Code)
+	assert.Equal(t, "Error status : 301.", serr.Message)
+	assert.Equal(t, "0007-00000203", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
 
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	request = &PutObjectRequest{
@@ -640,7 +688,6 @@ func TestPutObject(t *testing.T) {
 	}
 	result, err = client.PutObject(context.TODO(), request)
 	assert.NotNil(t, err)
-	var serr *ServiceError
 	errors.As(err, &serr)
 	assert.Equal(t, int(404), serr.StatusCode)
 	assert.Equal(t, "NoSuchBucket", serr.Code)
@@ -1104,6 +1151,936 @@ func TestDeleteMultipleObjects(t *testing.T) {
 		Objects: []DeleteObject{{Key: Ptr(objectNameSpecial)}},
 	}
 	_, err = client.DeleteMultipleObjects(context.TODO(), delRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestHeadObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(10)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	headRequest := &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.HeadObject(context.TODO(), headRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, result.ContentLength, int64(len(content)))
+	assert.NotEmpty(t, *result.ContentMD5)
+	assert.NotEmpty(t, *result.ObjectType)
+	assert.NotEmpty(t, *result.StorageClass)
+	assert.NotEmpty(t, *result.ETag)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	headRequest = &HeadObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+	}
+	result, err = client.HeadObject(context.TODO(), headRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestGetObjectMeta(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(10)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	headRequest := &GetObjectMetaRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.GetObjectMeta(context.TODO(), headRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, result.ContentLength, int64(len(content)))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.LastModified)
+	assert.NotEmpty(t, *result.HashCRC64)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	headRequest = &GetObjectMetaRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+	}
+	result, err = client.GetObjectMeta(context.TODO(), headRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestRestoreObject(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	objectName := objectNamePrefix + randLowStr(6)
+	content := randLowStr(10)
+	request := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(content),
+		},
+		StorageClass: StorageClassColdArchive,
+	}
+	_, err = client.PutObject(context.TODO(), request)
+	assert.Nil(t, err)
+
+	restoreRequest := &RestoreObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.RestoreObject(context.TODO(), restoreRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 202)
+	assert.Equal(t, result.Status, "202 Accepted")
+	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+
+	var serr *ServiceError
+	restoreRequest = &RestoreObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err = client.RestoreObject(context.TODO(), restoreRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(409), serr.StatusCode)
+	assert.Equal(t, "RestoreAlreadyInProgress", serr.Code)
+	assert.Equal(t, "The restore operation is in progress.", serr.Message)
+	assert.NotEmpty(t, serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
+	restoreRequest = &RestoreObjectRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+	}
+	_, err = client.RestoreObject(context.TODO(), restoreRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestPutObjectAcl(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6)
+	objectRequest := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	_, err = client.PutObject(context.TODO(), objectRequest)
+	request := &PutObjectAclRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		Acl:    ObjectACLPublicRead,
+	}
+	result, err := client.PutObjectAcl(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, result.StatusCode)
+	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+	infoRequest := &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	_, err = client.HeadObject(context.TODO(), infoRequest)
+	assert.Nil(t, err)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "-not-exist"
+	request = &PutObjectAclRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+		Acl:    ObjectACLPublicRead,
+	}
+	_, err = client.PutObjectAcl(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestGetObjectAcl(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6)
+	objectRequest := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		Acl:    ObjectACLPublicReadWrite,
+	}
+	_, err = client.PutObject(context.TODO(), objectRequest)
+	request := &GetObjectAclRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.GetObjectAcl(context.TODO(), request)
+	assert.Nil(t, err)
+
+	assert.Equal(t, 200, result.StatusCode)
+	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+	assert.Equal(t, ObjectACLType(*result.ACL), ObjectACLPublicReadWrite)
+	assert.NotEmpty(t, *result.Owner.ID)
+	assert.NotEmpty(t, *result.Owner.DisplayName)
+
+	objectNameNotExist := objectName + "-not-exist"
+	request = &GetObjectAclRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameNotExist),
+	}
+	result, err = client.GetObjectAcl(context.TODO(), request)
+	assert.NotNil(t, err)
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchKey", serr.Code)
+	assert.Equal(t, "The specified key does not exist.", serr.Message)
+	assert.Equal(t, "0026-00000001", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestInitiateMultipartUpload(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6)
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, initResult.StatusCode)
+	assert.NotEmpty(t, initResult.Headers.Get(HeaderOssRequestID))
+	assert.Equal(t, *initResult.Bucket, bucketName)
+	assert.Equal(t, *initResult.Key, objectName)
+	assert.NotEmpty(t, *initResult.UploadId)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+
+	var serr *ServiceError
+	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "-not-exist"
+	initRequest = &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketNameNotExist),
+		Key:    Ptr(objectName),
+	}
+	_, err = client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestUploadPart(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6)
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+
+	partRequest := &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader("upload part 1"),
+		},
+	}
+
+	partResult, err := client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, initResult.StatusCode)
+	assert.NotEmpty(t, partResult.Headers.Get(HeaderOssRequestID))
+	assert.NotEmpty(t, *partResult.ETag)
+	assert.NotEmpty(t, *partResult.ContentMD5)
+	assert.NotEmpty(t, *partResult.HashCRC64)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+
+	var serr *ServiceError
+	abortRequest = &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchUpload", serr.Code)
+	assert.Equal(t, "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", serr.Message)
+	assert.Equal(t, "0042-00000002", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestUploadPartCopy(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+
+	body := randLowStr(100000)
+	objectSrcName := objectNamePrefix + randLowStr(6) + "src"
+	objRequest := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectSrcName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(body),
+		},
+	}
+	_, err = client.PutObject(context.TODO(), objRequest)
+
+	objectDestName := objectNamePrefix + randLowStr(6) + "dest"
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectDestName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+	source := "/" + bucketName + "/" + objectSrcName
+	copyRequest := &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectDestName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		Source:     Ptr(source),
+	}
+	copyResult, err := client.UploadPartCopy(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, copyResult.StatusCode)
+	assert.NotEmpty(t, copyResult.Headers.Get(HeaderOssRequestID))
+	assert.NotEmpty(t, *copyResult.ETag)
+	assert.NotEmpty(t, *copyResult.LastModified)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectDestName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+
+	var serr *ServiceError
+	copyRequest = &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectDestName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		Source:     Ptr(source),
+	}
+	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchUpload", serr.Code)
+	assert.Equal(t, "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", serr.Message)
+	assert.Equal(t, "0042-00000311", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestCompleteMultipartUpload(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+
+	body := randLowStr(400000)
+	reader := strings.NewReader(body)
+	bufReader := bufio.NewReader(reader)
+	content, err := ioutil.ReadAll(bufReader)
+	assert.Nil(t, err)
+	count := 3
+	partSize := len(content) / count
+	part1 := content[:partSize]
+	part2 := content[partSize : 2*partSize]
+	part3 := content[2*partSize:]
+	objectName := objectNamePrefix + randLowStr(6)
+
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+	partRequest := &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part1)),
+		},
+	}
+	var parts []UploadPart
+	partResult, err := client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part := UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(2),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part2)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part = UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(3),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part3)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+	part = UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	request := &CompleteMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+		CompleteMultipartUpload: &CompleteMultipartUpload{
+			Part: parts,
+		},
+	}
+	result, err := client.CompleteMultipartUpload(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, result.StatusCode)
+	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.Location)
+	assert.Equal(t, *result.Bucket, bucketName)
+	assert.Equal(t, *result.Key, objectName)
+
+	getObj := &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	getObjresult, err := client.GetObject(context.TODO(), getObj)
+	assert.Nil(t, err)
+	data, _ := ioutil.ReadAll(getObjresult.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, string(data), body)
+
+	objectDestName := objectNamePrefix + randLowStr(6) + "dest" + "\f\v"
+	initCopyRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectDestName),
+	}
+	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
+	assert.Nil(t, err)
+	source := "/" + bucketName + "/" + objectName
+	copyRequest := &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectDestName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initCopyResult.UploadId),
+		Source:     Ptr(source),
+	}
+	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+	request = &CompleteMultipartUploadRequest{
+		Bucket:      Ptr(bucketName),
+		Key:         Ptr(objectDestName),
+		UploadId:    Ptr(*initCopyResult.UploadId),
+		CompleteAll: Ptr("yes"),
+	}
+	result, err = client.CompleteMultipartUpload(context.TODO(), request)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+	assert.NotEmpty(t, *result.ETag)
+	assert.NotEmpty(t, *result.Location)
+	assert.Equal(t, *result.Bucket, bucketName)
+	assert.Equal(t, *result.Key, objectDestName)
+
+	initCopyResult, err = client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
+	assert.Nil(t, err)
+	copyRequest = &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectDestName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initCopyResult.UploadId),
+		Source:     Ptr(source),
+	}
+	copyResult, err := client.UploadPartCopy(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+	copyPart := UploadPart{
+		PartNumber: copyRequest.PartNumber,
+		ETag:       copyResult.ETag,
+	}
+
+	var serr *ServiceError
+	request = &CompleteMultipartUploadRequest{
+		Bucket:      Ptr(bucketName),
+		Key:         Ptr(objectDestName),
+		UploadId:    Ptr(*initCopyResult.UploadId),
+		CompleteAll: Ptr("yes"),
+		CompleteMultipartUpload: &CompleteMultipartUpload{
+			Part: []UploadPart{
+				copyPart,
+			},
+		},
+	}
+	result, err = client.CompleteMultipartUpload(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, 400, serr.StatusCode)
+	assert.Equal(t, "InvalidArgument", serr.Code)
+	assert.Equal(t, "Should not speficy both complete all header and http body.", serr.Message)
+	assert.Equal(t, "0042-00000216", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+	request = &CompleteMultipartUploadRequest{
+		Bucket:      Ptr(bucketName),
+		Key:         Ptr(objectDestName),
+		UploadId:    Ptr(*initCopyResult.UploadId),
+		CompleteAll: Ptr("yes"),
+		Callback:    Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
+	}
+	result, err = client.CompleteMultipartUpload(context.TODO(), request)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, 203, serr.StatusCode)
+	assert.Equal(t, "CallbackFailed", serr.Code)
+	assert.Equal(t, "Error status : 301.", serr.Message)
+	assert.Equal(t, "0007-00000203", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestAbortMultipartUpload(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6)
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	result, err := client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 204)
+	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+
+	var serr *ServiceError
+	abortRequest = &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchUpload", serr.Code)
+	assert.Equal(t, "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", serr.Message)
+	assert.Equal(t, "0042-00000002", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestListMultipartUploads(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6) + "\v\n\f"
+	body := randLowStr(400000)
+	reader := strings.NewReader(body)
+	bufReader := bufio.NewReader(reader)
+	content, err := ioutil.ReadAll(bufReader)
+	assert.Nil(t, err)
+	count := 3
+	partSize := len(content) / count
+	part1 := content[:partSize]
+	part2 := content[partSize : 2*partSize]
+	part3 := content[2*partSize:]
+
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+	partRequest := &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part1)),
+		},
+	}
+	var parts []UploadPart
+	partResult, err := client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part := UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(2),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part2)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part = UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(3),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part3)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+	part = UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+
+	putObj := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(randLowStr(1000)),
+		},
+	}
+
+	_, err = client.PutObject(context.TODO(), putObj)
+	assert.Nil(t, err)
+	objectDestName := objectNamePrefix + randLowStr(6) + "dest" + "\f\v\n"
+	initCopyRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectDestName),
+	}
+
+	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
+	assert.Nil(t, err)
+	source := "/" + bucketName + "/" + objectName
+	copyRequest := &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectDestName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initCopyResult.UploadId),
+		Source:     Ptr(source),
+	}
+	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
+	assert.Nil(t, err)
+
+	listRequest := &ListMultipartUploadsRequest{
+		Bucket: Ptr(bucketName),
+	}
+	listResult, err := client.ListMultipartUploads(context.TODO(), listRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, listResult.StatusCode)
+	assert.NotEmpty(t, listResult.Headers.Get(HeaderOssRequestID))
+	assert.Equal(t, *listResult.Bucket, bucketName)
+	assert.Empty(t, *listResult.KeyMarker, bucketName)
+	assert.Len(t, listResult.Uploads, 2)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+
+	bucketNameNotExist := bucketName + "-not-exist"
+	listRequest = &ListMultipartUploadsRequest{
+		Bucket: Ptr(bucketNameNotExist),
+	}
+	listResult, err = client.ListMultipartUploads(context.TODO(), listRequest)
+	var serr *ServiceError
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.Equal(t, "0015-00000101", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestListParts(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	objectName := objectNamePrefix + randLowStr(6) + "-\v\n\f"
+	body := randLowStr(400000)
+	reader := strings.NewReader(body)
+	bufReader := bufio.NewReader(reader)
+	content, err := ioutil.ReadAll(bufReader)
+	assert.Nil(t, err)
+	count := 3
+	partSize := len(content) / count
+	part1 := content[:partSize]
+	part2 := content[partSize : 2*partSize]
+	part3 := content[2*partSize:]
+
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
+	assert.Nil(t, err)
+	partRequest := &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(1),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part1)),
+		},
+	}
+	var parts []UploadPart
+	partResult, err := client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part := UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(2),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part2)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+	assert.Nil(t, err)
+	part = UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       partResult.ETag,
+	}
+	parts = append(parts, part)
+	partRequest = &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectName),
+		PartNumber: int32(3),
+		UploadId:   Ptr(*initResult.UploadId),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(string(part3)),
+		},
+	}
+	partResult, err = client.UploadPart(context.TODO(), partRequest)
+
+	listRequest := &ListPartsRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	listResult, err := client.ListParts(context.TODO(), listRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, listResult.StatusCode)
+	assert.NotEmpty(t, listResult.Headers.Get(HeaderOssRequestID))
+	assert.Equal(t, *listResult.Bucket, bucketName)
+	assert.Equal(t, *listResult.Key, objectName)
+	assert.Equal(t, *listResult.UploadId, *initResult.UploadId)
+	assert.Equal(t, *listResult.StorageClass, "Standard")
+	assert.Equal(t, listResult.IsTruncated, false)
+	assert.Equal(t, listResult.PartNumberMarker, int32(0))
+	assert.Equal(t, listResult.NextPartNumberMarker, int32(3))
+	assert.Equal(t, listResult.MaxParts, int32(1000))
+	assert.Len(t, listResult.Parts, count)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+	assert.Nil(t, err)
+
+	bucketNameNotExist := bucketName + "-not-exist"
+	listRequest = &ListPartsRequest{
+		Bucket:   Ptr(bucketNameNotExist),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(*initResult.UploadId),
+	}
+	listResult, err = client.ListParts(context.TODO(), listRequest)
+	var serr *ServiceError
 	assert.NotNil(t, err)
 	errors.As(err, &serr)
 	assert.Equal(t, int(404), serr.StatusCode)

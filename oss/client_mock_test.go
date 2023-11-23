@@ -2,7 +2,9 @@ package oss
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -2687,6 +2689,7 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.NotNil(t, r.Header.Get("x-oss-callback"))
 		},
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
@@ -2704,6 +2707,47 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
 			assert.Equal(t, *o.HashCRC64, "870718044876840****")
 			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "6551DBCF4311A7303980****",
+			"Date":             "Mon, 13 Nov 2023 08:18:23 GMT",
+
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "870718044876840****",
+			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
+			"x-oss-version-id":     "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
+		},
+		[]byte(`{"filename":"object","size":"6","mimeType":""}`),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := ioutil.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.NotNil(t, r.Header.Get("x-oss-callback"))
+		},
+		&PutObjectRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"www.aliyuncs.com", "callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss"),
+			},
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
+			assert.Equal(t, *o.HashCRC64, "870718044876840****")
+			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
+			resultBody, err := ioutil.ReadAll(o.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, string(resultBody), `{"filename":"object","size":"6","mimeType":""}`)
 		},
 	},
 }
@@ -2848,6 +2892,50 @@ var testMockPutObjectErrorCases = []struct {
 			assert.Equal(t, "NoSuchBucket", serr.Code)
 			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
 			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		203,
+		map[string]string{
+			"Content-Type":         "application/xml",
+			"x-oss-request-id":     "5C3D9175B6FC201293AD****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "870718044876840****",
+			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
+			"x-oss-version-id":     "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>CallbackFailed</Code>
+  <Message>Error status : 301.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <EC>0007-00000203</EC>
+  <RecommendDoc>https://api.aliyun.com/troubleshoot?q=0007-00000203</RecommendDoc>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss"),
+			},
+			Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(203), serr.StatusCode)
+			assert.Equal(t, "CallbackFailed", serr.Code)
+			assert.Equal(t, "Error status : 301.", serr.Message)
+			assert.Equal(t, "0007-00000203", serr.EC)
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
 		},
 	},
@@ -4112,6 +4200,3146 @@ func TestMockDeleteMultipleObjects_Error(t *testing.T) {
 		assert.NotNil(t, c)
 
 		output, err := client.DeleteMultipleObjects(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockHeadObjectSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *HeadObjectRequest
+	CheckOutputFn  func(t *testing.T, o *HeadObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id":    "6555A936CA31DC333143****",
+			"Date":                "Thu, 16 Nov 2023 05:31:34 GMT",
+			"x-oss-object-type":   "Normal",
+			"x-oss-storage-class": "Archive",
+			"Last-Modified":       "Fri, 24 Feb 2018 09:41:56 GMT",
+			"Content-Length":      "344606",
+			"Content-Type":        "image/jpg",
+			"ETag":                "\"fba9dede5f27731c9771645a3986****\"",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6555A936CA31DC333143****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Thu, 16 Nov 2023 05:31:34 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.ETag, "\"fba9dede5f27731c9771645a3986****\"")
+			assert.Equal(t, *o.ObjectType, "Normal")
+			assert.Equal(t, *o.LastModified, time.Date(2018, time.February, 24, 9, 41, 56, 0, time.UTC))
+			assert.Equal(t, *o.StorageClass, "Archive")
+			assert.Equal(t, o.ContentLength, int64(344606))
+			assert.Equal(t, *o.ContentType, "image/jpg")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id":    "5CAC3B40B7AEADE01700****",
+			"Date":                "Tue, 04 Dec 2018 15:56:38 GMT",
+			"Content-Type":        "text/xml",
+			"x-oss-object-type":   "Normal",
+			"x-oss-storage-class": "Archive",
+			"Last-Modified":       "Fri, 24 Feb 2023 09:41:56 GMT",
+			"Content-Length":      "481827",
+			"ETag":                "\"A082B659EF78733A5A042FA253B1****\"",
+			"x-oss-version-Id":    "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?versionId=CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy%2A%2A%2A%2A", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "5CAC3B40B7AEADE01700****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+			assert.Equal(t, *o.ObjectType, "Normal")
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 56, 0, time.UTC))
+			assert.Equal(t, *o.StorageClass, "Archive")
+			assert.Equal(t, o.ContentLength, int64(481827))
+			assert.Equal(t, *o.ContentType, "text/xml")
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****")
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id":    "534B371674E88A4D8906****",
+			"Date":                "Tue, 04 Dec 2018 15:56:38 GMT",
+			"Content-Type":        "image/jpg",
+			"x-oss-object-type":   "Normal",
+			"x-oss-restore":       "ongoing-request=\"true\"",
+			"x-oss-storage-class": "Archive",
+			"Last-Modified":       "Fri, 24 Feb 2023 09:41:59 GMT",
+			"Content-Length":      "481827",
+			"ETag":                "\"A082B659EF78733A5A042FA253B1****\"",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ObjectType, "Normal")
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 59, 0, time.UTC))
+			assert.Equal(t, *o.StorageClass, "Archive")
+			assert.Equal(t, o.ContentLength, int64(481827))
+			assert.Equal(t, *o.ContentType, "image/jpg")
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+			assert.Equal(t, *o.Restore, "ongoing-request=\"true\"")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id":                    "534B371674E88A4D8906****",
+			"Date":                                "Tue, 04 Dec 2018 15:56:38 GMT",
+			"Content-Type":                        "image/jpg",
+			"x-oss-object-type":                   "Normal",
+			"x-oss-restore":                       "ongoing-request=\"false\", expiry-date=\"Sun, 16 Apr 2017 08:12:33 GMT\"",
+			"x-oss-storage-class":                 "Archive",
+			"x-oss-server-side-encryption":        "KMS",
+			"x-oss-server-side-data-encryption":   "SM4",
+			"x-oss-server-side-encryption-key-id": "9468da86-3509-4f8d-a61e-6eab1eac****",
+			"Content-Length":                      "481827",
+			"ETag":                                "\"A082B659EF78733A5A042FA253B1****\"",
+			"Last-Modified":                       "Fri, 24 Feb 2023 09:41:59 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ObjectType, "Normal")
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 59, 0, time.UTC))
+			assert.Equal(t, *o.StorageClass, "Archive")
+			assert.Equal(t, o.ContentLength, int64(481827))
+			assert.Equal(t, *o.ContentType, "image/jpg")
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+			assert.Equal(t, *o.Restore, "ongoing-request=\"false\", expiry-date=\"Sun, 16 Apr 2017 08:12:33 GMT\"")
+			assert.Equal(t, *o.ServerSideEncryption, "KMS")
+			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
+			assert.Equal(t, *o.SSEKMSKeyId, "9468da86-3509-4f8d-a61e-6eab1eac****")
+		},
+	},
+}
+
+func TestMockHeadObject_Success(t *testing.T) {
+	for _, c := range testMockHeadObjectSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.HeadObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockHeadObjectErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *HeadObjectRequest
+	CheckOutputFn  func(t *testing.T, o *HeadObjectResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6556E3AED11E553933CCDEDF",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-err":        "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPEVycm9yPgogIDxDb2RlPk5vU3VjaEtleTwvQ29kZT4KICA8TWVzc2FnZT5UaGUgc3BlY2lmaWVkIGtleSBkb2VzIG5vdCBleGlzdC48L01lc3NhZ2U+CiAgPFJlcXVlc3RJZD42NTU2RTNBRUQxMUU1NTM5MzNDQ0RFREY8L1JlcXVlc3RJZD4KICA8SG9zdElkPmRlbW8td2Fsa2VyLTY5NjEub3NzLWNuLWhhbmd6aG91LmFsaXl1bmNzLmNvbTwvSG9zdElkPgogIDxLZXk+d2Fsa2VyMmFzZGFzZGFzZC50eHQ8L0tleT4KICA8RUM+MDAyNi0wMDAwMDAwMTwvRUM+CiAgPFJlY29tbWVuZERvYz5odHRwczovL2FwaS5hbGl5dW4uY29tL3Ryb3VibGVzaG9vdD9xPTAwMjYtMDAwMDAwMDE8L1JlY29tbWVuZERvYz4KPC9FcnJvcj4K",
+			"x-oss-ec":         "0026-00000001",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchKey", serr.Code)
+			assert.Equal(t, "6556E3AED11E553933CCDEDF", serr.RequestID)
+			assert.Equal(t, "The specified key does not exist.", serr.Message)
+			assert.Equal(t, "0026-00000001", serr.EC)
+		},
+	},
+	{
+		304,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6555AC764311A73931E0****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(304), serr.StatusCode)
+		},
+	},
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6556FF5BD11E5536368607E8",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-err":        "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPEVycm9yPgogIDxDb2RlPkludmFsaWRUYXJnZXRUeXBlPC9Db2RlPgogIDxNZXNzYWdlPlRoZSBzeW1ib2xpYydzIHRhcmdldCBmaWxlIHR5cGUgaXMgaW52YWxpZDwvTWVzc2FnZT4KICA8UmVxdWVzdElkPjY1NTZGRjVCRDExRTU1MzYzNjg2MDdFODwvUmVxdWVzdElkPgogIDxIb3N0SWQ+ZGVtby13YWxrZXItNjk2MS5vc3MtY24taGFuZ3pob3UuYWxpeXVuY3MuY29tPC9Ib3N0SWQ+CiAgPEVDPjAwMjYtMDAwMDAwMTE8L0VDPgogIDxSZWNvbW1lbmREb2M+aHR0cHM6Ly9hcGkuYWxpeXVuLmNvbS90cm91Ymxlc2hvb3Q/cT0wMDI2LTAwMDAwMDExPC9SZWNvbW1lbmREb2M+CjwvRXJyb3I+Cg==",
+			"x-oss-ec":         "0026-00000011",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&HeadObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *HeadObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidTargetType", serr.Code)
+			assert.Equal(t, "6556FF5BD11E5536368607E8", serr.RequestID)
+			assert.Equal(t, "The symbolic's target file type is invalid", serr.Message)
+			assert.Equal(t, "0026-00000011", serr.EC)
+		},
+	},
+}
+
+func TestMockHeadObject_Error(t *testing.T) {
+	for _, c := range testMockHeadObjectErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.HeadObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectMetaSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectMetaRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectMetaResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id": "6555A936CA31DC333143****",
+			"Date":             "Thu, 16 Nov 2023 05:31:34 GMT",
+			"Last-Modified":    "Fri, 24 Feb 2018 09:41:56 GMT",
+			"Content-Length":   "344606",
+			"ETag":             "\"fba9dede5f27731c9771645a3986****\"",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?objectMeta", r.URL.String())
+		},
+		&GetObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6555A936CA31DC333143****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Thu, 16 Nov 2023 05:31:34 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.ETag, "\"fba9dede5f27731c9771645a3986****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2018, time.February, 24, 9, 41, 56, 0, time.UTC))
+			assert.Equal(t, o.ContentLength, int64(344606))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id": "5CAC3B40B7AEADE01700****",
+			"Date":             "Tue, 04 Dec 2018 15:56:38 GMT",
+			"Last-Modified":    "Fri, 24 Feb 2023 09:41:56 GMT",
+			"Content-Length":   "481827",
+			"ETag":             "\"A082B659EF78733A5A042FA253B1****\"",
+			"x-oss-version-Id": "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?objectMeta&versionId=CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy%2A%2A%2A%2A", strUrl)
+		},
+		&GetObjectMetaRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "5CAC3B40B7AEADE01700****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 56, 0, time.UTC))
+			assert.Equal(t, o.ContentLength, int64(481827))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****")
+			assert.Equal(t, *o.ETag, "\"A082B659EF78733A5A042FA253B1****\"")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id":       "534B371674E88A4D8906****",
+			"Date":                   "Tue, 04 Dec 2018 15:56:38 GMT",
+			"Last-Modified":          "Fri, 24 Feb 2023 09:41:59 GMT",
+			"Content-Length":         "481827",
+			"ETag":                   "\"A082B659EF78733A5A042FA253B1****\"",
+			"x-oss-last-access-time": "Thu, 14 Oct 2021 11:49:05 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?objectMeta", r.URL.String())
+		},
+		&GetObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 59, 0, time.UTC))
+			assert.Equal(t, o.ContentLength, int64(481827))
+			assert.Equal(t, *o.LastAccessTime, time.Date(2021, time.October, 14, 11, 49, 05, 0, time.UTC))
+		},
+	},
+}
+
+func TestMockGetObjectMeta_Success(t *testing.T) {
+	for _, c := range testMockGetObjectMetaSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectMeta(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectMetaErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectMetaRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectMetaResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6556E3AED11E553933CCDEDF",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-err":        "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPEVycm9yPgogIDxDb2RlPk5vU3VjaEtleTwvQ29kZT4KICA8TWVzc2FnZT5UaGUgc3BlY2lmaWVkIGtleSBkb2VzIG5vdCBleGlzdC48L01lc3NhZ2U+CiAgPFJlcXVlc3RJZD42NTU2RTNBRUQxMUU1NTM5MzNDQ0RFREY8L1JlcXVlc3RJZD4KICA8SG9zdElkPmRlbW8td2Fsa2VyLTY5NjEub3NzLWNuLWhhbmd6aG91LmFsaXl1bmNzLmNvbTwvSG9zdElkPgogIDxLZXk+d2Fsa2VyMmFzZGFzZGFzZC50eHQ8L0tleT4KICA8RUM+MDAyNi0wMDAwMDAwMTwvRUM+CiAgPFJlY29tbWVuZERvYz5odHRwczovL2FwaS5hbGl5dW4uY29tL3Ryb3VibGVzaG9vdD9xPTAwMjYtMDAwMDAwMDE8L1JlY29tbWVuZERvYz4KPC9FcnJvcj4K",
+			"x-oss-ec":         "0026-00000001",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?objectMeta", r.URL.String())
+		},
+		&GetObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchKey", serr.Code)
+			assert.Equal(t, "6556E3AED11E553933CCDEDF", serr.RequestID)
+			assert.Equal(t, "The specified key does not exist.", serr.Message)
+			assert.Equal(t, "0026-00000001", serr.EC)
+		},
+	},
+	{
+		304,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6555AC764311A73931E0****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?objectMeta", r.URL.String())
+		},
+		&GetObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(304), serr.StatusCode)
+		},
+	},
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6556FF5BD11E5536368607E8",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-err":        "PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPEVycm9yPgogIDxDb2RlPkludmFsaWRUYXJnZXRUeXBlPC9Db2RlPgogIDxNZXNzYWdlPlRoZSBzeW1ib2xpYydzIHRhcmdldCBmaWxlIHR5cGUgaXMgaW52YWxpZDwvTWVzc2FnZT4KICA8UmVxdWVzdElkPjY1NTZGRjVCRDExRTU1MzYzNjg2MDdFODwvUmVxdWVzdElkPgogIDxIb3N0SWQ+ZGVtby13YWxrZXItNjk2MS5vc3MtY24taGFuZ3pob3UuYWxpeXVuY3MuY29tPC9Ib3N0SWQ+CiAgPEVDPjAwMjYtMDAwMDAwMTE8L0VDPgogIDxSZWNvbW1lbmREb2M+aHR0cHM6Ly9hcGkuYWxpeXVuLmNvbS90cm91Ymxlc2hvb3Q/cT0wMDI2LTAwMDAwMDExPC9SZWNvbW1lbmREb2M+CjwvRXJyb3I+Cg==",
+			"x-oss-ec":         "0026-00000011",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "HEAD", r.Method)
+			assert.Equal(t, "/bucket/object?objectMeta", r.URL.String())
+		},
+		&GetObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectMetaResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidTargetType", serr.Code)
+			assert.Equal(t, "6556FF5BD11E5536368607E8", serr.RequestID)
+			assert.Equal(t, "The symbolic's target file type is invalid", serr.Message)
+			assert.Equal(t, "0026-00000011", serr.EC)
+		},
+	},
+}
+
+func TestMockGetObjectMeta_Error(t *testing.T) {
+	for _, c := range testMockGetObjectMetaErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectMeta(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockRestoreObjectSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *RestoreObjectRequest
+	CheckOutputFn  func(t *testing.T, o *RestoreObjectResult, err error)
+}{
+	{
+		202,
+		map[string]string{
+			"X-Oss-Request-Id": "6555A936CA31DC333143****",
+			"Date":             "Thu, 16 Nov 2023 05:31:34 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/bucket/object?restore", r.URL.String())
+		},
+		&RestoreObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Equal(t, 202, o.StatusCode)
+			assert.Equal(t, "202 Accepted", o.Status)
+			assert.Equal(t, "6555A936CA31DC333143****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Thu, 16 Nov 2023 05:31:34 GMT", o.Headers.Get("Date"))
+
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id": "5CAC3B40B7AEADE01700****",
+			"Date":             "Tue, 04 Dec 2018 15:56:38 GMT",
+			"x-oss-version-Id": "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?restore&versionId=CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy%2A%2A%2A%2A", strUrl)
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<RestoreRequest><Days>2</Days></RestoreRequest>")
+		},
+		&RestoreObjectRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****"),
+			RestoreRequest: &RestoreRequest{
+				Days: int32(2),
+			},
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "5CAC3B40B7AEADE01700****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"X-Oss-Request-Id": "534B371674E88A4D8906****",
+			"Date":             "Tue, 04 Dec 2018 15:56:38 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/bucket/object?restore", r.URL.String())
+
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<RestoreRequest><Days>2</Days><JobParameters><Tier>Standard</Tier></JobParameters></RestoreRequest>")
+		},
+		&RestoreObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			RestoreRequest: &RestoreRequest{
+				Days: int32(2),
+				Tier: Ptr("Standard"),
+			},
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Tue, 04 Dec 2018 15:56:38 GMT", o.Headers.Get("Date"))
+		},
+	},
+}
+
+func TestMockRestoreObject_Success(t *testing.T) {
+	for _, c := range testMockRestoreObjectSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.RestoreObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockRestoreObjectErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *RestoreObjectRequest
+	CheckOutputFn  func(t *testing.T, o *RestoreObjectResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6557176CD11E5535303C****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		<Error>
+		<Code>NoSuchKey</Code>
+		<Message>The specified key does not exist.</Message>
+		<RequestId>6557176CD11E5535303C****</RequestId>
+		<HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
+		<Key>walker-not-.txt</Key>
+		<EC>0026-00000001</EC>
+		<RecommendDoc>https://api.aliyun.com/troubleshoot?q=0026-00000001</RecommendDoc>
+		</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/bucket/object?restore", r.URL.String())
+		},
+		&RestoreObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchKey", serr.Code)
+			assert.Equal(t, "6557176CD11E5535303C****", serr.RequestID)
+			assert.Equal(t, "The specified key does not exist.", serr.Message)
+			assert.Equal(t, "0026-00000001", serr.EC)
+		},
+	},
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6555AC764311A73931E0****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>OperationNotSupported</Code>
+  <Message>The operation is not supported for this resource</Message>
+  <RequestId>6555AC764311A73931E0****</RequestId>
+  <HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <Detail>RestoreObject operation does not support this object storage class</Detail>
+  <EC>0016-00000702</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/bucket/object?restore", r.URL.String())
+		},
+		&RestoreObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "OperationNotSupported", serr.Code)
+			assert.Equal(t, "6555AC764311A73931E0****", serr.RequestID)
+			assert.Equal(t, "The operation is not supported for this resource", serr.Message)
+			assert.Equal(t, "0016-00000702", serr.EC)
+		},
+	},
+	{
+		409,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "6556FF5BD11E55363686****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-ec":         "0026-00000011",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>RestoreAlreadyInProgress</Code>
+  <Message>The restore operation is in progress.</Message>
+  <RequestId>6556FF5BD11E55363686****</RequestId>
+  <HostId>10.101.XX.XX</HostId>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			assert.Equal(t, "/bucket/object?restore", r.URL.String())
+		},
+		&RestoreObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *RestoreObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(409), serr.StatusCode)
+			assert.Equal(t, "RestoreAlreadyInProgress", serr.Code)
+			assert.Equal(t, "6556FF5BD11E55363686****", serr.RequestID)
+			assert.Equal(t, "The restore operation is in progress.", serr.Message)
+		},
+	},
+}
+
+func TestMockRestoreObject_Error(t *testing.T) {
+	for _, c := range testMockRestoreObjectErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.RestoreObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutObjectAclSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectAclRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectAclResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+			assert.Equal(t, string(ObjectACLPublicRead), r.Header.Get(HeaderOssObjectACL))
+		},
+		&PutObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Acl:    ObjectACLPublicRead,
+		},
+		func(t *testing.T, o *PutObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+			assert.Equal(t, string(ObjectACLPrivate), r.Header.Get(HeaderOssObjectACL))
+		},
+		&PutObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Acl:    ObjectACLPrivate,
+		},
+		func(t *testing.T, o *PutObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"X-Oss-Version-Id": "CAEQMhiBgIC3rpSD0BYiIDBjYTk5MmIzN2JlNjQxZTFiNGIzM2E3OTliODA0****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?acl&versionId=CAEQMhiBgIC3rpSD0BYiIDBjYTk5MmIzN2JlNjQxZTFiNGIzM2E3OTliODA0%2A%2A%2A%2A", strUrl)
+			assert.Equal(t, string(ObjectACLPublicReadWrite), r.Header.Get(HeaderOssObjectACL))
+		},
+		&PutObjectAclRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			Acl:       ObjectACLPublicReadWrite,
+			VersionId: Ptr("CAEQMhiBgIC3rpSD0BYiIDBjYTk5MmIzN2JlNjQxZTFiNGIzM2E3OTliODA0****"),
+		},
+		func(t *testing.T, o *PutObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get(HTTPHeaderContentType))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get(HeaderOssRequestID))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get(HTTPHeaderDate))
+
+			assert.Equal(t, "CAEQMhiBgIC3rpSD0BYiIDBjYTk5MmIzN2JlNjQxZTFiNGIzM2E3OTliODA0****", *o.VersionId)
+		},
+	},
+}
+
+func TestMockPutObjectAcl_Success(t *testing.T) {
+	for _, c := range testMockPutObjectAclSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutObjectAcl(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutObjectAclErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectAclRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectAclResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+			assert.Equal(t, string(ObjectACLPrivate), r.Header.Get(HeaderOssObjectACL))
+		},
+		&PutObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Acl:    ObjectACLPrivate,
+		},
+		func(t *testing.T, o *PutObjectAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?acl", strUrl)
+			assert.Equal(t, string(ObjectACLPrivate), r.Header.Get(HeaderOssObjectACL))
+		},
+		&PutObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Acl:    ObjectACLPrivate,
+		},
+		func(t *testing.T, o *PutObjectAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockPutObjectAcl_Error(t *testing.T) {
+	for _, c := range testMockPutObjectAclErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutObjectAcl(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectAclSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectAclRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectAclResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" ?>
+<AccessControlPolicy>
+    <Owner>
+        <ID>0022012****</ID>
+        <DisplayName>user_example</DisplayName>
+    </Owner>
+    <AccessControlList>
+        <Grant>public-read</Grant>
+    </AccessControlList>
+</AccessControlPolicy>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+		},
+		&GetObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, "public-read", *o.ACL)
+			assert.Equal(t, "0022012****", *o.Owner.ID)
+			assert.Equal(t, "user_example", *o.Owner.DisplayName)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" ?>
+<AccessControlPolicy>
+    <Owner>
+        <ID>0022012</ID>
+        <DisplayName>0022012</DisplayName>
+    </Owner>
+    <AccessControlList>
+        <Grant>public-read-write</Grant>
+    </AccessControlList>
+</AccessControlPolicy>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+		},
+		&GetObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, "public-read-write", *o.ACL)
+			assert.Equal(t, "0022012", *o.Owner.ID)
+			assert.Equal(t, "0022012", *o.Owner.DisplayName)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"X-Oss-Version-Id": "CAEQMhiBgMC1qpSD0BYiIGQ0ZmI5ZDEyYWVkNTQwMjBiNTliY2NjNmY3ZTVk****",
+		},
+		[]byte(`<?xml version="1.0" ?>
+<AccessControlPolicy>
+    <Owner>
+        <ID>0022012</ID>
+        <DisplayName>0022012</DisplayName>
+    </Owner>
+    <AccessControlList>
+        <Grant>private</Grant>
+    </AccessControlList>
+</AccessControlPolicy>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?acl&versionId=CAEQMhiBgMC1qpSD0BYiIGQ0ZmI5ZDEyYWVkNTQwMjBiNTliY2NjNmY3ZTVk%2A%2A%2A%2A", strUrl)
+		},
+		&GetObjectAclRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQMhiBgMC1qpSD0BYiIGQ0ZmI5ZDEyYWVkNTQwMjBiNTliY2NjNmY3ZTVk****"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, "private", *o.ACL)
+			assert.Equal(t, "0022012", *o.Owner.ID)
+			assert.Equal(t, "0022012", *o.Owner.DisplayName)
+			assert.Equal(t, "CAEQMhiBgMC1qpSD0BYiIGQ0ZmI5ZDEyYWVkNTQwMjBiNTliY2NjNmY3ZTVk****", *o.VersionId)
+		},
+	},
+}
+
+func TestMockGetObjectAcl_Success(t *testing.T) {
+	for _, c := range testMockGetObjectAclSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectAcl(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectAclErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectAclRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectAclResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+		},
+		&GetObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object?acl", strUrl)
+		},
+		&GetObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object?acl", r.URL.String())
+		},
+		&GetObjectAclRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockGetObjectAcl_Error(t *testing.T) {
+	for _, c := range testMockGetObjectAclErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectAcl(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockInitiateMultipartUploadSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *InitiateMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *InitiateMultipartUploadResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult>
+    <Bucket>oss-example</Bucket>
+    <Key>multipart.data</Key>
+    <UploadId>0004B9894A22E5B1888A1E29F823****</UploadId>
+</InitiateMultipartUploadResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.Key, "multipart.data")
+			assert.Equal(t, *o.UploadId, "0004B9894A22E5B1888A1E29F823****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "6551DBCF4311A7303980****",
+			"Date":             "Mon, 13 Nov 2023 08:18:23 GMT",
+			"Content-Type":     "application/xml",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+		<InitiateMultipartUploadResult>
+		<Bucket>oss-example</Bucket>
+		<Key>multipart.data</Key>
+		<UploadId>0004B9894A22E5B1888A1E29F823****</UploadId>
+		</InitiateMultipartUploadResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+			assert.Equal(t, r.Header.Get("Cache-Control"), "no-cache")
+			assert.Equal(t, r.Header.Get("Content-Disposition"), "attachment")
+			assert.Equal(t, r.Header.Get("x-oss-meta-name"), "walker")
+			assert.Equal(t, r.Header.Get("x-oss-meta-email"), "demo@aliyun.com")
+			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption"), "KMS")
+			assert.Equal(t, r.Header.Get("x-oss-server-side-data-encryption"), "SM4")
+			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption-key-id"), "9468da86-3509-4f8d-a61e-6eab1eac****")
+			assert.Equal(t, r.Header.Get("x-oss-storage-class"), string(StorageClassStandard))
+			assert.Equal(t, r.Header.Get("x-oss-forbid-overwrite"), "false")
+			assert.Equal(t, r.Header.Get("Content-Encoding"), "utf-8")
+			assert.Equal(t, r.Header.Get("Content-MD5"), "1B2M2Y8AsgTpgAmY7PhCfg==")
+			assert.Equal(t, r.Header.Get("Expires"), "2022-10-12T00:00:00.000Z")
+			assert.Equal(t, r.Header.Get("x-oss-tagging"), "TagA=B&TagC=D")
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket:                   Ptr("bucket"),
+			Key:                      Ptr("object"),
+			CacheControl:             Ptr("no-cache"),
+			ContentDisposition:       Ptr("attachment"),
+			ContentEncoding:          Ptr("utf-8"),
+			Expires:                  Ptr("2022-10-12T00:00:00.000Z"),
+			ForbidOverwrite:          Ptr("false"),
+			ServerSideEncryption:     Ptr("KMS"),
+			ServerSideDataEncryption: Ptr("SM4"),
+			SSEKMSKeyId:              Ptr("9468da86-3509-4f8d-a61e-6eab1eac****"),
+			StorageClass:             StorageClassStandard,
+			Metadata: map[string]string{
+				"name":  "walker",
+				"email": "demo@aliyun.com",
+			},
+			Tagging: Ptr("TagA=B&TagC=D"),
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.Key, "multipart.data")
+			assert.Equal(t, *o.UploadId, "0004B9894A22E5B1888A1E29F823****")
+		},
+	},
+}
+
+func TestMockInitiateMultipartUpload_Success(t *testing.T) {
+	for _, c := range testMockInitiateMultipartUploadSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.InitiateMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockInitiateMultipartUploadErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *InitiateMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *InitiateMultipartUploadResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss"),
+			},
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss"),
+			},
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockInitiateMultipartUpload_Error(t *testing.T) {
+	for _, c := range testMockInitiateMultipartUploadErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.InitiateMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"7265F4D211B56873A381D321F586****\"",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Ph****",
+			"x-oss-hash-crc64ecma": "316181249502703*****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+			assert.Equal(t, "bce8f3d48247c5d555bb5697bf277b35", r.Header.Get("Content-MD5"))
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 1"),
+			},
+			ContentMD5: Ptr("bce8f3d48247c5d555bb5697bf277b35"),
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F586****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Ph****")
+			assert.Equal(t, *o.HashCRC64, "316181249502703*****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "6551DBCF4311A7303980****",
+			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
+			"ETag":                 "\"7265F4D211B56873A381D321F587****\"",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Pp****",
+			"x-oss-hash-crc64ecma": "316181249502704*****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 2")
+			assert.Equal(t, "f811b746eb3e256f97cb3a190d528353", r.Header.Get("Content-MD5"))
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(2),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 2"),
+			},
+			ContentMD5: Ptr("f811b746eb3e256f97cb3a190d528353"),
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F587****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Pp****")
+			assert.Equal(t, *o.HashCRC64, "316181249502704*****")
+		},
+	},
+}
+
+func TestMockUploadPart_Success(t *testing.T) {
+	for _, c := range testMockUploadPartSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.UploadPart(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 1"),
+			},
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 1"),
+			},
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 1"),
+			},
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockUploadPart_Error(t *testing.T) {
+	for _, c := range testMockUploadPartErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.UploadPart(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartCopySuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartCopyRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartCopyResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CopyPartResult>
+    <LastModified>2014-07-17T06:27:54.000Z</LastModified>
+    <ETag>"5B3C1A2E053D763E1B002CC607C5****"</ETag>
+</CopyPartResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object"))
+		},
+		&UploadPartCopyRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"5B3C1A2E053D763E1B002CC607C5****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2014, time.July, 17, 6, 27, 54, 0, time.UTC))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":             "6551DBCF4311A7303980****",
+			"Date":                         "Mon, 13 Nov 2023 08:18:23 GMT",
+			"x-oss-copy-source-version-id": "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CopyPartResult>
+    <LastModified>2014-07-17T06:27:54.000Z</LastModified>
+    <ETag>"5B3C1A2E053D763E1B002CC607C5****"</ETag>
+</CopyPartResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9&versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY", strUrl)
+			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object"))
+
+			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfMatch), "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfNoneMatch), "\"D41D8CD98F00B204E9800998ECF9****\"")
+			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfModifiedSince), "Fri, 13 Nov 2023 14:47:53 GMT")
+			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfUnmodifiedSince), "Fri, 13 Nov 2015 14:47:53 GMT")
+		},
+		&UploadPartCopyRequest{
+			Bucket:            Ptr("bucket"),
+			Key:               Ptr("object"),
+			UploadId:          Ptr("0004B9895DBBB6EC9"),
+			Source:            Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			PartNumber:        int32(2),
+			IfMatch:           Ptr("\"D41D8CD98F00B204E9800998ECF8****\""),
+			IfNoneMatch:       Ptr("\"D41D8CD98F00B204E9800998ECF9****\""),
+			IfModifiedSince:   Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
+			IfUnmodifiedSince: Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
+			VersionId:         Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY"),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"5B3C1A2E053D763E1B002CC607C5****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2014, time.July, 17, 6, 27, 54, 0, time.UTC))
+			assert.Equal(t, *o.VersionId, "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY")
+		},
+	},
+}
+
+func TestMockUploadPartCopy_Success(t *testing.T) {
+	for _, c := range testMockUploadPartCopySuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.UploadPartCopy(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartCopyErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartCopyRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartCopyResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&UploadPartCopyRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&UploadPartCopyRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&UploadPartCopyRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockUploadPartCopy_Error(t *testing.T) {
+	for _, c := range testMockUploadPartCopyErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.UploadPartCopy(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockCompleteMultipartUploadSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *CompleteMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *CompleteMultipartUploadResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CompleteMultipartUploadResult>
+  <EncodingType>url</EncodingType>
+  <Location>http://oss-example.oss-cn-hangzhou.aliyuncs.com/multipart.data</Location>
+  <Bucket>oss-example</Bucket>
+  <Key>demo%2Fmultipart.data</Key>
+  <ETag>"097DE458AD02B5F89F9D0530231876****"</ETag>
+</CompleteMultipartUploadResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), `<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;8EFDA8BE206636A695359836FE0A****&#34;</ETag></Part><Part><PartNumber>2</PartNumber><ETag>&#34;8C315065167132444177411FDA14****&#34;</ETag></Part><Part><PartNumber>3</PartNumber><ETag>&#34;3349DC700140D7F86A0784842780****&#34;</ETag></Part></CompleteMultipartUpload>`)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6EC9"),
+			CompleteMultipartUpload: &CompleteMultipartUpload{
+				Part: []UploadPart{
+					{PartNumber: int32(3), ETag: Ptr("\"3349DC700140D7F86A0784842780****\"")},
+					{PartNumber: int32(1), ETag: Ptr("\"8EFDA8BE206636A695359836FE0A****\"")},
+					{PartNumber: int32(2), ETag: Ptr("\"8C315065167132444177411FDA14****\"")},
+				},
+			},
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"097DE458AD02B5F89F9D0530231876****\"")
+			assert.Equal(t, *o.Location, "http://oss-example.oss-cn-hangzhou.aliyuncs.com/multipart.data")
+			assert.Equal(t, *o.EncodingType, "url")
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.Key, "demo/multipart.data")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "6551DBCF4311A7303980****",
+			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
+			"x-oss-version-id":     "CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****",
+			"Content-Type":         "application/json",
+			"x-oss-hash-crc64ecma": "1206617243528768****",
+		},
+		[]byte(`{"filename":"oss-obj.txt","size":"100","mimeType":"","x":"a","b":"b"}`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+			assert.Equal(t, "false", r.Header.Get(HeaderOssForbidOverWrite))
+			assert.Equal(t, "yes", r.Header.Get("x-oss-complete-all"))
+			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"www.aliyuncs.com", "callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}&x=${x:a}&b=${x:b}"}`)), r.Header.Get(HeaderOssCallback))
+			assert.Equal(t, base64.StdEncoding.EncodeToString([]byte(`{"x:a":"a", "x:b":"b"}`)), r.Header.Get(HeaderOssCallbackVar))
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:          Ptr("bucket"),
+			Key:             Ptr("object"),
+			UploadId:        Ptr("0004B9895DBBB6EC9"),
+			ForbidOverwrite: Ptr("false"),
+			CompleteAll:     Ptr("yes"),
+			Callback:        Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"www.aliyuncs.com", "callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}&x=${x:a}&b=${x:b}"}`))),
+			CallbackVar:     Ptr(base64.StdEncoding.EncodeToString([]byte(`{"x:a":"a", "x:b":"b"}`))),
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.Headers.Get(HTTPHeaderContentType), "application/json")
+			assert.Equal(t, o.Body, io.NopCloser(strings.NewReader(`{"filename":"oss-obj.txt","size":"100","mimeType":"","x":"a","b":"b"}`)))
+			assert.Equal(t, *o.VersionId, "CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
+		},
+	},
+}
+
+func TestMockCompleteMultipartUpload_Success(t *testing.T) {
+	for _, c := range testMockCompleteMultipartUploadSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.CompleteMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockCompleteMultipartUploadErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *CompleteMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *CompleteMultipartUploadResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "655D94CCD11E55313348****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>MalformedXML</Code>
+  <Message>The XML you provided was not well-formed or did not validate against our published schema.</Message>
+  <RequestId>655D94CCD11E55313348****</RequestId>
+  <HostId>demo-walker-6961.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <EC>0042-00000205</EC>
+  <RecommendDoc>https://api.aliyun.com/troubleshoot?q=0042-00000205</RecommendDoc>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6EC9"),
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "MalformedXML", serr.Code)
+			assert.Equal(t, "The XML you provided was not well-formed or did not validate against our published schema.", serr.Message)
+			assert.Equal(t, "655D94CCD11E55313348****", serr.RequestID)
+			assert.Equal(t, "0042-00000205", serr.EC)
+		},
+	},
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "655D9598CA31DC313626****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>Should not speficy both complete all header and http body.</Message>
+  <RequestId>655D9598CA31DC313626****</RequestId>
+  <HostId>demo-walker-6961.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <ArgumentName>x-oss-complete-all</ArgumentName>
+  <ArgumentValue>yes</ArgumentValue>
+  <EC>0042-00000216</EC>
+  <RecommendDoc>https://api.aliyun.com/troubleshoot?q=0042-00000216</RecommendDoc>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:      Ptr("bucket"),
+			Key:         Ptr("object"),
+			UploadId:    Ptr("0004B9895DBBB6EC9"),
+			CompleteAll: Ptr("yes"),
+			CompleteMultipartUpload: &CompleteMultipartUpload{
+				Part: []UploadPart{
+					{PartNumber: int32(3), ETag: Ptr("\"3349DC700140D7F86A0784842780****\"")},
+					{PartNumber: int32(1), ETag: Ptr("\"8EFDA8BE206636A695359836FE0A****\"")},
+					{PartNumber: int32(2), ETag: Ptr("\"8C315065167132444177411FDA14****\"")},
+				},
+			},
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "Should not speficy both complete all header and http body.", serr.Message)
+			assert.Equal(t, "655D9598CA31DC313626****", serr.RequestID)
+			assert.Equal(t, "0042-00000216", serr.EC)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6EC9"),
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6EC9"),
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockCompleteMultipartUpload_Error(t *testing.T) {
+	for _, c := range testMockCompleteMultipartUploadErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.CompleteMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAbortMultipartUploadSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AbortMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *AbortMultipartUploadResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			assert.Equal(t, "/bucket/object?uploadId=0004B9895DBBB6E", r.URL.String())
+		},
+		&AbortMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6E"),
+		},
+		func(t *testing.T, o *AbortMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+}
+
+func TestMockAbortMultipartUpload_Success(t *testing.T) {
+	for _, c := range testMockAbortMultipartUploadSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.AbortMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAbortMultipartUploadErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AbortMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *AbortMultipartUploadResult, err error)
+}{
+	{
+		400,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>InvalidArgument</Code>
+  <Message>no such bucket access control exists</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>***-test.example.com</HostId>
+  <ArgumentName>x-oss-acl</ArgumentName>
+  <ArgumentValue>error-acl</ArgumentValue>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			assert.Equal(t, "/bucket/object?uploadId=0004B9895DBBB6E", r.URL.String())
+		},
+		&AbortMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6E"),
+		},
+		func(t *testing.T, o *AbortMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(400), serr.StatusCode)
+			assert.Equal(t, "InvalidArgument", serr.Code)
+			assert.Equal(t, "no such bucket access control exists", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			assert.Equal(t, "/bucket/object?uploadId=0004B9895DBBB6E", r.URL.String())
+		},
+		&AbortMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6E"),
+		},
+		func(t *testing.T, o *AbortMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			assert.Equal(t, "/bucket/object?uploadId=0004B9895DBBB6E", r.URL.String())
+		},
+		&AbortMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6E"),
+		},
+		func(t *testing.T, o *AbortMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockAbortMultipartUpload_Error(t *testing.T) {
+	for _, c := range testMockAbortMultipartUploadErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.AbortMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockListMultipartUploadsSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *ListMultipartUploadsRequest
+	CheckOutputFn  func(t *testing.T, o *ListMultipartUploadsResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<ListMultipartUploadsResult>
+    <Bucket>oss-example</Bucket>
+    <KeyMarker></KeyMarker>
+    <UploadIdMarker></UploadIdMarker>
+    <NextKeyMarker>oss.avi</NextKeyMarker>
+    <NextUploadIdMarker>0004B99B8E707874FC2D692FA5D77D3F</NextUploadIdMarker>
+    <Delimiter></Delimiter>
+    <Prefix></Prefix>
+    <MaxUploads>1000</MaxUploads>
+    <IsTruncated>false</IsTruncated>
+    <Upload>
+        <Key>multipart.data</Key>
+        <UploadId>0004B999EF518A1FE585B0C9360DC4C8</UploadId>
+        <Initiated>2012-02-23T04:18:23.000Z</Initiated>
+    </Upload>
+    <Upload>
+        <Key>multipart.data</Key>
+        <UploadId>0004B999EF5A239BB9138C6227D6****</UploadId>
+        <Initiated>2012-02-23T04:18:23.000Z</Initiated>
+    </Upload>
+    <Upload>
+        <Key>oss.avi</Key>
+        <UploadId>0004B99B8E707874FC2D692FA5D7****</UploadId>
+        <Initiated>2012-02-23T06:14:27.000Z</Initiated>
+    </Upload>
+</ListMultipartUploadsResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?encoding-type=url&uploads", strUrl)
+		},
+		&ListMultipartUploadsRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *ListMultipartUploadsResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.KeyMarker, "")
+			assert.Equal(t, *o.UploadIdMarker, "")
+			assert.Equal(t, *o.NextKeyMarker, "oss.avi")
+			assert.Equal(t, *o.NextUploadIdMarker, "0004B99B8E707874FC2D692FA5D77D3F")
+			assert.Equal(t, *o.Delimiter, "")
+			assert.Equal(t, *o.Prefix, "")
+			assert.Equal(t, o.MaxUploads, int32(1000))
+			assert.Equal(t, o.IsTruncated, false)
+			assert.Len(t, o.Uploads, 3)
+			assert.Equal(t, *o.Uploads[0].Key, "multipart.data")
+			assert.Equal(t, *o.Uploads[0].UploadId, "0004B999EF518A1FE585B0C9360DC4C8")
+			assert.Equal(t, *o.Uploads[0].Initiated, time.Date(2012, time.February, 23, 4, 18, 23, 0, time.UTC))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<ListMultipartUploadsResult>
+  <EncodingType>url</EncodingType>
+  <Bucket>oss-example</Bucket>
+  <KeyMarker></KeyMarker>
+  <UploadIdMarker></UploadIdMarker>
+  <NextKeyMarker>oss.avi</NextKeyMarker>
+  <NextUploadIdMarker>89F0105AA66942638E35300618DF****</NextUploadIdMarker>
+  <Delimiter>/</Delimiter>
+  <Prefix>pre</Prefix>
+  <MaxUploads>1000</MaxUploads>
+  <IsTruncated>false</IsTruncated>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>0214A87687F040F1BA4D83AB17C9****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T05:45:57.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>3AE2ED7A60E04AFE9A5287055D37****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T05:03:33.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>47E0E90F5DCB4AD5B3C4CD886CB0****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T05:02:11.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>A89E0E28E2E948A1BFF6FD5CDAFF****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T06:57:03.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>B18E1DCDB6964F5CB197F5F6B26A****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T05:42:02.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <UploadId>D4E111D4EA834F3ABCE4877B2779****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-22T05:42:33.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>walker-dest.txt</Key>
+    <UploadId>5209986C3A96486EA16B9C52C160****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-21T08:34:47.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>walker-dest.txt</Key>
+    <UploadId>63B652FA2C1342DCB3CCCC86D748****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-21T08:28:46.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>walker-dest.txt</Key>
+    <UploadId>6F67B34BCA3C481F887D73508A07****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-21T08:32:12.000Z</Initiated>
+  </Upload>
+  <Upload>
+    <Key>walker-dest.txt</Key>
+    <UploadId>89F0105AA66942638E35300618D****</UploadId>
+    <StorageClass>Standard</StorageClass>
+    <Initiated>2023-11-21T08:37:53.000Z</Initiated>
+  </Upload>
+</ListMultipartUploadsResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=url&key-marker&max-uploads=10&prefix=pre&upload-id-marker&uploads", strUrl)
+		},
+		&ListMultipartUploadsRequest{
+			Bucket:         Ptr("bucket"),
+			Delimiter:      Ptr("/"),
+			Prefix:         Ptr("pre"),
+			EncodingType:   Ptr("url"),
+			KeyMarker:      Ptr(""),
+			MaxUploads:     int32(10),
+			UploadIdMarker: Ptr(""),
+		},
+		func(t *testing.T, o *ListMultipartUploadsResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.KeyMarker, "")
+			assert.Equal(t, *o.UploadIdMarker, "")
+			assert.Equal(t, *o.NextKeyMarker, "oss.avi")
+			assert.Equal(t, *o.NextUploadIdMarker, "89F0105AA66942638E35300618DF****")
+			assert.Equal(t, *o.Delimiter, "/")
+			assert.Equal(t, *o.Prefix, "pre")
+			assert.Equal(t, o.MaxUploads, int32(1000))
+			assert.Equal(t, o.IsTruncated, false)
+			assert.Len(t, o.Uploads, 10)
+			assert.Equal(t, *o.Uploads[0].Key, "demo/gp-\f\n\v")
+			assert.Equal(t, *o.Uploads[0].UploadId, "0214A87687F040F1BA4D83AB17C9****")
+			assert.Equal(t, *o.Uploads[0].Initiated, time.Date(2023, time.November, 22, 5, 45, 57, 0, time.UTC))
+		},
+	},
+}
+
+func TestMockListMultipartUploads_Success(t *testing.T) {
+	for _, c := range testMockListMultipartUploadsSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.ListMultipartUploads(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockListMultipartUploadsErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *ListMultipartUploadsRequest
+	CheckOutputFn  func(t *testing.T, o *ListMultipartUploadsResult, err error)
+}{
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?encoding-type=url&uploads", strUrl)
+		},
+		&ListMultipartUploadsRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *ListMultipartUploadsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?encoding-type=url&uploads", strUrl)
+		},
+		&ListMultipartUploadsRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *ListMultipartUploadsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockListMultipartUploads_Error(t *testing.T) {
+	for _, c := range testMockListMultipartUploadsErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.ListMultipartUploads(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockListPartsSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *ListPartsRequest
+	CheckOutputFn  func(t *testing.T, o *ListPartsResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<ListPartsResult>
+    <Bucket>bucket</Bucket>
+    <Key>object</Key>
+    <UploadId>0004B999EF5A239BB9138C6227D6****</UploadId>
+    <NextPartNumberMarker>5</NextPartNumberMarker>
+    <MaxParts>1000</MaxParts>
+    <IsTruncated>false</IsTruncated>
+    <Part>
+        <PartNumber>1</PartNumber>
+        <LastModified>2012-02-23T07:01:34.000Z</LastModified>
+        <ETag>"3349DC700140D7F86A0784842780****"</ETag>
+        <Size>6291456</Size>
+    </Part>
+    <Part>
+        <PartNumber>2</PartNumber>
+        <LastModified>2012-02-23T07:01:12.000Z</LastModified>
+        <ETag>"3349DC700140D7F86A0784842780****"</ETag>
+        <Size>6291456</Size>
+    </Part>
+    <Part>
+        <PartNumber>5</PartNumber>
+        <LastModified>2012-02-23T07:02:03.000Z</LastModified>
+        <ETag>"7265F4D211B56873A381D321F586****"</ETag>
+        <Size>1024</Size>
+    </Part>
+</ListPartsResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B999EF5A239BB9138C6227D6%2A%2A%2A%2A", strUrl)
+		},
+		&ListPartsRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B999EF5A239BB9138C6227D6****"),
+		},
+		func(t *testing.T, o *ListPartsResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.Bucket, "bucket")
+			assert.Equal(t, *o.Key, "object")
+			assert.Empty(t, o.PartNumberMarker)
+			assert.Equal(t, o.NextPartNumberMarker, int32(5))
+			assert.Equal(t, o.IsTruncated, false)
+			assert.Equal(t, o.MaxParts, int32(1000))
+			assert.Len(t, o.Parts, 3)
+			assert.Equal(t, o.Parts[0].PartNumber, int32(1))
+			assert.Equal(t, *o.Parts[0].ETag, "\"3349DC700140D7F86A0784842780****\"")
+			assert.Equal(t, *o.Parts[0].LastModified, time.Date(2012, time.February, 23, 7, 1, 34, 0, time.UTC))
+			assert.Equal(t, o.Parts[0].Size, int64(6291456))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<ListPartsResult>
+  <EncodingType>url</EncodingType>
+  <Bucket>bucket</Bucket>
+  <Key>demo%2Fgp-%0C%0A%0B</Key>
+  <UploadId>D4E111D4EA834F3ABCE4877B2779****</UploadId>
+  <StorageClass>Standard</StorageClass>
+  <PartNumberMarker>0</PartNumberMarker>
+  <NextPartNumberMarker>1</NextPartNumberMarker>
+  <MaxParts>1000</MaxParts>
+  <IsTruncated>false</IsTruncated>
+  <Part>
+    <PartNumber>1</PartNumber>
+    <LastModified>2023-11-22T05:42:34.000Z</LastModified>
+    <ETag>"CF3F46D505093571E916FCDD4967****"</ETag>
+    <HashCrc64ecma>12066172435287683848</HashCrc64ecma>
+    <Size>96316</Size>
+  </Part>
+</ListPartsResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/demo/gp-%0C%0A%0B?encoding-type=url&uploadId=D4E111D4EA834F3ABCE4877B2779%2A%2A%2A%2A", strUrl)
+		},
+		&ListPartsRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("demo/gp-\f\n\v"),
+			UploadId: Ptr("D4E111D4EA834F3ABCE4877B2779****"),
+		},
+		func(t *testing.T, o *ListPartsResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.Bucket, "bucket")
+			key, _ := url.QueryUnescape("demo%2Fgp-%0C%0A%0B")
+			assert.Equal(t, *o.Key, key)
+			assert.Empty(t, o.PartNumberMarker)
+			assert.Equal(t, o.NextPartNumberMarker, int32(1))
+			assert.Equal(t, o.IsTruncated, false)
+			assert.Equal(t, o.MaxParts, int32(1000))
+			assert.Len(t, o.Parts, 1)
+			assert.Equal(t, o.Parts[0].PartNumber, int32(1))
+			assert.Equal(t, *o.Parts[0].ETag, "\"CF3F46D505093571E916FCDD4967****\"")
+			assert.Equal(t, *o.Parts[0].LastModified, time.Date(2023, time.November, 22, 5, 42, 34, 0, time.UTC))
+			assert.Equal(t, o.Parts[0].Size, int64(96316))
+			assert.Equal(t, *o.Parts[0].HashCRC64, "12066172435287683848")
+		},
+	},
+}
+
+func TestMockListParts_Success(t *testing.T) {
+	for _, c := range testMockListPartsSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.ListParts(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockListPartsErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *ListPartsRequest
+	CheckOutputFn  func(t *testing.T, o *ListPartsResult, err error)
+}{
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B999EF5A239BB9138C6227D6%2A%2A%2A%2A", strUrl)
+		},
+		&ListPartsRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B999EF5A239BB9138C6227D6****"),
+		},
+		func(t *testing.T, o *ListPartsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B999EF5A239BB9138C6227D6%2A%2A%2A%2A", strUrl)
+		},
+		&ListPartsRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B999EF5A239BB9138C6227D6****"),
+		},
+		func(t *testing.T, o *ListPartsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "0015-00000101", serr.EC)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockListParts_Error(t *testing.T) {
+	for _, c := range testMockListPartsErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.ListParts(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
 	}
 }

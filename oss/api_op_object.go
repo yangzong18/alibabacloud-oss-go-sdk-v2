@@ -2,8 +2,11 @@ package oss
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -44,8 +47,8 @@ type PutObjectRequest struct {
 	// Valid values: AES256 and KMS
 	ServerSideEncryption *string `input:"header,x-oss-server-side-encryption"`
 
-	//The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
-	//This header is valid only when the x-oss-server-side-encryption header is set to KMS.
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	// This header is valid only when the x-oss-server-side-encryption header is set to KMS.
 	ServerSideDataEncryption *string `input:"header,x-oss-server-side-data-encryption"`
 
 	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
@@ -64,6 +67,12 @@ type PutObjectRequest struct {
 	// You can specify multiple tags for an object. Example: TagA=A&TagB=B.
 	Tagging *string `input:"header,x-oss-tagging"`
 
+	// A callback parameter is a Base64-encoded string that contains multiple fields in the JSON format.
+	Callback *string `input:"header,x-oss-callback"`
+
+	// Configure custom parameters by using the callback-var parameter.
+	CallbackVar *string `input:"header,x-oss-callback-var"`
+
 	RequestCommon
 }
 
@@ -80,6 +89,8 @@ type PutObjectResult struct {
 
 	// Version of the object.
 	VersionId *string `output:"header,x-oss-version-id"`
+
+	Body io.ReadCloser
 
 	ResultCommon
 }
@@ -99,14 +110,21 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	if err = c.marshalInput(request, input); err != nil {
 		return nil, err
 	}
-
+	if request.Callback != nil {
+		callbackFn := func(opts *Options) {
+			opts.ResponseHandlers = []func(*http.Response) error{
+				callbackErrorResponseHandler,
+			}
+		}
+		optFns = append(optFns, callbackFn)
+	}
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
 	}
 
 	result := &PutObjectResult{}
-	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+	if err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 
@@ -284,7 +302,7 @@ func (c *Client) GetObject(ctx context.Context, request *GetObjectRequest, optFn
 		Bucket: request.Bucket,
 		Key:    request.Key,
 	}
-	if err = c.marshalInput(request, input); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 
@@ -310,7 +328,7 @@ type CopyObjectRequest struct {
 	// The name of the object.
 	Key *string `input:"path,key,required"`
 
-	//The path of the source object.
+	// The path of the source object.
 	Source *string `input:"header,x-oss-copy-source,required"`
 
 	// Specifies whether the object that is uploaded by calling the CopyObject operation
@@ -348,8 +366,8 @@ type CopyObjectRequest struct {
 	// Valid values: AES256 and KMS
 	ServerSideEncryption *string `input:"header,x-oss-server-side-encryption"`
 
-	//The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
-	//This header is valid only when the x-oss-server-side-encryption header is set to KMS.
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	// This header is valid only when the x-oss-server-side-encryption header is set to KMS.
 	ServerSideDataEncryption *string `input:"header,x-oss-server-side-data-encryption"`
 
 	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
@@ -423,7 +441,7 @@ func (c *Client) CopyObject(ctx context.Context, request *CopyObjectRequest, opt
 		Bucket: request.Bucket,
 		Key:    request.Key,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject); err != nil {
 		return nil, err
 	}
 
@@ -516,8 +534,8 @@ type AppendObjectResult struct {
 	// Valid values: AES256 and KMS
 	ServerSideEncryption *string `output:"header,x-oss-server-side-encryption"`
 
-	//The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
-	//This header is valid only when the x-oss-server-side-encryption header is set to KMS.
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	// This header is valid only when the x-oss-server-side-encryption header is set to KMS.
 	ServerSideDataEncryption *string `output:"header,x-oss-server-side-data-encryption"`
 
 	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
@@ -543,7 +561,7 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 		Bucket:     request.Bucket,
 		Key:        request.Key,
 	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	if err = c.marshalInput(request, input); err != nil {
 		return nil, err
 	}
 
@@ -621,9 +639,6 @@ type DeleteMultipleObjectsRequest struct {
 	// The size of the data in the HTTP message body. Unit: bytes.
 	ContentLength int64 `input:"header,Content-Length"`
 
-	// The MD5 hash of the object that you want to upload.
-	ContentMD5 *string `input:"header,Content-MD5"`
-
 	// The container that stores information about you want to delete objects.
 	Objects []DeleteObject
 
@@ -697,5 +712,1060 @@ func (c *Client) DeleteMultipleObjects(ctx context.Context, request *DeleteMulti
 	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
+	return result, err
+}
+
+type HeadObjectRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The version ID of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	// If the ETag specified in the request matches the ETag value of the object,
+	// the object and 200 OK are returned. Otherwise, 412 Precondition Failed is returned.
+	IfMatch *string `input:"header,If-Match"`
+
+	// If the ETag specified in the request does not match the ETag value of the object,
+	// the object and 200 OK are returned. Otherwise, 304 Not Modified is returned.
+	IfNoneMatch *string `input:"header,If-None-Match"`
+
+	// If the time specified in this header is earlier than the object modified time or is invalid,
+	// the object and 200 OK are returned. Otherwise, 304 Not Modified is returned.
+	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
+	IfModifiedSince *string `input:"header,If-Modified-Since"`
+
+	// If the time specified in this header is the same as or later than the object modified time,
+	// the object and 200 OK are returned. Otherwise, 412 Precondition Failed is returned.
+	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
+	IfUnmodifiedSince *string `input:"header,If-Unmodified-Since"`
+
+	RequestCommon
+}
+
+type HeadObjectResult struct {
+	// Size of the body in bytes. -1 indicates that the Content-Length dose not exist.
+	ContentLength int64 `output:"header,Content-Length"`
+
+	// A standard MIME type describing the format of the object data.
+	ContentType *string `output:"header,Content-Type"`
+
+	// The entity tag (ETag). An ETag is created when an object is created to identify the content of the object.
+	ETag *string `output:"header,ETag"`
+
+	// The time when the returned objects were last modified.
+	LastModified *time.Time `output:"header,Last-Modified,time"`
+
+	// The storage class of the object.
+	StorageClass *string `output:"header,x-oss-storage-class"`
+
+	// Content-Md5 for the uploaded object.
+	ContentMD5 *string `output:"header,Content-MD5"`
+
+	// A map of metadata to store with the object.
+	Metadata map[string]string `output:"header,x-oss-meta-,usermeta"`
+
+	// If the requested object is encrypted by using a server-side encryption algorithm based on entropy encoding,
+	// OSS automatically decrypts the object and returns the decrypted object after OSS receives the GetObject request.
+	// The x-oss-server-side-encryption header is included in the response to indicate
+	// the encryption algorithm used to encrypt the object on the server.
+	ServerSideEncryption *string `output:"header,x-oss-server-side-encryption"`
+
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	ServerSideDataEncryption *string `output:"header,x-oss-server-side-data-encryption"`
+
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	SSEKMSKeyId *string `output:"header,x-oss-server-side-encryption-key-id"`
+
+	// The type of the object.
+	ObjectType *string `output:"header,x-oss-object-type"`
+
+	// The position for the next append operation.
+	// If the type of the object is Appendable, this header is included in the response.
+	NextAppendPosition *string `output:"header,x-oss-next-append-position"`
+
+	// The 64-bit CRC value of the object.
+	// This value is calculated based on the ECMA-182 standard.
+	HashCRC64 *string `output:"header,x-oss-hash-crc64ecma"`
+
+	// The lifecycle information about the object.
+	// If lifecycle rules are configured for the object, this header is included in the response.
+	// This header contains the following parameters: expiry-date that indicates the expiration time of the object,
+	// and rule-id that indicates the ID of the matched lifecycle rule.
+	Expiration *string `output:"header,x-oss-expiration"`
+
+	// The status of the object when you restore an object.
+	// If the storage class of the bucket is Archive and a RestoreObject request is submitted,
+	Restore *string `output:"header,x-oss-restore"`
+
+	// The result of an event notification that is triggered for the object.
+	ProcessStatus *string `output:"header,x-oss-process-status"`
+
+	// The requester. This header is included in the response if the pay-by-requester mode
+	// is enabled for the bucket and the requester is not the bucket owner. The value of this header is requester
+	RequestCharged *string `output:"header,x-oss-request-charged"`
+
+	// The number of tags added to the object.
+	// This header is included in the response only when you have read permissions on tags.
+	TaggingCount int32 `output:"header,x-oss-tagging-count"`
+
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// The origins allowed for cross-origin resource sharing (CORS).
+	// If a CORS rule is configured for the bucket that stores the object and the Origin header
+	// in the request meets the CORS rule, this header is included in the response.
+	AllowOrigin *string `output:"header,Access-Control-Allow-Origin"`
+
+	// The methods allowed for CORS. If a CORS rule is configured for the bucket that stores the object
+	// and the Access-Control-Request-Method header in the request meets the CORS rule, this header is included in the response.
+	AllowMethods *string `output:"header,Access-Control-Allow-Methods"`
+
+	// The maximum caching period for CORS. If a CORS rule is configured for the bucket that stores
+	// the object and the request meets the CORS rule, this header is included in the response.
+	AllowAge *string `output:"header,Access-Control-Allow-Age"`
+
+	// The headers allowed for CORS. If a CORS rule is configured for the bucket that stores
+	// the object and the request meets the CORS rule, this header is included in the response
+	AllowHeaders *string `output:"header,Access-Control-Allow-Headers"`
+
+	// The headers that can be accessed by JavaScript applications on the client.
+	// If a CORS rule is configured for the bucket that stores the object and the request meets
+	// the CORS rule, this header is included in the response
+	ExposeHeaders *string `output:"header,Access-Control-Expose-Headers"`
+
+	ResultCommon
+}
+
+// HeadObject Queries information about all objects in a bucket.
+func (c *Client) HeadObject(ctx context.Context, request *HeadObjectRequest, optFns ...func(*Options)) (*HeadObjectResult, error) {
+	var err error
+	if request == nil {
+		request = &HeadObjectRequest{}
+	}
+	input := &OperationInput{
+		OpName: "HeadObject",
+		Method: "HEAD",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &HeadObjectResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetObjectMetaRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The version ID of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type GetObjectMetaResult struct {
+	// Size of the body in bytes. -1 indicates that the Content-Length dose not exist.
+	ContentLength int64 `output:"header,Content-Length"`
+
+	// The entity tag (ETag). An ETag is created when an object is created to identify the content of the object.
+	ETag *string `output:"header,ETag"`
+
+	// The time when the returned objects were last modified.
+	LastModified *time.Time `output:"header,Last-Modified,time"`
+
+	// The time when the object was last accessed.
+	LastAccessTime *time.Time `output:"header,x-oss-last-access-time,time"`
+
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// The 64-bit CRC value of the object.
+	// This value is calculated based on the ECMA-182 standard.
+	HashCRC64 *string `output:"header,x-oss-hash-crc64ecma"`
+
+	ResultCommon
+}
+
+// GetObjectMeta Queries the metadata of an object, including ETag, Size, and LastModified.
+// The content of the object is not returned.
+func (c *Client) GetObjectMeta(ctx context.Context, request *GetObjectMetaRequest, optFns ...func(*Options)) (*GetObjectMetaResult, error) {
+	var err error
+	if request == nil {
+		request = &GetObjectMetaRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetObjectMeta",
+		Method: "HEAD",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"objectMeta": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &GetObjectMetaResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type RestoreObjectRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The version ID of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	// The container that stores information about the RestoreObject request.
+	RestoreRequest *RestoreRequest `input:"body,RestoreRequest,xml"`
+
+	RequestCommon
+}
+
+type RestoreRequest struct {
+	// The duration within which the restored object remains in the restored state.
+	Days int32 `xml:"Days"`
+
+	// The restoration priority of Cold Archive or Deep Cold Archive objects. Valid values:Expedited,Standard,Bulk
+	Tier *string `xml:"JobParameters>Tier"`
+}
+
+type RestoreObjectResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// The restoration priority.
+	// This header is displayed only for the Cold Archive or Deep Cold Archive object in the restored state.
+	RestorePriority *string `output:"header,x-oss-object-restore-priority"`
+
+	ResultCommon
+}
+
+// RestoreObject Restores Archive, Cold Archive, or Deep Cold Archive objects.
+func (c *Client) RestoreObject(ctx context.Context, request *RestoreObjectRequest, optFns ...func(*Options)) (*RestoreObjectResult, error) {
+	var err error
+	if request == nil {
+		request = &RestoreObjectRequest{}
+	}
+	input := &OperationInput{
+		OpName: "RestoreObject",
+		Method: "POST",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"restore": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &RestoreObjectResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type PutObjectAclRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The access control list (ACL) of the object.
+	Acl ObjectACLType `input:"header,x-oss-object-acl,required"`
+
+	// The version ID of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type PutObjectAclResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	ResultCommon
+}
+
+// PutObjectAcl You can call this operation to modify the access control list (ACL) of an object.
+func (c *Client) PutObjectAcl(ctx context.Context, request *PutObjectAclRequest, optFns ...func(*Options)) (*PutObjectAclResult, error) {
+	var err error
+	if request == nil {
+		request = &PutObjectAclRequest{}
+	}
+	input := &OperationInput{
+		OpName: "PutObjectAcl",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"acl": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &PutObjectAclResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetObjectAclRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The version ID of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type GetObjectAclResult struct {
+	// The ACL of the object. Default value: default.
+	ACL *string `xml:"AccessControlList>Grant"`
+
+	// The container that stores information about the object owner.
+	Owner *Owner `xml:"Owner"`
+
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	ResultCommon
+}
+
+// GetObjectAcl Queries the access control list (ACL) of an object in a bucket.
+func (c *Client) GetObjectAcl(ctx context.Context, request *GetObjectAclRequest, optFns ...func(*Options)) (*GetObjectAclResult, error) {
+	var err error
+	if request == nil {
+		request = &GetObjectAclRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetObjectAcl",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"acl": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &GetObjectAclResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type InitiateMultipartUploadRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The encoding type of the object names in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	// The caching behavior of the web page when the object is downloaded.
+	CacheControl *string `input:"header,Cache-Control"`
+
+	// The method that is used to access the object.
+	ContentDisposition *string `input:"header,Content-Disposition"`
+
+	// The method that is used to encode the object.
+	ContentEncoding *string `input:"header,Content-Encoding"`
+
+	// A standard MIME type describing the format of the contents.
+	ContentType *string `input:"header,Content-Type"`
+
+	// The expiration time of the cache in UTC.
+	Expires *string `input:"header,Expires"`
+
+	// Specifies whether the InitiateMultipartUpload operation overwrites
+	// the existing object that has the same name as the object that you want to upload.
+	// Valid values: true and false
+	ForbidOverwrite *string `input:"header,x-oss-forbid-overwrite"`
+
+	// The encryption method on the server side when an object is created.
+	// Valid values: AES256 and KMS
+	ServerSideEncryption *string `input:"header,x-oss-server-side-encryption"`
+
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	// This header is valid only when the x-oss-server-side-encryption header is set to KMS.
+	ServerSideDataEncryption *string `input:"header,x-oss-server-side-data-encryption"`
+
+	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
+	SSEKMSKeyId *string `input:"header,x-oss-server-side-encryption-key-id"`
+
+	// The storage class of the object.
+	StorageClass StorageClassType `input:"header,x-oss-storage-class"`
+
+	// The metadata of the object that you want to upload.
+	Metadata map[string]string `input:"header,x-oss-meta-,usermeta"`
+
+	// The tags that are specified for the object by using a key-value pair.
+	// You can specify multiple tags for an object. Example: TagA=A&TagB=B.
+	Tagging *string `input:"header,x-oss-tagging"`
+
+	RequestCommon
+}
+
+type InitiateMultipartUploadResult struct {
+	// The name of the bucket to which the object is uploaded by the multipart upload task.
+	Bucket *string `xml:"Bucket"`
+
+	// The name of the object that is uploaded by the multipart upload task.
+	Key *string `xml:"Key"`
+
+	// The upload ID that uniquely identifies the multipart upload task.
+	UploadId *string `xml:"UploadId"`
+
+	// The encoding type of the object names in the response. Valid value: url
+	EncodingType *string `xml:"EncodingType"`
+
+	ResultCommon
+}
+
+// InitiateMultipartUpload Initiates a multipart upload task before you can upload data in parts to Object Storage Service (OSS).
+func (c *Client) InitiateMultipartUpload(ctx context.Context, request *InitiateMultipartUploadRequest, optFns ...func(*Options)) (*InitiateMultipartUploadResult, error) {
+	var err error
+	if request == nil {
+		request = &InitiateMultipartUploadRequest{}
+	}
+	input := &OperationInput{
+		OpName: "InitiateMultipartUpload",
+		Method: "POST",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"uploads":       "",
+			"encoding-type": "url",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &InitiateMultipartUploadResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type UploadPartRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Each uploaded part is identified by a number.
+	// Value: 1-10000
+	//The size limit of a single part is between 100 KB and 5 GB.
+	PartNumber int32 `input:"query,partNumber,required"`
+
+	// The ID of the multipart upload task.
+	UploadId *string `input:"query,uploadId,required"`
+
+	// The MD5 hash of the object that you want to upload.
+	ContentMD5 *string `input:"header,Content-MD5"`
+
+	RequestCommon
+}
+
+type UploadPartResult struct {
+	// Entity tag for the uploaded part.
+	ETag *string `output:"header,ETag"`
+
+	// The MD5 hash of the part that you want to upload.
+	ContentMD5 *string `output:"header,Content-MD5"`
+
+	// The 64-bit CRC value of the part.
+	// This value is calculated based on the ECMA-182 standard.
+	HashCRC64 *string `output:"header,x-oss-hash-crc64ecma"`
+
+	ResultCommon
+}
+
+// UploadPart Call the UploadPart interface to upload data in blocks (parts) based on the specified Object name and uploadId.
+func (c *Client) UploadPart(ctx context.Context, request *UploadPartRequest, optFns ...func(*Options)) (*UploadPartResult, error) {
+	var err error
+	if request == nil {
+		request = &UploadPartRequest{}
+	}
+	input := &OperationInput{
+		OpName: "UploadPart",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	if err = c.marshalInput(request, input); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &UploadPartResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type UploadPartCopyRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Each uploaded part is identified by a number.
+	// Value: 1-10000
+	//The size limit of a single part is between 100 KB and 5 GB.
+	PartNumber int32 `input:"query,partNumber,required"`
+
+	// The ID of the multipart upload task.
+	UploadId *string `input:"query,uploadId,required"`
+
+	// The path of the source object.
+	Source *string `input:"header,x-oss-copy-source,required"`
+
+	// The range of bytes to copy data from the source object.
+	Range *string `input:"header,x-oss-copy-source-range"`
+
+	// The copy operation condition. If the ETag value of the source object is
+	// the same as the ETag value provided by the user, OSS copies data. Otherwise,
+	// OSS returns 412 Precondition Failed.
+	IfMatch *string `input:"header,x-oss-copy-source-if-match"`
+
+	// The object transfer condition. If the input ETag value does not match the ETag value of the object
+	// the system transfers the object normally and returns 200 OK. Otherwise, OSS returns 304 Not Modified.
+	IfNoneMatch *string `input:"header,x-oss-copy-source-if-none-match"`
+
+	// The object transfer condition. If the specified time is earlier than the actual modified time of the object,
+	// the system transfers the object normally and returns 200 OK. Otherwise, OSS returns 304 Not Modified.
+	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
+	IfModifiedSince *string `input:"header,x-oss-copy-source-if-modified-since"`
+
+	// The object transfer condition. If the specified time is the same as or later than the actual modified time of the object,
+	// OSS transfers the object normally and returns 200 OK. Otherwise, OSS returns 412 Precondition Failed.
+	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
+	IfUnmodifiedSince *string `input:"header,x-oss-copy-source-if-unmodified-since"`
+
+	// Version of the source object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type UploadPartCopyResult struct {
+	// The time when the returned objects were last modified.
+	LastModified *time.Time `xml:"LastModified"`
+
+	// Entity tag for the uploaded part.
+	ETag *string `xml:"ETag"`
+
+	// The version ID of the source object.
+	VersionId *string `output:"header,x-oss-copy-source-version-id"`
+
+	ResultCommon
+}
+
+// UploadPartCopy You can call this operation to copy data from an existing object to upload a part by adding a x-oss-copy-request header to UploadPart.
+func (c *Client) UploadPartCopy(ctx context.Context, request *UploadPartCopyRequest, optFns ...func(*Options)) (*UploadPartCopyResult, error) {
+	var err error
+	if request == nil {
+		request = &UploadPartCopyRequest{}
+	}
+	input := &OperationInput{
+		OpName: "UploadPartCopy",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &UploadPartCopyResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type CompleteMultipartUploadRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The ID of the multipart upload task.
+	UploadId *string `input:"query,uploadId,required"`
+
+	// The encoding type of the object names in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	// Specifies whether the object that is uploaded by calling the PutObject operation
+	// overwrites an existing object that has the same name. Valid values: true and false
+	ForbidOverwrite *string `input:"header,x-oss-forbid-overwrite"`
+
+	// Specifies whether to list all parts that are uploaded by using the current upload ID. Valid value: yes
+	CompleteAll *string `input:"header,x-oss-complete-all"`
+
+	// The container that stores the content of the CompleteMultipartUpload
+	CompleteMultipartUpload *CompleteMultipartUpload `input:"body,CompleteMultipartUpload,xml"`
+
+	// A callback parameter is a Base64-encoded string that contains multiple fields in the JSON format.
+	Callback *string `input:"header,x-oss-callback"`
+
+	// Configure custom parameters by using the callback-var parameter.
+	CallbackVar *string `input:"header,x-oss-callback-var"`
+
+	RequestCommon
+}
+
+type UploadPart struct {
+	// The number of parts.
+	PartNumber int32 `xml:"PartNumber"`
+
+	// The ETag values that are returned by OSS after parts are uploaded.
+	ETag *string `xml:"ETag"`
+}
+
+type CompleteMultipartUpload struct {
+	XMLName xml.Name     `xml:"CompleteMultipartUpload"`
+	Part    []UploadPart `xml:"Part"`
+}
+type UploadParts []UploadPart
+
+func (slice UploadParts) Len() int {
+	return len(slice)
+}
+func (slice UploadParts) Less(i, j int) bool {
+	return slice[i].PartNumber < slice[j].PartNumber
+}
+func (slice UploadParts) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
+}
+
+type CompleteMultipartUploadResult struct {
+	// The version ID of the source object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// The 64-bit CRC value of the object.
+	// This value is calculated based on the ECMA-182 standard.
+	HashCRC64 *string `output:"header,x-oss-hash-crc64ecma"`
+
+	// The encoding type of the name of the deleted object in the response.
+	// If encoding-type is specified in the request, the object name is encoded in the returned result.
+	EncodingType *string `xml:"EncodingType"`
+
+	// The URL that is used to access the uploaded object.
+	Location *string `xml:"Location"`
+
+	// The name of the bucket.
+	Bucket *string `xml:"Bucket"`
+
+	// The name of the uploaded object.
+	Key *string `xml:"Key"`
+
+	// The ETag that is generated when an object is created.
+	// ETags are used to identify the content of objects.
+	ETag *string `xml:"ETag"`
+
+	Body io.ReadCloser
+
+	ResultCommon
+}
+
+// CompleteMultipartUpload Completes the multipart upload task of an object after all parts of the object are uploaded.
+func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteMultipartUploadRequest, optFns ...func(*Options)) (*CompleteMultipartUploadResult, error) {
+	var err error
+	if request == nil {
+		request = &CompleteMultipartUploadRequest{}
+	}
+	input := &OperationInput{
+		OpName: "CompleteMultipartUpload",
+		Method: "POST",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"encoding-type": "url",
+		},
+	}
+	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Part) > 0 {
+		sort.Sort(UploadParts(request.CompleteMultipartUpload.Part))
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	if request.Callback != nil {
+		callbackFn := func(opts *Options) {
+			opts.ResponseHandlers = []func(*http.Response) error{
+				callbackErrorResponseHandler,
+			}
+		}
+		optFns = append(optFns, callbackFn)
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &CompleteMultipartUploadResult{}
+	if request.Callback != nil {
+		if err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader); err != nil {
+			return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+		}
+	} else {
+		if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType); err != nil {
+			return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+		}
+	}
+	return result, err
+}
+
+type AbortMultipartUploadRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The ID of the multipart upload task.
+	UploadId *string `input:"query,uploadId,required"`
+
+	RequestCommon
+}
+
+type AbortMultipartUploadResult struct {
+	ResultCommon
+}
+
+// AbortMultipartUpload Cancels a multipart upload task and deletes the parts uploaded in the task.
+func (c *Client) AbortMultipartUpload(ctx context.Context, request *AbortMultipartUploadRequest, optFns ...func(*Options)) (*AbortMultipartUploadResult, error) {
+	var err error
+	if request == nil {
+		request = &AbortMultipartUploadRequest{}
+	}
+	input := &OperationInput{
+		OpName: "AbortMultipartUpload",
+		Method: "DELETE",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &AbortMultipartUploadResult{}
+	if err = c.unmarshalOutput(result, output, discardBody); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type ListMultipartUploadsRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The character that is used to group objects by name. If you specify the delimiter parameter in the request,
+	// the response contains the CommonPrefixes parameter. The objects whose names contain the same string from
+	// the prefix to the next occurrence of the delimiter are grouped as a single result element in CommonPrefixes.
+	Delimiter *string `input:"query,delimiter"`
+
+	// The encoding type of the content in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	// This parameter is used together with the upload-id-marker parameter to specify
+	// the position from which the next list begins.
+	KeyMarker *string `input:"query,key-marker"`
+
+	// The maximum number of multipart upload tasks that can be returned for the current request.
+	// Default value: 1000. Maximum value: 1000.
+	MaxUploads int32 `input:"query,max-uploads"`
+
+	// The prefix that the names of the returned objects must contain.
+	Prefix *string `input:"query,prefix"`
+
+	// The upload ID of the multipart upload task after which the list begins.
+	// This parameter is used together with the key-marker parameter.
+	UploadIdMarker *string `input:"query,upload-id-marker"`
+
+	RequestCommon
+}
+
+type ListMultipartUploadsResult struct {
+	// The method used to encode the object name in the response.
+	// If encoding-type is specified in the request, values of those elements including
+	// Delimiter, KeyMarker, Prefix, NextKeyMarker, and Key are encoded in the returned result.
+	EncodingType *string `xml:"EncodingType"`
+
+	// The name of the bucket.
+	Bucket *string `xml:"Bucket"`
+
+	// The name of the object that corresponds to the multipart upload task after which the list begins.
+	KeyMarker *string `xml:"KeyMarker"`
+
+	// The upload ID of the multipart upload task after which the list begins.
+	UploadIdMarker *string `xml:"UploadIdMarker"`
+
+	// The upload ID of the multipart upload task after which the list begins.
+	NextKeyMarker *string `xml:"NextKeyMarker"`
+
+	// The NextUploadMarker value that is used for the UploadMarker value in
+	// the next request if the response does not contain all required results.
+	NextUploadIdMarker *string `xml:"NextUploadIdMarker"`
+
+	// The character that is used to group objects by name.
+	Delimiter *string `xml:"Delimiter"`
+
+	// The prefix contained in the returned object names.
+	Prefix *string `xml:"Prefix"`
+
+	// The maximum number of multipart upload tasks returned by OSS.
+	MaxUploads int32 `xml:"MaxUploads"`
+
+	// Indicates whether the list of multipart upload tasks returned in the response is truncated.
+	// true: Only part of the results are returned this time.
+	// false: All results are returned.
+	IsTruncated bool `xml:"IsTruncated"`
+
+	Uploads []Upload `xml:"Upload"`
+
+	ResultCommon
+}
+
+type Upload struct {
+	// The name of the object for which a multipart upload task was initiated.
+	Key *string `xml:"Key"`
+
+	// The ID of the multipart upload task
+	UploadId *string `xml:"UploadId"`
+
+	// The time when the multipart upload task was initialized.
+	Initiated *time.Time `xml:"Initiated"`
+}
+
+// ListMultipartUploads Lists all multipart upload tasks in progress. The tasks are not completed or canceled.
+func (c *Client) ListMultipartUploads(ctx context.Context, request *ListMultipartUploadsRequest, optFns ...func(*Options)) (*ListMultipartUploadsResult, error) {
+	var err error
+	if request == nil {
+		request = &ListMultipartUploadsRequest{}
+	}
+	input := &OperationInput{
+		OpName: "ListMultipartUploads",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Parameters: map[string]string{
+			"encoding-type": "url",
+			"uploads":       "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ListMultipartUploadsResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type ListPartsRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,uploadId,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The ID of the multipart upload task.
+	UploadId *string `input:"query,uploadId,required"`
+
+	// The encoding type of the content in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	// The maximum number of parts that can be returned by OSS.
+	// Default value: 1000. Maximum value: 1000.
+	MaxParts int32 `input:"query,max-parts"`
+
+	// The position from which the list starts.
+	// All parts whose part numbers are greater than the value of this parameter are listed.
+	PartNumberMarker *string `input:"query,part-number-marker"`
+
+	RequestCommon
+}
+
+type ListPartsResult struct {
+	// The method used to encode the object name in the response.
+	// If encoding-type is specified in the request, values of those elements including
+	// Delimiter, KeyMarker, Prefix, NextKeyMarker, and Key are encoded in the returned result.
+	EncodingType *string `xml:"EncodingType"`
+
+	// The name of the bucket.
+	Bucket *string `xml:"Bucket"`
+
+	// The name of the object that corresponds to the multipart upload task after which the list begins.
+	Key *string `xml:"Key"`
+
+	// The ID of the upload task.
+	UploadId *string `xml:"UploadId"`
+
+	// The position from which the list starts.
+	// All parts whose part numbers are greater than the value of this parameter are listed.
+	PartNumberMarker int32 `xml:"PartNumberMarker"`
+
+	// The NextPartNumberMarker value that is used for the PartNumberMarker value in a subsequent
+	// request when the response does not contain all required results.
+	NextPartNumberMarker int32 `xml:"NextPartNumberMarker"`
+
+	// he maximum number of parts in the response.
+	MaxParts int32 `xml:"MaxParts"`
+
+	// Indicates whether the list of parts returned in the response has been truncated.
+	// true: Only part of the results are returned this time.
+	// false: All results are returned.
+	IsTruncated bool `xml:"IsTruncated"`
+
+	// The storage class of the object.
+	StorageClass *string `xml:"StorageClass"`
+
+	Parts []Part `xml:"Part"`
+
+	ResultCommon
+}
+
+type Part struct {
+	// The number that identifies a part.
+	PartNumber int32 `xml:"PartNumber"`
+
+	// The ETag value of the content of the uploaded part.
+	ETag *string `xml:"ETag"`
+
+	// The time when the part was uploaded.
+	LastModified *time.Time `xml:"LastModified"`
+
+	// The size of the uploaded parts.
+	Size int64 `xml:"Size"`
+
+	// The 64-bit CRC value of the object.
+	// This value is calculated based on the ECMA-182 standard.
+	HashCRC64 *string `xml:"HashCrc64ecma"`
+}
+
+// ListParts Lists all parts that are uploaded by using a specified upload ID.
+func (c *Client) ListParts(ctx context.Context, request *ListPartsRequest, optFns ...func(*Options)) (*ListPartsResult, error) {
+	var err error
+	if request == nil {
+		request = &ListPartsRequest{}
+	}
+	input := &OperationInput{
+		OpName: "ListParts",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"encoding-type": "url",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ListPartsResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
 	return result, err
 }

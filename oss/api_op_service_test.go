@@ -181,4 +181,28 @@ func TestUnmarshalOutput_ListBuckets(t *testing.T) {
 	assert.Equal(t, result.Status, "AccessDenied")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	resultErr := &ListBucketsResult{}
+	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }

@@ -536,10 +536,13 @@ func TestUnmarshalOutput_ListObjects(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr ListObjectsResult
+	resultErr := &ListObjectsResult{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_ListObjectsV2(t *testing.T) {
@@ -912,10 +915,13 @@ func TestUnmarshalOutput_ListObjectsV2(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr ListObjectsResultV2
+	resultErr := &ListObjectsResultV2{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_GetBucketInfo(t *testing.T) {
@@ -1208,14 +1214,17 @@ func TestUnmarshalOutput_GetBucketInfo(t *testing.T) {
 		Status:     "AccessDenied",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
-			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"X-Oss-Request-Id": {"568D5566F2D0F89F5C0E****"},
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr GetBucketInfoResult
+	resultErr := &GetBucketInfoResult{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "568D5566F2D0F89F5C0E****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_GetBucketLocation(t *testing.T) {
@@ -1318,7 +1327,7 @@ func TestUnmarshalOutput_GetBucketLocation(t *testing.T) {
 <Error>
   <Code>AccessDenied</Code>
   <Message>AccessDenied</Message>
-  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <RequestId>534B371674E88A4D8906****</RequestId>
   <HostId>test.oss.aliyuncs.com</HostId>
 </Error>`
 	output = &OperationOutput{
@@ -1330,10 +1339,14 @@ func TestUnmarshalOutput_GetBucketLocation(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr GetBucketLocationResult
+	resultErr := &GetBucketLocationResult{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+
 }
 
 func TestMarshalInput_GetBucketStat(t *testing.T) {
@@ -1468,7 +1481,7 @@ func TestUnmarshalOutput_GetBucketStat(t *testing.T) {
 <Error>
   <Code>AccessDenied</Code>
   <Message>AccessDenied</Message>
-  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <RequestId>534B371674E88A4D8906****</RequestId>
   <HostId>test.oss.aliyuncs.com</HostId>
 </Error>`
 	output = &OperationOutput{
@@ -1480,10 +1493,14 @@ func TestUnmarshalOutput_GetBucketStat(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr GetBucketStatResult
+	resultErr := &GetBucketStatResult{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+
 }
 
 func TestMarshalInput_PutBucketAcl(t *testing.T) {
@@ -1542,7 +1559,7 @@ func TestUnmarshalOutput_PutBucketAcl(t *testing.T) {
 		},
 	}
 	result := &PutBucketAclResult{}
-	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	err = c.unmarshalOutput(result, output, discardBody)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
@@ -1557,7 +1574,7 @@ func TestUnmarshalOutput_PutBucketAcl(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	err = c.unmarshalOutput(result, output, discardBody)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
@@ -1572,7 +1589,7 @@ func TestUnmarshalOutput_PutBucketAcl(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	err = c.unmarshalOutput(result, output, discardBody)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
@@ -1595,10 +1612,13 @@ func TestUnmarshalOutput_PutBucketAcl(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr PutBucketAclResult
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	resultErr := &PutBucketAclResult{}
+	err = c.unmarshalOutput(resultErr, output, discardBody)
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_GetBucketAcl(t *testing.T) {
@@ -1720,12 +1740,15 @@ func TestUnmarshalOutput_GetBucketAcl(t *testing.T) {
 		Status:     "AccessDenied",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
-			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"X-Oss-Request-Id": {"568D5566F2D0F89F5C0E****"},
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr PutBucketAclResult
+	resultErr := &PutBucketAclResult{}
 	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "568D5566F2D0F89F5C0E****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }

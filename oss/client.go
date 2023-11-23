@@ -288,7 +288,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		Key:             input.Key,
 		Request:         request,
 		SubResource:     subResource,
-		AuthMethodQuery: (opts.AuthMethod != nil && *opts.AuthMethod == AuthMethodQuery),
+		AuthMethodQuery: opts.AuthMethod != nil && *opts.AuthMethod == AuthMethodQuery,
 		ClockOffset:     clockOffset,
 	}
 	if signTime, ok := input.OpMetadata.Get(signer.SignTime).(time.Time); ok {
@@ -440,19 +440,37 @@ func serviceErrorResponseHandler(response *http.Response) error {
 	if response.StatusCode/100 == 2 {
 		return nil
 	}
+	return tryConvertServiceError(response)
+}
 
+func callbackErrorResponseHandler(response *http.Response) error {
+	if response.StatusCode == 200 {
+		return nil
+	}
+	return tryConvertServiceError(response)
+}
+
+func tryConvertServiceError(response *http.Response) (err error) {
+	var respBody []byte
+	var body []byte
 	timestamp, err := time.Parse(http.TimeFormat, response.Header.Get("Date"))
 	if err != nil {
 		timestamp = time.Now()
 	}
 
 	defer response.Body.Close()
-	body, err := io.ReadAll(response.Body)
-
+	respBody, err = io.ReadAll(response.Body)
+	body = respBody
+	if len(respBody) == 0 && len(response.Header.Get(HeaderOssERR)) > 0 {
+		body, err = base64.StdEncoding.DecodeString(response.Header.Get(HeaderOssERR))
+		if err != nil {
+			body = respBody
+		}
+	}
 	se := &ServiceError{
 		StatusCode:    response.StatusCode,
 		Code:          "BadErrorResponse",
-		RequestID:     response.Header.Get("x-oss-request-id"),
+		RequestID:     response.Header.Get(HeaderOssRequestID),
 		Timestamp:     timestamp,
 		RequestTarget: fmt.Sprintf("%s %s", response.Request.Method, response.Request.URL),
 		Snapshot:      body,
@@ -462,7 +480,6 @@ func serviceErrorResponseHandler(response *http.Response) error {
 		se.Message = fmt.Sprintf("The body of the response was not readable, due to :%s", err.Error())
 		return se
 	}
-
 	err = xml.Unmarshal(body, &se)
 	if err != nil {
 		len := len(body)
@@ -783,6 +800,26 @@ func unmarshalBodyDefault(result any, output *OperationOutput) error {
 	return err
 }
 
+func unmarshalCallbackBody(result any, output *OperationOutput) error {
+	var err error
+	var body []byte
+	if output.Body != nil {
+		defer output.Body.Close()
+		if body, err = io.ReadAll(output.Body); err != nil {
+			return err
+		}
+	}
+	if len(body) > 0 {
+		switch r := result.(type) {
+		case *PutObjectResult:
+			r.Body = io.NopCloser(strings.NewReader(string(body)))
+		case *CompleteMultipartUploadResult:
+			r.Body = io.NopCloser(strings.NewReader(string(body)))
+		}
+	}
+	return err
+}
+
 func unmarshalHeader(result any, output *OperationOutput) error {
 	val := reflect.ValueOf(result)
 	switch val.Kind() {
@@ -926,24 +963,23 @@ func updateContentMd5(_ any, input *OperationInput) error {
 		if input.Headers == nil {
 			input.Headers = map[string]string{}
 		}
-		input.Headers["Content-Md5"] = contentMd5
+		input.Headers["Content-MD5"] = contentMd5
 	}
 
 	return err
 }
 
-func enableEncodingType(_ any, input *OperationInput) error {
-	mapKey := "encoding-type"
-	if input.Parameters == nil {
-		input.Parameters = map[string]string{}
+func encodeSourceObject(_ any, input *OperationInput) error {
+	var err error
+	if input.Headers["x-oss-copy-source"] != "" {
+		source := input.Headers["x-oss-copy-source"]
+		parts := strings.SplitN(source, "/", 3)
+		object := parts[len(parts)-1]
+		encodedObject := url.QueryEscape(object)
+		encodedSource := strings.Replace(source, object, encodedObject, 1)
+		input.Headers["x-oss-copy-source"] = encodedSource
 	}
-	value, exists := input.Parameters[mapKey]
-	if exists || value != "url" {
-		input.Parameters["encoding-type"] = "url"
-	} else {
-		input.Parameters["encoding-type"] = "url"
-	}
-	return nil
+	return err
 }
 
 func (c *Client) toClientError(err error, code string, output *OperationOutput) error {

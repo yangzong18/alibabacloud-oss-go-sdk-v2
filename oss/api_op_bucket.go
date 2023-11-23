@@ -307,7 +307,53 @@ func unmarshalEncodeType(result any, output *OperationOutput) error {
 				}
 			}
 		}
-
+	case *InitiateMultipartUploadResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			var err error
+			if *r.Key, err = url.QueryUnescape(*r.Key); err != nil {
+				return err
+			}
+		}
+	case *CompleteMultipartUploadResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			var err error
+			if *r.Key, err = url.QueryUnescape(*r.Key); err != nil {
+				return err
+			}
+		}
+	case *ListMultipartUploadsResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			fields := []**string{&r.KeyMarker, &r.NextKeyMarker, &r.Prefix, &r.Delimiter}
+			var s string
+			var err error
+			for _, pp := range fields {
+				if pp != nil && *pp != nil {
+					if s, err = url.QueryUnescape(**pp); err != nil {
+						return err
+					}
+					*pp = Ptr(s)
+				}
+			}
+			for i := 0; i < len(r.Uploads); i++ {
+				if *r.Uploads[i].Key, err = url.QueryUnescape(*r.Uploads[i].Key); err != nil {
+					return err
+				}
+			}
+		}
+	case *ListPartsResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			fields := []**string{&r.Key}
+			var s string
+			var err error
+			for _, pp := range fields {
+				if pp != nil && *pp != nil {
+					if s, err = url.QueryUnescape(**pp); err != nil {
+						return err
+					}
+					*pp = Ptr(s)
+				}
+			}
+		}
 	}
 	return nil
 }
