@@ -354,6 +354,35 @@ func unmarshalEncodeType(result any, output *OperationOutput) error {
 				}
 			}
 		}
+	case *ListObjectVersionsResult:
+		if r.EncodingType != nil && strings.EqualFold(*r.EncodingType, "url") {
+			fields := []**string{&r.Prefix, &r.KeyMarker, &r.Delimiter, &r.NextKeyMarker}
+			var s string
+			var err error
+			for _, pp := range fields {
+				if pp != nil && *pp != nil {
+					if s, err = url.QueryUnescape(**pp); err != nil {
+						return err
+					}
+					*pp = Ptr(s)
+				}
+			}
+			for i := 0; i < len(r.ObjectVersions); i++ {
+				if *r.ObjectVersions[i].Key, err = url.QueryUnescape(*r.ObjectVersions[i].Key); err != nil {
+					return err
+				}
+			}
+			for i := 0; i < len(r.ObjectDeleteMarkers); i++ {
+				if *r.ObjectDeleteMarkers[i].Key, err = url.QueryUnescape(*r.ObjectDeleteMarkers[i].Key); err != nil {
+					return err
+				}
+			}
+			for i := 0; i < len(r.CommonPrefixes); i++ {
+				if *r.CommonPrefixes[i].Prefix, err = url.QueryUnescape(*r.CommonPrefixes[i].Prefix); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -824,5 +853,258 @@ func (c *Client) GetBucketAcl(ctx context.Context, request *GetBucketAclRequest,
 	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
+	return result, err
+}
+
+type PutBucketVersioningRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	VersioningConfiguration *VersioningConfiguration `input:"body,VersioningConfiguration,xml,required"`
+
+	RequestCommon
+}
+
+type VersioningConfiguration struct {
+	// The versioning state of the bucket. Valid values: Enabled,Suspended
+	Status VersioningStatusType `xml:"Status"`
+}
+
+type PutBucketVersioningResult struct {
+	ResultCommon
+}
+
+// PutBucketVersioning Configures the versioning state for a bucket.
+func (c *Client) PutBucketVersioning(ctx context.Context, request *PutBucketVersioningRequest, optFns ...func(*Options)) (*PutBucketVersioningResult, error) {
+	var err error
+	if request == nil {
+		request = &PutBucketVersioningRequest{}
+	}
+	input := &OperationInput{
+		OpName: "PutBucketVersioning",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &PutBucketVersioningResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type GetBucketVersioningRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	RequestCommon
+}
+
+type GetBucketVersioningResult struct {
+	// The versioning state of the bucket. Valid values: Enabled,Suspended
+	VersionStatus *string `xml:"Status"`
+
+	ResultCommon
+}
+
+// GetBucketVersioning You can call this operation to query the versioning state of a bucket.
+func (c *Client) GetBucketVersioning(ctx context.Context, request *GetBucketVersioningRequest, optFns ...func(*Options)) (*GetBucketVersioningResult, error) {
+	var err error
+	if request == nil {
+		request = &GetBucketVersioningRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetBucketVersioning",
+		Method: "GET",
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+	result := &GetBucketVersioningResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type ListObjectVersionsRequest struct {
+	// The name of the bucket containing the objects
+	Bucket *string `input:"host,bucket,required"`
+
+	// The character that is used to group objects by name. If you specify the delimiter parameter in the request,
+	// the response contains the CommonPrefixes parameter. The objects whose names contain the same string from
+	// the prefix to the next occurrence of the delimiter are grouped as a single result element in CommonPrefixes.
+	Delimiter *string `input:"query,delimiter"`
+
+	// Specifies that objects whose names are alphabetically after the value of the key-marker parameter are returned.
+	// This parameter can be specified together with version-id-marker.
+	// By default, this parameter is left empty.
+	KeyMarker *string `input:"query,key-marker"`
+
+	// Specifies that the versions created before the version specified by version-id-marker for the object
+	// whose name is specified by key-marker are returned by creation time in descending order.
+	// By default, if this parameter is not specified, the results are returned from the latest
+	// version of the object whose name is alphabetically after the value of key-marker.
+	VersionIdMarker *string `input:"query,version-id-marker"`
+
+	// The maximum number of objects that you want to return. If the list operation cannot be complete at a time
+	// because the max-keys parameter is specified, the NextMarker element is included in the response as the marker
+	// for the next list operation.
+	MaxKeys int32 `input:"query,max-keys"`
+
+	// The prefix that the names of the returned objects must contain.
+	Prefix *string `input:"query,prefix"`
+
+	// The encoding type of the content in the response. Valid value: url
+	EncodingType *string `input:"query,encoding-type"`
+
+	RequestCommon
+}
+
+type ListObjectVersionsResult struct {
+	// The name of the bucket.
+	Name *string `xml:"Name"`
+
+	// Indicates the object from which the ListObjectVersions (GetBucketVersions) operation starts.
+	KeyMarker *string `xml:"KeyMarker"`
+
+	// The version from which the ListObjectVersions (GetBucketVersions) operation starts.
+	// This parameter is used together with KeyMarker.
+	VersionIdMarker *string `xml:"VersionIdMarker"`
+
+	// If not all results are returned for the request, the NextKeyMarker parameter is included
+	// in the response to indicate the key-marker value of the next ListObjectVersions (GetBucketVersions) request.
+	NextKeyMarker *string `xml:"NextKeyMarker"`
+
+	// If not all results are returned for the request, the NextVersionIdMarker parameter is included in
+	// the response to indicate the version-id-marker value of the next ListObjectVersions (GetBucketVersions) request.
+	NextVersionIdMarker *string `xml:"NextVersionIdMarker"`
+
+	// The container that stores delete markers.
+	ObjectDeleteMarkers []ObjectDeleteMarkerProperties `xml:"DeleteMarker"`
+
+	// The container that stores the versions of objects, excluding delete markers.
+	ObjectVersions []ObjectVersionProperties `xml:"Version"`
+
+	// The prefix contained in the returned object names.
+	Prefix *string `xml:"Prefix"`
+
+	// The maximum number of returned objects in the response.
+	MaxKeys int32 `xml:"MaxKeys"`
+
+	// The character that is used to group objects by name.
+	Delimiter *string `xml:"Delimiter"`
+
+	// Indicates whether the returned results are truncated.
+	// true indicates that not all results are returned this time.
+	// false indicates that all results are returned this time.
+	IsTruncated bool `xml:"IsTruncated"`
+
+	// The encoding type of the content in the response.
+	EncodingType *string `xml:"EncodingType"`
+
+	// If the Delimiter parameter is specified in the request, the response contains the CommonPrefixes element.
+	CommonPrefixes []CommonPrefix `xml:"CommonPrefixes"`
+
+	ResultCommon
+}
+
+type ObjectDeleteMarkerProperties struct {
+	// The name of the object.
+	Key *string `xml:"Key"`
+
+	// The version ID of the object.
+	VersionId *string `xml:"VersionId"`
+
+	// Indicates whether the version is the current version.
+	IsLatest bool `xml:"IsLatest"`
+
+	// The time when the returned objects were last modified.
+	LastModified *time.Time `xml:"LastModified"`
+
+	// The container that stores information about the bucket owner.
+	Owner Owner `xml:"Owner"`
+}
+
+type ObjectVersionProperties struct {
+	// The name of the object.
+	Key *string `xml:"Key"`
+
+	// The version ID of the object.
+	VersionId *string `xml:"VersionId"`
+
+	// Indicates whether the version is the current version.
+	IsLatest bool `xml:"IsLatest"`
+
+	// The time when the returned objects were last modified.
+	LastModified *time.Time `xml:"LastModified"`
+
+	// The type of the returned object.
+	Type *string `xml:"Type"`
+
+	// The size of the returned object. Unit: bytes.
+	Size int64 `xml:"Size"`
+
+	// The entity tag (ETag) that is generated when an object is created. ETags are used to identify the content of objects.
+	ETag *string `xml:"ETag"`
+
+	// The storage class of the object.
+	StorageClass *string `xml:"StorageClass"`
+
+	// The container that stores information about the bucket owner.
+	Owner Owner `xml:"Owner"`
+
+	// The restoration status of the object.
+	RestoreInfo *string `xml:"RestoreInfo"`
+}
+
+// ListObjectVersions Lists the versions of all objects in a bucket, including delete markers.
+func (c *Client) ListObjectVersions(ctx context.Context, request *ListObjectVersionsRequest, optFns ...func(*Options)) (*ListObjectVersionsResult, error) {
+	var err error
+	if request == nil {
+		request = &ListObjectVersionsRequest{}
+	}
+	input := &OperationInput{
+		OpName: "ListObjectVersions",
+		Method: "GET",
+		Parameters: map[string]string{
+			"versions":      "",
+			"encoding-type": "url",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &ListObjectVersionsResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
 	return result, err
 }

@@ -78,6 +78,17 @@ const (
 	ObjectACLDefault ObjectACLType = "default"
 )
 
+// VersioningStatusType bucket versioning status
+type VersioningStatusType string
+
+const (
+	// VersionEnabled Versioning Status definition: Enabled
+	VersionEnabled VersioningStatusType = "Enabled"
+
+	// VersionSuspended Versioning Status definition: Suspended
+	VersionSuspended VersioningStatusType = "Suspended"
+)
+
 // OSS headers
 const (
 	HeaderOssPrefix                      string = "X-Oss-"

@@ -3,7 +3,9 @@ package oss
 import (
 	"bytes"
 	"io"
+	"io/ioutil"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -1750,5 +1752,855 @@ func TestUnmarshalOutput_GetBucketAcl(t *testing.T) {
 	assert.Equal(t, resultErr.StatusCode, 403)
 	assert.Equal(t, resultErr.Status, "AccessDenied")
 	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "568D5566F2D0F89F5C0E****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_PutBucketVersioning(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *PutBucketVersioningRequest
+	var input *OperationInput
+	var err error
+
+	request = &PutBucketVersioningRequest{}
+	input = &OperationInput{
+		OpName: "PutBucketVersioning",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &PutBucketVersioningRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	input = &OperationInput{
+		OpName: "PutBucketVersioning",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, VersioningConfiguration.")
+
+	request = &PutBucketVersioningRequest{
+		Bucket: Ptr("oss-demo"),
+		VersioningConfiguration: &VersioningConfiguration{
+			Status: VersionEnabled,
+		},
+	}
+	input = &OperationInput{
+		OpName: "PutBucketVersioning",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	body, _ := ioutil.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
+
+	request = &PutBucketVersioningRequest{
+		Bucket: Ptr("oss-demo"),
+		VersioningConfiguration: &VersioningConfiguration{
+			Status: VersionSuspended,
+		},
+	}
+	input = &OperationInput{
+		OpName: "PutBucketVersioning",
+		Method: "PUT",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	body, _ = ioutil.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<VersioningConfiguration><Status>Suspended</Status></VersioningConfiguration>")
+}
+
+func TestUnmarshalOutput_PutBucketVersioning(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &PutBucketAclResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 400,
+		Status:     "InvalidArgument",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "InvalidArgument")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	resultErr := &PutBucketAclResult{}
+	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_GetBucketVersioning(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *GetBucketVersioningRequest
+	var input *OperationInput
+	var err error
+
+	request = &GetBucketVersioningRequest{}
+	input = &OperationInput{
+		OpName: "GetBucketVersioning",
+		Method: "GET",
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &GetBucketVersioningRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	input = &OperationInput{
+		OpName: "GetBucketVersioning",
+		Method: "GET",
+		Parameters: map[string]string{
+			"versioning": "",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+}
+
+func TestUnmarshalOutput_GetBucketVersioning(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<VersioningConfiguration>
+</VersioningConfiguration>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &GetBucketVersioningResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Nil(t, result.VersionStatus)
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<VersioningConfiguration>
+<Status>Enabled</Status>
+</VersioningConfiguration>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &GetBucketVersioningResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.VersionStatus, "Enabled")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 400,
+		Status:     "InvalidArgument",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "InvalidArgument")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	resultErr := &GetBucketVersioningResult{}
+	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_ListObjectVersions(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *ListObjectVersionsRequest
+	var input *OperationInput
+	var err error
+
+	request = &ListObjectVersionsRequest{}
+	input = &OperationInput{
+		OpName: "ListObjectVersions",
+		Method: "GET",
+		Parameters: map[string]string{
+			"versions ":     "",
+			"encoding-type": "url",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &ListObjectVersionsRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+
+	request = &ListObjectVersionsRequest{
+		Bucket:          Ptr("oss-demo"),
+		KeyMarker:       Ptr(""),
+		VersionIdMarker: Ptr(""),
+		Delimiter:       Ptr("/"),
+		MaxKeys:         int32(100),
+		Prefix:          Ptr("abc"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["key-marker"], "")
+	assert.Equal(t, input.Parameters["version-id-marker"], "")
+	assert.Equal(t, input.Parameters["delimiter"], "/")
+	assert.Equal(t, input.Parameters["max-keys"], "100")
+	assert.Equal(t, input.Parameters["prefix"], "abc")
+}
+
+func TestUnmarshalOutput_ListObjectVersions(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<ListVersionsResult>
+    <Name>examplebucket-1250000000</Name>
+    <Prefix/>
+    <KeyMarker/>
+    <VersionIdMarker/>
+    <MaxKeys>1000</MaxKeys>
+    <IsTruncated>false</IsTruncated>
+    <Version>
+        <Key>example-object-1.jpg</Key>
+        <VersionId/>
+        <IsLatest>true</IsLatest>
+        <LastModified>2019-08-05T12:03:10.000Z</LastModified>
+        <ETag>5B3C1A2E053D763E1B669CC607C5A0FE1****</ETag>
+        <Size>20</Size>
+        <StorageClass>STANDARD</StorageClass>
+        <Owner>
+            <ID>1250000000</ID>
+            <DisplayName>1250000000</DisplayName>
+        </Owner>
+    </Version>
+    <Version>
+        <Key>example-object-2.jpg</Key>
+        <VersionId/>
+        <IsLatest>true</IsLatest>
+        <LastModified>2019-08-09T12:03:09.000Z</LastModified>
+        <ETag>5B3C1A2E053D763E1B002CC607C5A0FE1****</ETag>
+        <Size>20</Size>
+        <StorageClass>STANDARD</StorageClass>
+        <Owner>
+            <ID>1250000000</ID>
+            <DisplayName>1250000000</DisplayName>
+        </Owner>
+    </Version>
+    <Version>
+        <Key>example-object-3.jpg</Key>
+        <VersionId/>
+        <IsLatest>true</IsLatest>
+        <LastModified>2019-08-10T12:03:08.000Z</LastModified>
+        <ETag>4B3F1A2E053D763E1B002CC607C5AGTRF****</ETag>
+        <Size>20</Size>
+        <StorageClass>STANDARD</StorageClass>
+        <Owner>
+            <ID>1250000000</ID>
+            <DisplayName>1250000000</DisplayName>
+        </Owner>
+    </Version>
+</ListVersionsResult>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &ListObjectVersionsResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.Name, "examplebucket-1250000000")
+	assert.Equal(t, *result.Prefix, "")
+	assert.Equal(t, *result.KeyMarker, "")
+	assert.Equal(t, *result.VersionIdMarker, "")
+	assert.Equal(t, result.MaxKeys, int32(1000))
+	assert.False(t, result.IsTruncated)
+	assert.Len(t, result.ObjectVersions, 3)
+	assert.Equal(t, *result.ObjectVersions[0].Key, "example-object-1.jpg")
+	assert.Empty(t, *result.ObjectVersions[1].VersionId)
+	assert.True(t, result.ObjectVersions[2].IsLatest)
+	assert.NotEmpty(t, *result.ObjectVersions[0].LastModified)
+	assert.Equal(t, *result.ObjectVersions[1].ETag, "5B3C1A2E053D763E1B002CC607C5A0FE1****")
+	assert.Equal(t, result.ObjectVersions[2].Size, int64(20))
+	assert.Equal(t, *result.ObjectVersions[2].Owner.ID, "1250000000")
+	assert.Equal(t, *result.ObjectVersions[2].Owner.DisplayName, "1250000000")
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<ListVersionsResult>
+  <Name>demo-bucket</Name>
+  <Prefix>demo%2Fgp-</Prefix>
+  <KeyMarker></KeyMarker>
+  <VersionIdMarker></VersionIdMarker>
+  <MaxKeys>5</MaxKeys>
+  <Delimiter>%2F</Delimiter>
+  <EncodingType>url</EncodingType>
+  <IsTruncated>false</IsTruncated>
+  <Version>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <VersionId>CAEQHxiBgIDAj.jV3xgiIGFjMDI5ZTRmNGNiODQ0NjE4MDFhODM0Y2UxNTI3****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2023-11-22T05:15:05.000Z</LastModified>
+    <ETag>"29B94424BC241D80B0AF488A4E4B86AF-1"</ETag>
+    <Type>Multipart</Type>
+    <Size>96316</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <Version>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <VersionId>CAEQHxiBgMDYseHV3xgiIDg2Mzk0Zjg3MjQ0MTRhM2FiMzgxOGY1NjdmN2Rk****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-11-22T05:11:25.000Z</LastModified>
+    <ETag>"29B94424BC241D80B0AF488A4E4B86AF-1"</ETag>
+    <Type>Multipart</Type>
+    <Size>96316</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <Version>
+    <Key>demo%2Fgp-%0C%0A%0B</Key>
+    <VersionId>CAEQHxiBgICCuNrV3xgiIDI2YzMyYTBhM2U1ZTQwNjI4OWQ4OTllZGJiNGIz****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-11-22T05:07:37.000Z</LastModified>
+    <ETag>"29B94424BC241D80B0AF488A4E4B86AF-1"</ETag>
+    <Type>Multipart</Type>
+    <Size>96316</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+</ListVersionsResult>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &ListObjectVersionsResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.Name, "demo-bucket")
+	prefix, _ := url.QueryUnescape(*result.Prefix)
+	assert.Equal(t, *result.Prefix, prefix)
+	assert.Equal(t, *result.KeyMarker, "")
+	assert.Equal(t, *result.VersionIdMarker, "")
+	assert.Equal(t, result.MaxKeys, int32(5))
+	assert.False(t, result.IsTruncated)
+	assert.Len(t, result.ObjectVersions, 3)
+	key, _ := url.QueryUnescape(*result.ObjectVersions[0].Key)
+	assert.Equal(t, *result.ObjectVersions[0].Key, key)
+	assert.Equal(t, *result.ObjectVersions[1].VersionId, "CAEQHxiBgMDYseHV3xgiIDg2Mzk0Zjg3MjQ0MTRhM2FiMzgxOGY1NjdmN2Rk****")
+	assert.False(t, result.ObjectVersions[2].IsLatest)
+	assert.NotEmpty(t, *result.ObjectVersions[0].LastModified)
+	assert.Equal(t, *result.ObjectVersions[1].ETag, "\"29B94424BC241D80B0AF488A4E4B86AF-1\"")
+	assert.Equal(t, result.ObjectVersions[2].Size, int64(96316))
+	assert.Equal(t, *result.ObjectVersions[2].Owner.ID, "150692521021****")
+	assert.Equal(t, *result.ObjectVersions[2].Owner.DisplayName, "150692521021****")
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<ListVersionsResult>
+  <Name>demo-bucket</Name>
+  <Prefix>demo%2F</Prefix>
+  <KeyMarker></KeyMarker>
+  <VersionIdMarker></VersionIdMarker>
+  <MaxKeys>20</MaxKeys>
+  <Delimiter>%2F</Delimiter>
+  <EncodingType>url</EncodingType>
+  <IsTruncated>true</IsTruncated>
+  <NextKeyMarker>demo%2FREADME-CN.md</NextKeyMarker>
+  <NextVersionIdMarker>CAEQEhiBgICDzK6NnBgiIGRlZWJhYmNlMGUxZDQ4YTZhNTU2MzM4Mzk5NDBl****</NextVersionIdMarker>
+  <DeleteMarker>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgIDh3b_tuRgiIGRjMjExMjVmMzcwMTQ2Njc4NjhhNTA0MzEzMDkx****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2023-04-01T05:52:31.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgICI173TtRgiIDFlMmYyMzFjNmJmMDQ0NTBiNmIyYThkZjA1YjA5****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-06T03:02:28.000Z</LastModified>
+    <ETag>"D41D8CD98F00B204E9800998ECF8427E"</ETag>
+    <Type>Normal</Type>
+    <Size>0</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgICHsJuXtRgiIDMzNzUxNWIwYzEwODRlYTg5MTgxMDhmYTUzNDQz****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-03T04:49:26.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgIC.oPmDtRgiIDNhNGZjMDQxMTYwYTRkYzE4ZDk4YTQ2NmYxYjA1****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-02T06:22:36.000Z</LastModified>
+    <ETag>"D41D8CD98F00B204E9800998ECF8****"</ETag>
+    <Type>Normal</Type>
+    <Size>0</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgMCH__iDtRgiIDk4ZDFjZGY3NTk5ZjQ2NjViMzhjZjA2ODUwNjU0****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-02T06:22:27.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgMD3p_iDtRgiIDljYjdlNzA3ZjE3ZTQ4NzI4ODE1ZWQ1ZWFlYjZl****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-02T06:22:05.000Z</LastModified>
+    <ETag>"D41D8CD98F00B204E9800998ECF8427E"</ETag>
+    <Type>Normal</Type>
+    <Size>0</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgMC_6feDtRgiIGQ4YTIyOTNjZDY4ZjQ1NGY5NGE5YTNlOTBlODlm****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-02T06:21:49.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F</Key>
+    <VersionId>CAEQFxiBgIDPjPSDtRgiIDcwMWU0ZDg2Y2NlNzRhZTM5NDM5ZmMxYjMwZGUw****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2023-03-02T06:19:47.000Z</LastModified>
+    <ETag>"D41D8CD98F00B204E9800998ECF8****"</ETag>
+    <Type>Normal</Type>
+    <Size>0</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2F.gitignore</Key>
+    <VersionId>CAEQFBiBgIDd.86GohgiIDMyMmVlZGNhOTI4OTQ3M2M5MGJiYTVmNTBjYjhl****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2022-11-04T08:00:06.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F.gitignore</Key>
+    <VersionId>CAEQEhiBgIDkyq6NnBgiIDMyMGNhN2JjODllMjQwNWFhZThmZGRkZDRmYzlh****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2022-09-28T09:04:39.000Z</LastModified>
+    <ETag>"C173E921A7464E5147B26B5F3DF9****"</ETag>
+    <Type>Normal</Type>
+    <Size>166</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2F.travis.yml</Key>
+    <VersionId>CAEQFBiBgMDv.86GohgiIDc5ZmM5MTkxNjJmZDQ1OWU4Njk4MGI5ODI4M2Yw****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2022-11-04T08:00:06.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2F.travis.yml</Key>
+    <VersionId>CAEQEhiBgIDOy66NnBgiIDE5MmVkNzRmOGUxNzRmM2I4NTEyMzBhOGZhMWQw****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2022-09-28T09:04:39.000Z</LastModified>
+    <ETag>"1D66AB946CCD6C2E4D7FD65D8D80****"</ETag>
+    <Type>Normal</Type>
+    <Size>4046</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2FCHANGELOG.md</Key>
+    <VersionId>CAEQFBiBgIDy.86GohgiIGE0NTU2ZTFlZWQ4ZTQwZmZiMjc4ZmJhZmQ2YzZj****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2022-11-04T08:00:06.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2FCHANGELOG.md</Key>
+    <VersionId>CAEQEhiBgID3y66NnBgiIDk2YmIwYmMxZWYzOTQ4Y2JhZjViMzMzZjg5ZjFm****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2022-09-28T09:04:39.000Z</LastModified>
+    <ETag>"1CB587ACD1BB5A0442CAD8A972E0****"</ETag>
+    <Type>Normal</Type>
+    <Size>6745</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2FLICENSE</Key>
+    <VersionId>CAEQFBiBgMD0.86GohgiIGZmMmFlM2UwNjdlMzRiMGFhYjk4MjM1ZGUyZDY0****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2022-11-04T08:00:06.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2FLICENSE</Key>
+    <VersionId>CAEQEhiBgICIzK6NnBgiIDMxYjM3OTdmN2E0ODRjZjhhOWVhYTE5MTg3NmQw****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2022-09-28T09:04:39.000Z</LastModified>
+    <ETag>"877D6894CBE5711A315681C24ED0****"</ETag>
+    <Type>Normal</Type>
+    <Size>1094</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <DeleteMarker>
+    <Key>demo%2FREADME-CN.md</Key>
+    <VersionId>CAEQFBiCgID3.86GohgiIDc4ZTE0NTNhZTc5MDQxYzBhYTU5MjY1ZDFjNGJm****</VersionId>
+    <IsLatest>true</IsLatest>
+    <LastModified>2022-11-04T08:00:06.000Z</LastModified>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </DeleteMarker>
+  <Version>
+    <Key>demo%2FREADME-CN.md</Key>
+    <VersionId>CAEQEhiBgICDzK6NnBgiIGRlZWJhYmNlMGUxZDQ4YTZhNTU2MzM4Mzk5NDBl****</VersionId>
+    <IsLatest>false</IsLatest>
+    <LastModified>2022-09-28T09:04:39.000Z</LastModified>
+    <ETag>"E317049B40462DE37C422CE4FC1B****"</ETag>
+    <Type>Normal</Type>
+    <Size>2943</Size>
+    <StorageClass>Standard</StorageClass>
+    <Owner>
+      <ID>150692521021****</ID>
+      <DisplayName>150692521021****</DisplayName>
+    </Owner>
+  </Version>
+  <CommonPrefixes>
+    <Prefix>demo%2F.git%2F</Prefix>
+  </CommonPrefixes>
+  <CommonPrefixes>
+    <Prefix>demo%2F.idea%2F</Prefix>
+  </CommonPrefixes>
+</ListVersionsResult>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &ListObjectVersionsResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.Name, "demo-bucket")
+	prefix, _ = url.QueryUnescape(*result.Prefix)
+	assert.Equal(t, *result.Prefix, prefix)
+	assert.Equal(t, *result.KeyMarker, "")
+	assert.Equal(t, *result.VersionIdMarker, "")
+	assert.Equal(t, result.MaxKeys, int32(20))
+	assert.True(t, result.IsTruncated)
+	assert.Len(t, result.ObjectVersions, 9)
+	assert.Len(t, result.ObjectDeleteMarkers, 9)
+	key, _ = url.QueryUnescape(*result.ObjectVersions[0].Key)
+	assert.Equal(t, *result.ObjectVersions[0].Key, key)
+	assert.False(t, result.ObjectVersions[2].IsLatest)
+	assert.NotEmpty(t, *result.ObjectVersions[0].LastModified)
+	assert.Equal(t, *result.ObjectVersions[1].ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+	assert.Equal(t, result.ObjectVersions[2].Size, int64(0))
+	assert.Equal(t, *result.ObjectVersions[2].Owner.ID, "150692521021****")
+	assert.Equal(t, *result.ObjectVersions[2].Owner.DisplayName, "150692521021****")
+	assert.Len(t, result.CommonPrefixes, 2)
+	compPrefix1, _ := url.QueryUnescape(*result.CommonPrefixes[0].Prefix)
+	compPrefix2, _ := url.QueryUnescape(*result.CommonPrefixes[1].Prefix)
+	assert.Equal(t, *result.CommonPrefixes[0].Prefix, compPrefix1)
+	assert.Equal(t, *result.CommonPrefixes[1].Prefix, compPrefix2)
+	key, _ = url.QueryUnescape(*result.ObjectDeleteMarkers[0].Key)
+	assert.Equal(t, *result.ObjectDeleteMarkers[0].Key, key)
+	assert.Equal(t, *result.ObjectDeleteMarkers[0].VersionId, "CAEQFxiBgIDh3b_tuRgiIGRjMjExMjVmMzcwMTQ2Njc4NjhhNTA0MzEzMDkx****")
+	assert.True(t, result.ObjectDeleteMarkers[0].IsLatest)
+	assert.NotEmpty(t, result.ObjectDeleteMarkers[0].LastModified)
+	assert.Equal(t, *result.ObjectDeleteMarkers[0].Owner.ID, "150692521021****")
+	assert.Equal(t, *result.ObjectDeleteMarkers[0].Owner.DisplayName, "150692521021****")
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 400,
+		Status:     "InvalidArgument",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "InvalidArgument")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	resultErr := &ListObjectVersionsResult{}
+	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalEncodeType)
+	assert.Nil(t, err)
+	assert.Equal(t, resultErr.StatusCode, 403)
+	assert.Equal(t, resultErr.Status, "AccessDenied")
+	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
 }
