@@ -142,7 +142,7 @@ const (
 	HTTPHeaderContentType               = "Content-Type"
 	HTTPHeaderContentLanguage           = "Content-Language"
 	HTTPHeaderDate                      = "Date"
-	HTTPHeaderEtag                      = "ETag"
+	HTTPHeaderETag                      = "ETag"
 	HTTPHeaderExpires                   = "Expires"
 	HTTPHeaderHost                      = "Host"
 	HTTPHeaderLastModified              = "Last-Modified"
