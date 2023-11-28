@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"time"
@@ -73,6 +72,9 @@ type PutObjectRequest struct {
 	// Configure custom parameters by using the callback-var parameter.
 	CallbackVar *string `input:"header,x-oss-callback-var"`
 
+	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
+
 	RequestCommon
 }
 
@@ -90,7 +92,7 @@ type PutObjectResult struct {
 	// Version of the object.
 	VersionId *string `output:"header,x-oss-version-id"`
 
-	Body io.ReadCloser
+	CallbackResult map[string]any
 
 	ResultCommon
 }
@@ -111,20 +113,21 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 		return nil, err
 	}
 	if request.Callback != nil {
-		callbackFn := func(opts *Options) {
-			opts.ResponseHandlers = []func(*http.Response) error{
-				callbackErrorResponseHandler,
-			}
-		}
-		optFns = append(optFns, callbackFn)
+		optFns = append(optFns, callbackResponseHandler)
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
 	}
-
 	result := &PutObjectResult{}
-	if err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader); err != nil {
+	var unmarshalFns []func(result any, output *OperationOutput) error
+	unmarshalFns = append(unmarshalFns, unmarshalHeader)
+	if request.Callback != nil {
+		unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
+	} else {
+		unmarshalFns = append(unmarshalFns, discardBody)
+	}
+	if err = c.unmarshalOutput(result, output, unmarshalFns...); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 
@@ -210,6 +213,9 @@ type GetObjectRequest struct {
 
 	// VersionId used to reference a specific version of the object.
 	VersionId *string `input:"query,versionId"`
+
+	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
 	RequestCommon
 }
@@ -392,7 +398,10 @@ type CopyObjectRequest struct {
 	TaggingDirective *string `input:"header,x-oss-tagging-directive"`
 
 	// The version ID of the source object.
-	VersionId *string `input:"query,x-oss-copy-source-version-id"`
+	VersionId *string `input:"header,x-oss-copy-source-version-id"`
+
+	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
 	RequestCommon
 }
@@ -515,6 +524,9 @@ type AppendObjectRequest struct {
 	// The tags that are specified for the object by using a key-value pair.
 	// You can specify multiple tags for an object. Example: TagA=A&TagB=B.
 	Tagging *string `input:"header,x-oss-tagging"`
+
+	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
 	RequestCommon
 }
@@ -1236,6 +1248,9 @@ type UploadPartRequest struct {
 	// The MD5 hash of the object that you want to upload.
 	ContentMD5 *string `input:"header,Content-MD5"`
 
+	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
+
 	RequestCommon
 }
 
@@ -1321,8 +1336,11 @@ type UploadPartCopyRequest struct {
 	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
 	IfUnmodifiedSince *string `input:"header,x-oss-copy-source-if-unmodified-since"`
 
-	// Version of the source object.
-	VersionId *string `input:"query,versionId"`
+	// The version ID of the source object.
+	VersionId *string `input:"header,x-oss-copy-source-version-id"`
+
+	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
+	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
 	RequestCommon
 }
@@ -1449,7 +1467,7 @@ type CompleteMultipartUploadResult struct {
 	// ETags are used to identify the content of objects.
 	ETag *string `xml:"ETag"`
 
-	Body io.ReadCloser
+	CallbackResult map[string]any
 
 	ResultCommon
 }
@@ -1476,26 +1494,22 @@ func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteM
 		return nil, err
 	}
 	if request.Callback != nil {
-		callbackFn := func(opts *Options) {
-			opts.ResponseHandlers = []func(*http.Response) error{
-				callbackErrorResponseHandler,
-			}
-		}
-		optFns = append(optFns, callbackFn)
+		optFns = append(optFns, callbackResponseHandler)
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
 	}
 	result := &CompleteMultipartUploadResult{}
+	var unmarshalFns []func(result any, output *OperationOutput) error
+	unmarshalFns = append(unmarshalFns, unmarshalHeader)
 	if request.Callback != nil {
-		if err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader); err != nil {
-			return nil, c.toClientError(err, "UnmarshalOutputFail", output)
-		}
+		unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
 	} else {
-		if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType); err != nil {
-			return nil, c.toClientError(err, "UnmarshalOutputFail", output)
-		}
+		unmarshalFns = append(unmarshalFns, unmarshalBodyXml, unmarshalEncodeType)
+	}
+	if err = c.unmarshalOutput(result, output, unmarshalFns...); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 	return result, err
 }
@@ -1764,6 +1778,301 @@ func (c *Client) ListParts(ctx context.Context, request *ListPartsRequest, optFn
 
 	result := &ListPartsResult{}
 	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type PutSymlinkRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// The destination object to which the symbolic link points.
+	Target *string `input:"header,x-oss-symlink-target,required"`
+
+	// Specifies whether the object that is uploaded by calling the PutObject operation
+	// overwrites an existing object that has the same name. Valid values: true and false
+	ForbidOverwrite *string `input:"header,x-oss-forbid-overwrite"`
+
+	// The ACL of the object. Default value: default.
+	Acl ObjectACLType `input:"header,x-oss-object-acl"`
+
+	// The storage class of the object.
+	StorageClass StorageClassType `input:"header,x-oss-storage-class"`
+
+	// The metadata of the object that you want to symlink.
+	Metadata map[string]string `input:"header,x-oss-meta-,usermeta"`
+
+	RequestCommon
+}
+
+type PutSymlinkResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	ResultCommon
+}
+
+// PutSymlink Creates a symbolic link that points to a destination object. You can use the symbolic link to access the destination object.
+func (c *Client) PutSymlink(ctx context.Context, request *PutSymlinkRequest, optFns ...func(*Options)) (*PutSymlinkResult, error) {
+	var err error
+	if request == nil {
+		request = &PutSymlinkRequest{}
+	}
+	input := &OperationInput{
+		OpName: "PutSymlink",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"symlink": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &PutSymlinkResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetSymlinkRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Version of the object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type GetSymlinkResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// Indicates the target object that the symbol link directs to.
+	Target *string `output:"header,x-oss-symlink-target"`
+
+	// Entity tag for the uploaded object.
+	ETag *string `output:"header,ETag"`
+
+	// The metadata of the object that you want to symlink.
+	Metadata map[string]string `output:"header,x-oss-meta-,usermeta"`
+
+	ResultCommon
+}
+
+// GetSymlink Obtains a symbol link. To perform GetSymlink operations, you must have the read permission on the symbol link.
+func (c *Client) GetSymlink(ctx context.Context, request *GetSymlinkRequest, optFns ...func(*Options)) (*GetSymlinkResult, error) {
+	var err error
+	if request == nil {
+		request = &GetSymlinkRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetSymlink",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"symlink": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &GetSymlinkResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type PutObjectTaggingRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Version of the object.
+	VersionId *string `input:"query,versionId"`
+
+	Tagging *Tagging `input:"body,Tagging,xml,required"`
+
+	RequestCommon
+}
+
+type Tagging struct {
+	TagSet TagSet `xml:"TagSet"`
+}
+
+type TagSet struct {
+	Tags []Tag `xml:"Tag"`
+}
+
+type Tag struct {
+	Key   *string `xml:"Key"`
+	Value *string `xml:"Value"`
+}
+
+type PutObjectTaggingResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	ResultCommon
+}
+
+// PutObjectTagging Adds tags to an object or updates the tags added to the object. Each tag added to an object is a key-value pair.
+func (c *Client) PutObjectTagging(ctx context.Context, request *PutObjectTaggingRequest, optFns ...func(*Options)) (*PutObjectTaggingResult, error) {
+	var err error
+	if request == nil {
+		request = &PutObjectTaggingRequest{}
+	}
+	input := &OperationInput{
+		OpName: "PutObjectTagging",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &PutObjectTaggingResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetObjectTaggingRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Version of the object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type GetObjectTaggingResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	// The container used to store the collection of tags.
+	Tags []Tag `xml:"TagSet>Tag"`
+
+	ResultCommon
+}
+
+// GetObjectTagging You can call this operation to query the tags of an object.
+func (c *Client) GetObjectTagging(ctx context.Context, request *GetObjectTaggingRequest, optFns ...func(*Options)) (*GetObjectTaggingResult, error) {
+	var err error
+	if request == nil {
+		request = &GetObjectTaggingRequest{}
+	}
+	input := &OperationInput{
+		OpName: "GetObjectTagging",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &GetObjectTaggingResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type DeleteObjectTaggingRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	// Version of the object.
+	VersionId *string `input:"query,versionId"`
+
+	RequestCommon
+}
+
+type DeleteObjectTaggingResult struct {
+	// Version of the object.
+	VersionId *string `output:"header,x-oss-version-id"`
+
+	ResultCommon
+}
+
+// DeleteObjectTagging You can call this operation to delete the tags of a specified object.
+func (c *Client) DeleteObjectTagging(ctx context.Context, request *DeleteObjectTaggingRequest, optFns ...func(*Options)) (*DeleteObjectTaggingResult, error) {
+	var err error
+	if request == nil {
+		request = &DeleteObjectTaggingRequest{}
+	}
+	input := &OperationInput{
+		OpName: "DeleteObjectTagging",
+		Method: "DELETE",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DeleteObjectTaggingResult{}
+	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 

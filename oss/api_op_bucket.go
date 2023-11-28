@@ -1072,7 +1072,7 @@ type ObjectVersionProperties struct {
 	StorageClass *string `xml:"StorageClass"`
 
 	// The container that stores information about the bucket owner.
-	Owner Owner `xml:"Owner"`
+	Owner *Owner `xml:"Owner"`
 
 	// The restoration status of the object.
 	RestoreInfo *string `xml:"RestoreInfo"`

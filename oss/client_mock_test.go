@@ -3,13 +3,14 @@ package oss
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -2745,9 +2746,44 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
 			assert.Equal(t, *o.HashCRC64, "870718044876840****")
 			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
-			resultBody, err := ioutil.ReadAll(o.Body)
+			jsonData, err := json.Marshal(o.CallbackResult)
 			assert.Nil(t, err)
-			assert.Equal(t, string(resultBody), `{"filename":"object","size":"6","mimeType":""}`)
+			assert.NotEmpty(t, string(jsonData))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "6551DBCF4311A7303980****",
+			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "870718044876840****",
+			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := ioutil.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&PutObjectRequest{
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			TrafficLimit: int64(100 * 1024 * 8),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss"),
+			},
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
+			assert.Equal(t, *o.HashCRC64, "870718044876840****")
 		},
 	},
 }
@@ -3058,6 +3094,64 @@ var testMockGetObjectSuccessCases = []struct {
 			assert.Equal(t, *o.HashCRC64, "870718044876840****")
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":                    "6551DBCF4311A7303980****",
+			"Date":                                "Mon, 13 Nov 2023 08:18:23 GMT",
+			"Content-Type":                        "text",
+			"x-oss-version-id":                    "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
+			"ETag":                                "\"5B3C1A2E05E1B002CC607C****\"",
+			"Content-Length":                      "344606",
+			"Last-Modified":                       "Fri, 24 Feb 2012 06:07:48 GMT",
+			"x-oss-object-type":                   "Normal",
+			"Accept-Ranges":                       "bytes",
+			"Content-disposition":                 "attachment; filename=testing.txt",
+			"Cache-control":                       "no-cache",
+			"X-Oss-Storage-Class":                 "Standard",
+			"x-oss-server-side-encryption":        "KMS",
+			"x-oss-server-side-data-encryption":   "SM4",
+			"x-oss-server-side-encryption-key-id": "12f8711f-90df-4e0d-903d-ab972b0f****",
+			"x-oss-tagging-count":                 "2",
+			"Content-MD5":                         "si4Nw3Cn9wZ/rPX3XX+j****",
+			"x-oss-hash-crc64ecma":                "870718044876840****",
+			"x-oss-meta-name":                     "demo",
+			"x-oss-meta-email":                    "demo@aliyun.com",
+		},
+		[]byte(`hi oss`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&GetObjectRequest{
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			TrafficLimit: int64(100 * 1024 * 8),
+		},
+		func(t *testing.T, o *GetObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"5B3C1A2E05E1B002CC607C****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2012, time.February, 24, 6, 7, 48, 0, time.UTC))
+			assert.Equal(t, *o.ContentType, "text")
+			assert.Equal(t, o.ContentLength, int64(344606))
+			assert.Equal(t, *o.ObjectType, "Normal")
+			assert.Equal(t, *o.StorageClass, "Standard")
+			content, err := ioutil.ReadAll(o.Body)
+			assert.Equal(t, string(content), "hi oss")
+			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
+			assert.Equal(t, *o.ServerSideEncryption, "KMS")
+			assert.Equal(t, *o.SSEKMSKeyId, "12f8711f-90df-4e0d-903d-ab972b0f****")
+			assert.Equal(t, o.TaggingCount, int32(2))
+			assert.Equal(t, o.Metadata["name"], "demo")
+			assert.Equal(t, o.Metadata["email"], "demo@aliyun.com")
+			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
+			assert.Equal(t, *o.HashCRC64, "870718044876840****")
+		},
+	},
 }
 
 func TestMockGetObject_Success(t *testing.T) {
@@ -3253,12 +3347,13 @@ var testMockCopyObjectSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket/object", r.URL.String())
-			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
+			assert.Equal(t, "/bucket/copy-object?versionId=CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk3****", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			Source: Ptr("/bucket/copy-object"),
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			Source:    Ptr("/bucket/copy-object"),
+			VersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk3****"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3330,12 +3425,60 @@ var testMockCopyObjectSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket/object", r.URL.String())
-			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
+			assert.Equal(t, "/bucket/copy-object?versionId=CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			Source: Ptr("/bucket/copy-object"),
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			Source:    Ptr("/bucket/copy-object"),
+			VersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
+		},
+		func(t *testing.T, o *CopyObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"F2064A169EE92E9775EE5324D0B1****\"")
+			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
+			assert.Equal(t, *o.ServerSideEncryption, "KMS")
+			assert.Equal(t, *o.SSEKMSKeyId, "12f8711f-90df-4e0d-903d-ab972b0f****")
+			assert.Equal(t, *o.HashCRC64, "870718044876841****")
+			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
+			assert.Equal(t, *o.SourceVersionId, "CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****")
+			assert.Equal(t, *o.LastModified, time.Date(2023, time.February, 24, 9, 41, 56, 0, time.UTC))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":                    "6551DBCF4311A7303980****",
+			"Date":                                "Mon, 13 Nov 2023 08:18:23 GMT",
+			"Content-Type":                        "text",
+			"x-oss-version-id":                    "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
+			"ETag":                                "\"F2064A169EE92E9775EE5324D0B1****\"",
+			"x-oss-server-side-encryption":        "KMS",
+			"x-oss-server-side-data-encryption":   "SM4",
+			"x-oss-server-side-encryption-key-id": "12f8711f-90df-4e0d-903d-ab972b0f****",
+			"x-oss-hash-crc64ecma":                "870718044876841****",
+			"x-oss-copy-source-version-id":        "CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+	<CopyObjectResult>
+	 <ETag>"F2064A169EE92E9775EE5324D0B1****"</ETag>
+	 <LastModified>2023-02-24T09:41:56.000Z</LastModified>
+	</CopyObjectResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "/bucket/copy-object?versionId=CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****", r.Header.Get("x-oss-copy-source"))
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&CopyObjectRequest{
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			Source:       Ptr("/bucket/copy-object"),
+			TrafficLimit: int64(100 * 1024 * 8),
+			VersionId:    Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3593,6 +3736,56 @@ var testMockAppendObjectSuccessCases = []struct {
 			ServerSideEncryption:     Ptr("KMS"),
 			ServerSideDataEncryption: Ptr("SM4"),
 			SSEKMSKeyId:              Ptr("12f8711f-90df-4e0d-903d-ab972b0f****"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD4qOWz3hgiIDUyMWIzNTBjMWM4NjQ5MDJiNTM4YzEwZGQxM2Rk****")
+			assert.Equal(t, *o.HashCRC64, "1474161709526656****")
+			assert.Equal(t, o.NextPosition, int64(1717))
+			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
+			assert.Equal(t, *o.ServerSideEncryption, "KMS")
+			assert.Equal(t, *o.SSEKMSKeyId, "12f8711f-90df-4e0d-903d-ab972b0f****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":                    "6551DBCF4311A7303980****",
+			"Date":                                "Mon, 13 Nov 2023 08:18:23 GMT",
+			"x-oss-version-id":                    "CAEQHxiBgMD4qOWz3hgiIDUyMWIzNTBjMWM4NjQ5MDJiNTM4YzEwZGQxM2Rk****",
+			"x-oss-next-append-position":          "1717",
+			"x-oss-hash-crc64ecma":                "1474161709526656****",
+			"x-oss-server-side-encryption":        "KMS",
+			"x-oss-server-side-data-encryption":   "SM4",
+			"x-oss-server-side-encryption-key-id": "12f8711f-90df-4e0d-903d-ab972b0f****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := ioutil.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss,append object,this is a demo"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption"), "KMS")
+			assert.Equal(t, r.Header.Get("x-oss-server-side-data-encryption"), "SM4")
+			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption-key-id"), "12f8711f-90df-4e0d-903d-ab972b0f****")
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=100", strUrl)
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&AppendObjectRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Position: Ptr(int64(100)),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("hi oss,append object,this is a demo"),
+			},
+			ServerSideEncryption:     Ptr("KMS"),
+			ServerSideDataEncryption: Ptr("SM4"),
+			SSEKMSKeyId:              Ptr("12f8711f-90df-4e0d-903d-ab972b0f****"),
+			TrafficLimit:             int64(100 * 1024 * 8),
 		},
 		func(t *testing.T, o *AppendObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -5841,6 +6034,46 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, *o.HashCRC64, "316181249502704*****")
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "6551DBCF4311A7303980****",
+			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
+			"ETag":                 "\"7265F4D211B56873A381D321F587****\"",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Pp****",
+			"x-oss-hash-crc64ecma": "316181249502704*****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 2")
+			assert.Equal(t, "f811b746eb3e256f97cb3a190d528353", r.Header.Get("Content-MD5"))
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(2),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader("upload part 2"),
+			},
+			ContentMD5:   Ptr("f811b746eb3e256f97cb3a190d528353"),
+			TrafficLimit: int64(100 * 1024 * 8),
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F587****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Pp****")
+			assert.Equal(t, *o.HashCRC64, "316181249502704*****")
+		},
+	},
 }
 
 func TestMockUploadPart_Success(t *testing.T) {
@@ -6081,8 +6314,8 @@ var testMockUploadPartCopySuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
-			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9&versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY", strUrl)
-			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object"))
+			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
+			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object")+"?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY")
 
 			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfMatch), "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, r.Header.Get(HeaderOssCopySourceIfNoneMatch), "\"D41D8CD98F00B204E9800998ECF9****\"")
@@ -6100,6 +6333,43 @@ var testMockUploadPartCopySuccessCases = []struct {
 			IfModifiedSince:   Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
 			IfUnmodifiedSince: Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
 			VersionId:         Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY"),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"5B3C1A2E053D763E1B002CC607C5****\"")
+			assert.Equal(t, *o.LastModified, time.Date(2014, time.July, 17, 6, 27, 54, 0, time.UTC))
+			assert.Equal(t, *o.VersionId, "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":             "6551DBCF4311A7303980****",
+			"Date":                         "Mon, 13 Nov 2023 08:18:23 GMT",
+			"x-oss-copy-source-version-id": "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CopyPartResult>
+    <LastModified>2014-07-17T06:27:54.000Z</LastModified>
+    <ETag>"5B3C1A2E053D763E1B002CC607C5****"</ETag>
+</CopyPartResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
+			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object"))
+			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
+		},
+		&UploadPartCopyRequest{
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			Source:       Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			PartNumber:   int32(2),
+			TrafficLimit: int64(100 * 1024 * 8),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -6370,7 +6640,9 @@ var testMockCompleteMultipartUploadSuccessCases = []struct {
 			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, o.Headers.Get(HTTPHeaderContentType), "application/json")
-			assert.Equal(t, o.Body, io.NopCloser(strings.NewReader(`{"filename":"oss-obj.txt","size":"100","mimeType":"","x":"a","b":"b"}`)))
+			jsonData, _ := json.Marshal(o.CallbackResult)
+			assert.Nil(t, err)
+			assert.NotEmpty(t, string(jsonData))
 			assert.Equal(t, *o.VersionId, "CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
 		},
 	},
@@ -8056,6 +8328,1066 @@ func TestMockListObjectVersions_Error(t *testing.T) {
 		assert.NotNil(t, c)
 
 		output, err := client.ListObjectVersions(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutSymlinkSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutSymlinkRequest
+	CheckOutputFn  func(t *testing.T, o *PutSymlinkResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&PutSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Target: Ptr("src-object"),
+		},
+		func(t *testing.T, o *PutSymlinkResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"Content-Type":     "application/xml",
+			"x-oss-version-id": "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+
+		},
+		&PutSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Target: Ptr("src-object"),
+		},
+		func(t *testing.T, o *PutSymlinkResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"Content-Type":     "application/xml",
+			"x-oss-version-id": "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+			assert.Equal(t, r.Header.Get("x-oss-symlink-target"), "target-object")
+			assert.Equal(t, r.Header.Get("x-oss-forbid-overwrite"), "true")
+			assert.Equal(t, r.Header.Get("x-oss-object-acl"), string(ObjectACLPrivate))
+			assert.Equal(t, r.Header.Get("x-oss-storage-class"), string(StorageClassStandard))
+			assert.Equal(t, r.Header.Get("x-oss-meta-name"), "demo")
+			assert.Equal(t, r.Header.Get("x-oss-meta-email"), "demo@aliyun.com")
+		},
+		&PutSymlinkRequest{
+			Bucket:          Ptr("bucket"),
+			Key:             Ptr("object"),
+			Target:          Ptr("target-object"),
+			ForbidOverwrite: Ptr("true"),
+			Acl:             ObjectACLPrivate,
+			StorageClass:    StorageClassStandard,
+			Metadata: map[string]string{
+				"name":  "demo",
+				"email": "demo@aliyun.com",
+			},
+		},
+		func(t *testing.T, o *PutSymlinkResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+		},
+	},
+}
+
+func TestMockPutSymlink_Success(t *testing.T) {
+	for _, c := range testMockPutSymlinkSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutSymlink(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutSymlinkErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutSymlinkRequest
+	CheckOutputFn  func(t *testing.T, o *PutSymlinkResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&PutSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Target: Ptr("target-object"),
+		},
+		func(t *testing.T, o *PutSymlinkResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&PutSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Target: Ptr("target-object"),
+		},
+		func(t *testing.T, o *PutSymlinkResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockPutSymlink_Error(t *testing.T) {
+	for _, c := range testMockPutSymlinkErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutSymlink(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetSymlinkSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetSymlinkRequest
+	CheckOutputFn  func(t *testing.T, o *GetSymlinkResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-symlink-target": "example.jpg",
+			"ETag":                 "A797938C31D59EDD08D86188F6D5****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&GetSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetSymlinkResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.Target, "example.jpg")
+			assert.Equal(t, *o.ETag, "A797938C31D59EDD08D86188F6D5****")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"Content-Type":         "application/xml",
+			"x-oss-version-id":     "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+			"x-oss-symlink-target": "example.jpg",
+			"ETag":                 "A797938C31D59EDD08D86188F6D5****",
+			"x-oss-meta-name":      "demo",
+			"x-oss-meta-email":     "demo@aliyun.com",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink&versionId=CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh%2A%2A%2A%2A", strUrl)
+		},
+		&GetSymlinkRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+		},
+		func(t *testing.T, o *GetSymlinkResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+			assert.Equal(t, *o.Target, "example.jpg")
+			assert.Equal(t, *o.ETag, "A797938C31D59EDD08D86188F6D5****")
+			assert.Equal(t, o.Metadata["name"], "demo")
+			assert.Equal(t, o.Metadata["email"], "demo@aliyun.com")
+		},
+	},
+}
+
+func TestMockGetSymlink_Success(t *testing.T) {
+	for _, c := range testMockGetSymlinkSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetSymlink(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetSymlinkErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetSymlinkRequest
+	CheckOutputFn  func(t *testing.T, o *GetSymlinkResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&GetSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetSymlinkResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?symlink", strUrl)
+		},
+		&GetSymlinkRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetSymlinkResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockGetSymlink_Error(t *testing.T) {
+	for _, c := range testMockGetSymlinkErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetSymlink(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutObjectTaggingSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectTaggingResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag></TagSet></Tagging>`)
+		},
+		&PutObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Tagging: &Tagging{
+				TagSet{
+					Tags: []Tag{
+						{
+							Key:   Ptr("k1"),
+							Value: Ptr("v1"),
+						},
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutObjectTaggingResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-version-id": "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging&versionId=CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh%2A%2A%2A%2A", strUrl)
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
+		},
+		&PutObjectTaggingRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+			Tagging: &Tagging{
+				TagSet{
+					Tags: []Tag{
+						{
+							Key:   Ptr("k1"),
+							Value: Ptr("v1"),
+						},
+						{
+							Key:   Ptr("k2"),
+							Value: Ptr("v2"),
+						},
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutObjectTaggingResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+		},
+	},
+}
+
+func TestMockPutObjectTagging_Success(t *testing.T) {
+	for _, c := range testMockPutObjectTaggingSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutObjectTagging(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutObjectTaggingErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectTaggingResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
+		},
+		&PutObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Tagging: &Tagging{
+				TagSet{
+					Tags: []Tag{
+						{
+							Key:   Ptr("k1"),
+							Value: Ptr("v1"),
+						},
+						{
+							Key:   Ptr("k2"),
+							Value: Ptr("v2"),
+						},
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+			data, _ := ioutil.ReadAll(r.Body)
+			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
+		},
+		&PutObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Tagging: &Tagging{
+				TagSet{
+					Tags: []Tag{
+						{
+							Key:   Ptr("k1"),
+							Value: Ptr("v1"),
+						},
+						{
+							Key:   Ptr("k2"),
+							Value: Ptr("v2"),
+						},
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockPutObjectTagging_Error(t *testing.T) {
+	for _, c := range testMockPutObjectTaggingErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutObjectTagging(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectTaggingSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectTaggingResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"Content-Type":     "application/xml",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Tagging>
+  <TagSet>
+    <Tag>
+      <Key>age</Key>
+      <Value>18</Value>
+    </Tag>
+  </TagSet>
+</Tagging>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&GetObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectTaggingResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.Headers.Get("Content-Type"), "application/xml")
+			assert.Len(t, o.Tags, 1)
+			assert.Equal(t, *o.Tags[0].Key, "age")
+			assert.Equal(t, *o.Tags[0].Value, "18")
+
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-version-id": "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Tagging>
+  <TagSet>
+    <Tag>
+      <Key>a</Key>
+      <Value>1</Value>
+    </Tag>
+    <Tag>
+      <Key>b</Key>
+      <Value>2</Value>
+    </Tag>
+  </TagSet>
+</Tagging>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging&versionId=CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh%2A%2A%2A%2A", strUrl)
+		},
+		&GetObjectTaggingRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+		},
+		func(t *testing.T, o *GetObjectTaggingResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+			assert.Len(t, o.Tags, 2)
+			assert.Equal(t, *o.Tags[0].Key, "a")
+			assert.Equal(t, *o.Tags[0].Value, "1")
+			assert.Equal(t, *o.Tags[1].Key, "b")
+			assert.Equal(t, *o.Tags[1].Value, "2")
+		},
+	},
+}
+
+func TestMockGetObjectTagging_Success(t *testing.T) {
+	for _, c := range testMockGetObjectTaggingSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectTagging(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockGetObjectTaggingErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *GetObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *GetObjectTaggingResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&GetObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&GetObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *GetObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockGetObjectTagging_Error(t *testing.T) {
+	for _, c := range testMockGetObjectTaggingErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.GetObjectTagging(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockDeleteObjectTaggingSuccessCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *DeleteObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *DeleteObjectTaggingResult, err error)
+}{
+	{
+		204,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&DeleteObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *DeleteObjectTaggingResult, err error) {
+			assert.Equal(t, 204, o.StatusCode)
+			assert.Equal(t, "204 No Content", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+		},
+	},
+	{
+		204,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-version-id": "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging&versionId=CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh%2A%2A%2A%2A", strUrl)
+		},
+		&DeleteObjectTaggingRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+		},
+		func(t *testing.T, o *DeleteObjectTaggingResult, err error) {
+			assert.Equal(t, 204, o.StatusCode)
+			assert.Equal(t, "204 No Content", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+		},
+	},
+}
+
+func TestMockDeleteObjectTagging_Success(t *testing.T) {
+	for _, c := range testMockDeleteObjectTaggingSuccessCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.DeleteObjectTagging(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockDeleteObjectTaggingErrorCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *DeleteObjectTaggingRequest
+	CheckOutputFn  func(t *testing.T, o *DeleteObjectTaggingResult, err error)
+}{
+	{
+		404,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D9175B6FC201293AD****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>NoSuchBucket</Code>
+  <Message>The specified bucket does not exist.</Message>
+  <RequestId>5C3D9175B6FC201293AD****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0015-00000101</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&DeleteObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *DeleteObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(404), serr.StatusCode)
+			assert.Equal(t, "NoSuchBucket", serr.Code)
+			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		403,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>UserDisable</Code>
+  <Message>UserDisable</Message>
+  <RequestId>5C3D8D2A0ACA54D87B43****</RequestId>
+  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
+  <BucketName>test</BucketName>
+  <EC>0003-00000801</EC>
+</Error>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "DELETE", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?tagging", strUrl)
+		},
+		&DeleteObjectTaggingRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *DeleteObjectTaggingResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			var serr *ServiceError
+			errors.As(err, &serr)
+			assert.NotNil(t, serr)
+			assert.Equal(t, int(403), serr.StatusCode)
+			assert.Equal(t, "UserDisable", serr.Code)
+			assert.Equal(t, "UserDisable", serr.Message)
+			assert.Equal(t, "0003-00000801", serr.EC)
+			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+}
+
+func TestMockDeleteObjectTagging_Error(t *testing.T) {
+	for _, c := range testMockDeleteObjectTaggingErrorCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.DeleteObjectTagging(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
 	}
 }

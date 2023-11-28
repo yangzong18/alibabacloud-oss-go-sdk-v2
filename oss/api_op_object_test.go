@@ -204,6 +204,25 @@ func TestMarshalInput_PutObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-callback-var"], callbackVar)
 	assert.Nil(t, input.Parameters)
 	assert.Nil(t, input.OpMetadata.values)
+
+	request = &PutObjectRequest{
+		Bucket: Ptr("oss-bucket"),
+		Key:    Ptr("oss-key"),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(body),
+		},
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+
+	assert.Equal(t, *input.Bucket, "oss-bucket")
+	assert.Equal(t, *input.Key, "oss-key")
+	assert.Equal(t, input.Body, strings.NewReader(body))
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
+	assert.Nil(t, input.Parameters)
+	assert.Nil(t, input.OpMetadata.values)
 }
 
 func TestUnmarshalOutput_PutObject(t *testing.T) {
@@ -223,7 +242,10 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 		},
 	}
 	result := &PutObjectResult{}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	var unmarshalFns []func(result any, output *OperationOutput) error
+	unmarshalFns = append(unmarshalFns, unmarshalHeader)
+	unmarshalFns = append(unmarshalFns, discardBody)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
@@ -248,7 +270,7 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 		},
 	}
 	result = &PutObjectResult{}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
@@ -274,7 +296,10 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 		Body: io.NopCloser(strings.NewReader(`{"filename":"object.txt","size":"100","mimeType":""}`)),
 	}
 	result = &PutObjectResult{}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	unmarshalFns = []func(result any, output *OperationOutput) error{}
+	unmarshalFns = append(unmarshalFns, unmarshalHeader)
+	unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
@@ -285,8 +310,9 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 	assert.Equal(t, *result.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
 	assert.Equal(t, *result.HashCRC64, "316181249502703****")
 	assert.Equal(t, *result.VersionId, "CAEQNhiBgMDJgZCA0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY0****")
-	bodyBytes, _ := ioutil.ReadAll(result.Body)
-	assert.Equal(t, string(bodyBytes), `{"filename":"object.txt","size":"100","mimeType":""}`)
+	jsonData, err := json.Marshal(result.CallbackResult)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, string(jsonData))
 
 	output = &OperationOutput{
 		StatusCode: 404,
@@ -296,7 +322,7 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
@@ -311,7 +337,7 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
@@ -326,7 +352,7 @@ func TestUnmarshalOutput_PutObject(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalCallbackBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalFns...)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 203)
 	assert.Equal(t, result.Status, "Non-Authoritative Information")
@@ -380,6 +406,17 @@ func TestMarshalInput_GetObject(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-key")
+
+	request = &GetObjectRequest{
+		Bucket:       Ptr("oss-bucket"),
+		Key:          Ptr("oss-key"),
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "oss-bucket")
+	assert.Equal(t, *input.Key, "oss-key")
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
 
 	request = &GetObjectRequest{
 		Bucket:                     Ptr("oss-bucket"),
@@ -673,6 +710,19 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key")
 
 	request = &CopyObjectRequest{
+		Bucket:       Ptr("oss-bucket"),
+		Key:          Ptr("oss-copy-key"),
+		Source:       Ptr("/oss-bucket/oss-key"),
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "oss-bucket")
+	assert.Equal(t, *input.Key, "oss-copy-key")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key")
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
+
+	request = &CopyObjectRequest{
 		Bucket:            Ptr("oss-bucket"),
 		Key:               Ptr("oss-copy-key"),
 		Source:            Ptr("/oss-bucket/oss-dir/oss-obj"),
@@ -696,8 +746,7 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-none-match"], "\"D41D8CD98F00B204E9800998ECF9****\"")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-modified-since"], "Fri, 13 Nov 2023 14:47:53 GMT")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-unmodified-since"], "Fri, 13 Nov 2015 14:47:53 GMT")
-	assert.Equal(t, input.Parameters["x-oss-copy-source-version-id"], "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/"+url.QueryEscape("oss-dir/oss-obj"))
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/"+url.QueryEscape("oss-dir/oss-obj")+"?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &CopyObjectRequest{
@@ -737,8 +786,7 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-none-match"], "\"D41D8CD98F00B204E9800998ECF9****\"")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-modified-since"], "Fri, 13 Nov 2023 14:47:53 GMT")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-unmodified-since"], "Fri, 13 Nov 2015 14:47:53 GMT")
-	assert.Equal(t, input.Parameters["x-oss-copy-source-version-id"], "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
 	assert.Equal(t, input.Headers["x-oss-meta-name"], "walker")
 	assert.Equal(t, input.Headers["x-oss-meta-email"], "demo@aliyun.com")
 	assert.Equal(t, input.Headers["x-oss-server-side-encryption"], "KMS")
@@ -1035,6 +1083,34 @@ func TestMarshalInput_AppendObject(t *testing.T) {
 	assert.Empty(t, input.Parameters["append"])
 	assert.Equal(t, input.Parameters["position"], strconv.FormatInt(p, 10))
 	assert.Nil(t, input.OpMetadata.values)
+
+	request = &AppendObjectRequest{
+		Bucket:   Ptr("oss-bucket"),
+		Key:      Ptr("oss-key"),
+		Position: Ptr(int64(0)),
+		RequestCommon: RequestCommon{
+			Body: strings.NewReader(body),
+		},
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+
+	input = &OperationInput{
+		OpName:     "AppendObject",
+		Method:     "POST",
+		Parameters: map[string]string{"append": ""},
+		Bucket:     request.Bucket,
+		Key:        request.Key,
+	}
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+
+	assert.Equal(t, *input.Bucket, "oss-bucket")
+	assert.Equal(t, *input.Key, "oss-key")
+	assert.Equal(t, input.Body, strings.NewReader(body))
+	assert.Empty(t, input.Parameters["append"])
+	assert.Equal(t, input.Parameters["position"], strconv.FormatInt(p, 10))
+	assert.Nil(t, input.OpMetadata.values)
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
 }
 
 func TestUnmarshalOutput_AppendObject(t *testing.T) {
@@ -2777,6 +2853,20 @@ func TestMarshalInput_UploadPart(t *testing.T) {
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
 	assert.Nil(t, input.OpMetadata.values)
+
+	request = &UploadPartRequest{
+		Bucket:       Ptr("oss-demo"),
+		Key:          Ptr("oss-object"),
+		PartNumber:   int32(1),
+		UploadId:     Ptr("0004B9895DBBB6EC9****"),
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["partNumber"], "1")
+	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
+	assert.Nil(t, input.OpMetadata.values)
 }
 
 func TestUnmarshalOutput_UploadPart(t *testing.T) {
@@ -2958,16 +3048,11 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
-		Bucket:            Ptr("oss-dest-bucket"),
-		Key:               Ptr("oss-dest-object"),
-		PartNumber:        int32(1),
-		UploadId:          Ptr("0004B9895DBBB6EC9****"),
-		Source:            Ptr(source),
-		IfMatch:           Ptr("\"D41D8CD98F00B204E9800998ECF8****\""),
-		IfNoneMatch:       Ptr("\"D41D8CD98F00B204E9800998ECF9****\""),
-		IfModifiedSince:   Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
-		IfUnmodifiedSince: Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
-		VersionId:         Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****"),
+		Bucket:     Ptr("oss-dest-bucket"),
+		Key:        Ptr("oss-dest-object"),
+		PartNumber: int32(1),
+		UploadId:   Ptr("0004B9895DBBB6EC9****"),
+		Source:     Ptr(source),
 	}
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
@@ -2980,11 +3065,37 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
 	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj"))
-	assert.Equal(t, input.Headers["x-oss-copy-source-if-match"], "\"D41D8CD98F00B204E9800998ECF8****\"")
-	assert.Equal(t, input.Headers["x-oss-copy-source-if-none-match"], "\"D41D8CD98F00B204E9800998ECF9****\"")
-	assert.Equal(t, input.Headers["x-oss-copy-source-if-modified-since"], "Fri, 13 Nov 2023 14:47:53 GMT")
-	assert.Equal(t, input.Headers["x-oss-copy-source-if-unmodified-since"], "Fri, 13 Nov 2015 14:47:53 GMT")
-	assert.Equal(t, input.Parameters["versionId"], "CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
+	assert.Nil(t, input.OpMetadata.values)
+
+	request = &UploadPartCopyRequest{
+		Bucket:     Ptr("oss-dest-bucket"),
+		Key:        Ptr("oss-dest-object"),
+		PartNumber: int32(1),
+		UploadId:   Ptr("0004B9895DBBB6EC9****"),
+		Source:     Ptr(source),
+		VersionId:  Ptr("CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["partNumber"], "1")
+	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj")+"?versionId=CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
+	assert.Nil(t, input.OpMetadata.values)
+
+	request = &UploadPartCopyRequest{
+		Bucket:       Ptr("oss-dest-bucket"),
+		Key:          Ptr("oss-dest-object"),
+		PartNumber:   int32(1),
+		UploadId:     Ptr("0004B9895DBBB6EC9****"),
+		Source:       Ptr(source),
+		TrafficLimit: int64(100 * 1024 * 8),
+	}
+	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["partNumber"], "1")
+	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj"))
+	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
 	assert.Nil(t, input.OpMetadata.values)
 }
 
@@ -3237,7 +3348,10 @@ func TestUnmarshalOutput_CompleteMultipartUpload(t *testing.T) {
 	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderDate), "Wed, 22 Feb 2012 08:32:21 GMT")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/json")
-	assert.Equal(t, result.Body, io.NopCloser(strings.NewReader(body)))
+
+	jsonData, _ := json.Marshal(result.CallbackResult)
+	assert.Nil(t, err)
+	assert.NotEmpty(t, string(jsonData))
 	assert.Equal(t, *result.VersionId, "CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
 
 	output = &OperationOutput{
@@ -3248,7 +3362,7 @@ func TestUnmarshalOutput_CompleteMultipartUpload(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
@@ -3263,7 +3377,7 @@ func TestUnmarshalOutput_CompleteMultipartUpload(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
@@ -3287,7 +3401,7 @@ func TestUnmarshalOutput_CompleteMultipartUpload(t *testing.T) {
 		},
 	}
 	resultErr := &UploadPartResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader)
+	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
 	assert.Nil(t, err)
 	assert.Equal(t, resultErr.StatusCode, 403)
 	assert.Equal(t, resultErr.Status, "AccessDenied")
@@ -3972,4 +4086,762 @@ func TestUnmarshalOutput_ListParts(t *testing.T) {
 	assert.Equal(t, resultErr.Status, "AccessDenied")
 	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
+}
+
+func TestMarshalInput_PutSymlink(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *PutSymlinkRequest
+	var input *OperationInput
+	var err error
+
+	request = &PutSymlinkRequest{}
+	input = &OperationInput{
+		OpName: "PutSymlink",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"symlink": "",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket")
+
+	request = &PutSymlinkRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Key")
+
+	request = &PutSymlinkRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Target")
+
+	request = &PutSymlinkRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+		Target: Ptr("oss-target-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Headers["x-oss-symlink-target"], "oss-target-object")
+
+	request = &PutSymlinkRequest{
+		Bucket:          Ptr("oss-demo"),
+		Key:             Ptr("oss-object"),
+		Target:          Ptr("oss-target-object"),
+		ForbidOverwrite: Ptr("true"),
+		Acl:             ObjectACLPrivate,
+		StorageClass:    StorageClassStandard,
+		Metadata: map[string]string{
+			"name":  "demo",
+			"email": "demo@aliyun.com",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Headers["x-oss-symlink-target"], "oss-target-object")
+	assert.Equal(t, input.Headers["x-oss-forbid-overwrite"], "true")
+	assert.Equal(t, input.Headers["x-oss-object-acl"], string(ObjectACLPrivate))
+	assert.Equal(t, input.Headers["x-oss-storage-class"], string(StorageClassStandard))
+	assert.Equal(t, input.Headers["x-oss-meta-name"], "demo")
+	assert.Equal(t, input.Headers["x-oss-meta-email"], "demo@aliyun.com")
+	assert.Nil(t, input.OpMetadata.values)
+}
+
+func TestUnmarshalOutput_PutSymlink(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+		},
+	}
+	result := &PutSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"x-oss-version-id": {"CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"},
+		},
+	}
+	result = &PutSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &PutSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_GetSymlink(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *GetSymlinkRequest
+	var input *OperationInput
+	var err error
+
+	request = &GetSymlinkRequest{}
+	input = &OperationInput{
+		OpName: "GetSymlink",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"symlink": "",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket")
+
+	request = &GetSymlinkRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Key")
+
+	request = &GetSymlinkRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+
+	request = &GetSymlinkRequest{
+		Bucket:    Ptr("oss-demo"),
+		Key:       Ptr("oss-object"),
+		VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["versionId"], "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+}
+
+func TestUnmarshalOutput_GetSymlink(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id":     {"534B371674E88A4D8906****"},
+			"x-oss-symlink-target": {"example.jpg"},
+			"ETag":                 {"A797938C31D59EDD08D86188F6D5****"},
+		},
+	}
+	result := &GetSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.Target, "example.jpg")
+	assert.Equal(t, *result.ETag, "A797938C31D59EDD08D86188F6D5****")
+
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id":     {"534B371674E88A4D8906****"},
+			"x-oss-version-id":     {"CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"},
+			"x-oss-symlink-target": {"example.jpg"},
+			"ETag":                 {"A797938C31D59EDD08D86188F6D5****"},
+		},
+	}
+	result = &GetSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+	assert.Equal(t, *result.Target, "example.jpg")
+	assert.Equal(t, *result.ETag, "A797938C31D59EDD08D86188F6D5****")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &GetSymlinkResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_PutObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *PutObjectTaggingRequest
+	var input *OperationInput
+	var err error
+
+	request = &PutObjectTaggingRequest{}
+	input = &OperationInput{
+		OpName: "PutObjectTagging",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket")
+
+	request = &PutObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Key")
+
+	request = &PutObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Tagging")
+
+	request = &PutObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+		Tagging: &Tagging{
+			TagSet{
+				Tags: []Tag{
+					{
+						Key:   Ptr("k1"),
+						Value: Ptr("v1"),
+					},
+				},
+			},
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	data, _ := ioutil.ReadAll(input.Body)
+	assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag></TagSet></Tagging>`)
+}
+
+func TestUnmarshalOutput_PutObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Date":             {"Mon, 18 Mar 2019 08:25:17 GMT"},
+		},
+	}
+	result := &PutObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Date"), "Mon, 18 Mar 2019 08:25:17 GMT")
+
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"x-oss-version-id": {"CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"},
+		},
+	}
+	result = &PutObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &PutObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_GetObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *GetObjectTaggingRequest
+	var input *OperationInput
+	var err error
+
+	request = &GetObjectTaggingRequest{}
+	input = &OperationInput{
+		OpName: "GetObjectTagging",
+		Method: "GET",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket")
+
+	request = &GetObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Key")
+
+	request = &GetObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+
+	request = &GetObjectTaggingRequest{
+		Bucket:    Ptr("oss-demo"),
+		Key:       Ptr("oss-object"),
+		VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["versionId"], "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+}
+
+func TestUnmarshalOutput_GetObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Tagging>
+  <TagSet>
+    <Tag>
+      <Key>a</Key>
+      <Value>1</Value>
+    </Tag>
+    <Tag>
+      <Key>b</Key>
+      <Value>2</Value>
+    </Tag>
+  </TagSet>
+</Tagging>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+			"Date":             {"Mon, 18 Mar 2019 08:25:17 GMT"},
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte(body))),
+	}
+	result := &GetObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Date"), "Mon, 18 Mar 2019 08:25:17 GMT")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	assert.Len(t, result.Tags, 2)
+	assert.Equal(t, *result.Tags[0].Key, "a")
+	assert.Equal(t, *result.Tags[0].Value, "1")
+	assert.Equal(t, *result.Tags[1].Key, "b")
+	assert.Equal(t, *result.Tags[1].Value, "2")
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<Tagging>
+  <TagSet>
+    <Tag>
+      <Key>age</Key>
+      <Value>18</Value>
+    </Tag>
+  </TagSet>
+</Tagging>`
+	output = &OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+			"x-oss-version-id": {"CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"},
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte(body))),
+	}
+	result = &GetObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Len(t, result.Tags, 1)
+	assert.Equal(t, *result.Tags[0].Key, "age")
+	assert.Equal(t, *result.Tags[0].Value, "18")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body = `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_DeleteObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *DeleteObjectTaggingRequest
+	var input *OperationInput
+	var err error
+
+	request = &DeleteObjectTaggingRequest{}
+	input = &OperationInput{
+		OpName: "DeleteObjectTagging",
+		Method: "DELETE",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"tagging": "",
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket")
+
+	request = &DeleteObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Key")
+
+	request = &DeleteObjectTaggingRequest{
+		Bucket: Ptr("oss-demo"),
+		Key:    Ptr("oss-object"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+
+	request = &DeleteObjectTaggingRequest{
+		Bucket:    Ptr("oss-demo"),
+		Key:       Ptr("oss-object"),
+		VersionId: Ptr("CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"),
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["versionId"], "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+}
+
+func TestUnmarshalOutput_DeleteObjectTagging(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *OperationOutput
+	var err error
+	output = &OperationOutput{
+		StatusCode: 204,
+		Status:     "No Content",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Date":             {"Mon, 18 Mar 2019 08:25:17 GMT"},
+		},
+	}
+	result := &DeleteObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 204)
+	assert.Equal(t, result.Status, "No Content")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Date"), "Mon, 18 Mar 2019 08:25:17 GMT")
+	output = &OperationOutput{
+		StatusCode: 204,
+		Status:     "No Content",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+			"x-oss-version-id": {"CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****"},
+		},
+	}
+	result = &DeleteObjectTaggingResult{}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 204)
+	assert.Equal(t, result.Status, "No Content")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.VersionId, "CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 404,
+		Status:     "NoSuchBucket",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 404)
+	assert.Equal(t, result.Status, "NoSuchBucket")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<Error>
+  <Code>AccessDenied</Code>
+  <Message>AccessDenied</Message>
+  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
+  <HostId>test.oss.aliyuncs.com</HostId>
+</Error>`
+	output = &OperationOutput{
+		StatusCode: 403,
+		Status:     "AccessDenied",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 }

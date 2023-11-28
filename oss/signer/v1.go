@@ -45,6 +45,7 @@ var requiredSignedParametersMap = map[string]struct{}{
 	"continuation-token":           {},
 	"regionList":                   {},
 	"cloudboxes":                   {},
+	"symlink":                      {},
 }
 
 const (

@@ -436,6 +436,12 @@ func buildURL(input *OperationInput, opts *Options) (host string, path string) {
 	return host, ("/" + strings.Join(paths, "/"))
 }
 
+func callbackResponseHandler(opts *Options) {
+	opts.ResponseHandlers = []func(*http.Response) error{
+		callbackErrorResponseHandler,
+	}
+}
+
 func serviceErrorResponseHandler(response *http.Response) error {
 	if response.StatusCode/100 == 2 {
 		return nil
@@ -812,9 +818,13 @@ func unmarshalCallbackBody(result any, output *OperationOutput) error {
 	if len(body) > 0 {
 		switch r := result.(type) {
 		case *PutObjectResult:
-			r.Body = io.NopCloser(strings.NewReader(string(body)))
+			if err = json.Unmarshal(body, &r.CallbackResult); err != nil {
+				return err
+			}
 		case *CompleteMultipartUploadResult:
-			r.Body = io.NopCloser(strings.NewReader(string(body)))
+			if err = json.Unmarshal(body, &r.CallbackResult); err != nil {
+				return err
+			}
 		}
 	}
 	return err
@@ -977,6 +987,10 @@ func encodeSourceObject(_ any, input *OperationInput) error {
 		object := parts[len(parts)-1]
 		encodedObject := url.QueryEscape(object)
 		encodedSource := strings.Replace(source, object, encodedObject, 1)
+		if input.Headers["x-oss-copy-source-version-id"] != "" {
+			encodedSource += "?versionId=" + input.Headers["x-oss-copy-source-version-id"]
+			delete(input.Headers, "x-oss-copy-source-version-id")
+		}
 		input.Headers["x-oss-copy-source"] = encodedSource
 	}
 	return err
