@@ -655,26 +655,34 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	var err error
 
 	request = &CopyObjectRequest{}
+	source := encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "CopyObject",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &CopyObjectRequest{
 		Bucket: Ptr("oss-bucket"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
-		OpName: "GetObject",
-		Method: "GET",
+		OpName: "CopyObject",
+		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
@@ -682,40 +690,58 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 		Bucket: Ptr("oss-bucket"),
 		Key:    Ptr("oss-key"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
-		OpName: "GetObject",
-		Method: "GET",
+		OpName: "CopyObject",
+		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &CopyObjectRequest{
-		Bucket: Ptr("oss-bucket"),
-		Key:    Ptr("oss-copy-key"),
-		Source: Ptr("/oss-bucket/oss-key"),
+		Bucket:    Ptr("oss-bucket"),
+		Key:       Ptr("oss-copy-key"),
+		SourceKey: Ptr("oss-src-key"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
-		OpName: "GetObject",
-		Method: "GET",
+		OpName: "CopyObject",
+		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-copy-key")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-src-key")
 
 	request = &CopyObjectRequest{
 		Bucket:       Ptr("oss-bucket"),
 		Key:          Ptr("oss-copy-key"),
-		Source:       Ptr("/oss-bucket/oss-key"),
+		SourceKey:    Ptr("oss-key"),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	source = encodeSourceObject(request)
+	input = &OperationInput{
+		OpName: "CopyObject",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-copy-key")
@@ -725,20 +751,24 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	request = &CopyObjectRequest{
 		Bucket:            Ptr("oss-bucket"),
 		Key:               Ptr("oss-copy-key"),
-		Source:            Ptr("/oss-bucket/oss-dir/oss-obj"),
+		SourceKey:         Ptr("oss-dir/oss-obj"),
 		IfMatch:           Ptr("\"D41D8CD98F00B204E9800998ECF8****\""),
 		IfNoneMatch:       Ptr("\"D41D8CD98F00B204E9800998ECF9****\""),
 		IfModifiedSince:   Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
 		IfUnmodifiedSince: Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
-		VersionId:         Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****"),
+		SourceVersionId:   Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
-		OpName: "GetObject",
-		Method: "GET",
+		OpName: "CopyObject",
+		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-copy-key")
@@ -752,12 +782,12 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	request = &CopyObjectRequest{
 		Bucket:                   Ptr("oss-copy-bucket"),
 		Key:                      Ptr("oss-copy-key"),
-		Source:                   Ptr("/oss-bucket/oss-key"),
+		SourceKey:                Ptr("oss-key"),
 		IfMatch:                  Ptr("\"D41D8CD98F00B204E9800998ECF8****\""),
 		IfNoneMatch:              Ptr("\"D41D8CD98F00B204E9800998ECF9****\""),
 		IfModifiedSince:          Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
 		IfUnmodifiedSince:        Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
-		VersionId:                Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****"),
+		SourceVersionId:          Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****"),
 		ForbidOverwrite:          Ptr("false"),
 		ServerSideEncryption:     Ptr("KMS"),
 		ServerSideDataEncryption: Ptr("SM4"),
@@ -772,13 +802,17 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 		},
 		Tagging: Ptr("TagA=B&TagC=D"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
-		OpName: "GetObject",
-		Method: "GET",
+		OpName: "CopyObject",
+		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "oss-copy-bucket")
 	assert.Equal(t, *input.Key, "oss-copy-key")
@@ -786,7 +820,7 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-none-match"], "\"D41D8CD98F00B204E9800998ECF9****\"")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-modified-since"], "Fri, 13 Nov 2023 14:47:53 GMT")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-unmodified-since"], "Fri, 13 Nov 2015 14:47:53 GMT")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-key?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-copy-bucket/oss-key?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
 	assert.Equal(t, input.Headers["x-oss-meta-name"], "walker")
 	assert.Equal(t, input.Headers["x-oss-meta-email"], "demo@aliyun.com")
 	assert.Equal(t, input.Headers["x-oss-server-side-encryption"], "KMS")
@@ -2958,26 +2992,34 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	var err error
 
 	request = &UploadPartCopyRequest{}
+	source := encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &UploadPartCopyRequest{
 		Bucket: Ptr("oss-demo"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
@@ -2985,13 +3027,17 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 		Bucket: Ptr("oss-demo"),
 		Key:    Ptr("oss-object"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
@@ -3000,13 +3046,17 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 		Key:        Ptr("oss-object"),
 		PartNumber: int32(1),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
@@ -3016,31 +3066,39 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 		PartNumber: int32(1),
 		UploadId:   Ptr("0004B9895DBBB6EC9****"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
-	source := "/oss-src-bucket/oss-src-dir/oss-src-obj"
 	request = &UploadPartCopyRequest{
-		Bucket:     Ptr("oss-dest-bucket"),
-		Key:        Ptr("oss-dest-object"),
-		PartNumber: int32(1),
-		UploadId:   Ptr("0004B9895DBBB6EC9****"),
-		Source:     Ptr(source),
+		Bucket:       Ptr("oss-dest-bucket"),
+		Key:          Ptr("oss-dest-object"),
+		PartNumber:   int32(1),
+		UploadId:     Ptr("0004B9895DBBB6EC9****"),
+		SourceKey:    Ptr("oss-src-dir/oss-src-obj"),
+		SourceBucket: Ptr("oss-src-bucket"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
@@ -3048,19 +3106,24 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
-		Bucket:     Ptr("oss-dest-bucket"),
-		Key:        Ptr("oss-dest-object"),
-		PartNumber: int32(1),
-		UploadId:   Ptr("0004B9895DBBB6EC9****"),
-		Source:     Ptr(source),
+		Bucket:       Ptr("oss-dest-bucket"),
+		Key:          Ptr("oss-dest-object"),
+		PartNumber:   int32(1),
+		UploadId:     Ptr("0004B9895DBBB6EC9****"),
+		SourceKey:    Ptr("oss-src-dir/oss-src-obj"),
+		SourceBucket: Ptr("oss-src-bucket"),
 	}
+	source = encodeSourceObject(request)
 	input = &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
@@ -3068,14 +3131,25 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
-		Bucket:     Ptr("oss-dest-bucket"),
-		Key:        Ptr("oss-dest-object"),
-		PartNumber: int32(1),
-		UploadId:   Ptr("0004B9895DBBB6EC9****"),
-		Source:     Ptr(source),
-		VersionId:  Ptr("CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****"),
+		Bucket:          Ptr("oss-dest-bucket"),
+		Key:             Ptr("oss-dest-object"),
+		PartNumber:      int32(1),
+		UploadId:        Ptr("0004B9895DBBB6EC9****"),
+		SourceKey:       Ptr("oss-src-dir/oss-src-obj"),
+		SourceBucket:    Ptr("oss-src-bucket"),
+		SourceVersionId: Ptr("CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****"),
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	source = encodeSourceObject(request)
+	input = &OperationInput{
+		OpName: "UploadPartCopy",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
@@ -3087,10 +3161,21 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 		Key:          Ptr("oss-dest-object"),
 		PartNumber:   int32(1),
 		UploadId:     Ptr("0004B9895DBBB6EC9****"),
-		Source:       Ptr(source),
+		SourceKey:    Ptr("oss-src-dir/oss-src-obj"),
+		SourceBucket: Ptr("oss-src-bucket"),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
-	err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject)
+	source = encodeSourceObject(request)
+	input = &OperationInput{
+		OpName: "UploadPartCopy",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
+	}
+	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")

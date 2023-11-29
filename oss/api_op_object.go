@@ -334,8 +334,14 @@ type CopyObjectRequest struct {
 	// The name of the object.
 	Key *string `input:"path,key,required"`
 
+	// The name of the source bucket.
+	SourceBucket *string `input:"nop,bucket"`
+
 	// The path of the source object.
-	Source *string `input:"header,x-oss-copy-source,required"`
+	SourceKey *string `input:"nop,key,required"`
+
+	// The version ID of the source object.
+	SourceVersionId *string `input:"nop,versionId"`
 
 	// Specifies whether the object that is uploaded by calling the CopyObject operation
 	// overwrites an existing object that has the same name. Valid values: true and false
@@ -397,9 +403,6 @@ type CopyObjectRequest struct {
 	// Replace: The tags specified in the request are configured for the destination object.
 	TaggingDirective *string `input:"header,x-oss-tagging-directive"`
 
-	// The version ID of the source object.
-	VersionId *string `input:"header,x-oss-copy-source-version-id"`
-
 	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
@@ -444,13 +447,17 @@ func (c *Client) CopyObject(ctx context.Context, request *CopyObjectRequest, opt
 	if request == nil {
 		request = &CopyObjectRequest{}
 	}
+	source := encodeSourceObject(request)
 	input := &OperationInput{
 		OpName: "CopyObject",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	if err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 
@@ -1311,8 +1318,14 @@ type UploadPartCopyRequest struct {
 	// The ID of the multipart upload task.
 	UploadId *string `input:"query,uploadId,required"`
 
+	// The name of the source bucket.
+	SourceBucket *string `input:"nop,bucket"`
+
 	// The path of the source object.
-	Source *string `input:"header,x-oss-copy-source,required"`
+	SourceKey *string `input:"nop,key,required"`
+
+	// The version ID of the source object.
+	SourceVersionId *string `input:"nop,versionId"`
 
 	// The range of bytes to copy data from the source object.
 	Range *string `input:"header,x-oss-copy-source-range"`
@@ -1335,9 +1348,6 @@ type UploadPartCopyRequest struct {
 	// OSS transfers the object normally and returns 200 OK. Otherwise, OSS returns 412 Precondition Failed.
 	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
 	IfUnmodifiedSince *string `input:"header,x-oss-copy-source-if-unmodified-since"`
-
-	// The version ID of the source object.
-	VersionId *string `input:"header,x-oss-copy-source-version-id"`
 
 	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
@@ -1364,13 +1374,17 @@ func (c *Client) UploadPartCopy(ctx context.Context, request *UploadPartCopyRequ
 	if request == nil {
 		request = &UploadPartCopyRequest{}
 	}
+	source := encodeSourceObject(request)
 	input := &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
+		Headers: map[string]string{
+			"x-oss-copy-source": source,
+		},
 	}
-	if err = c.marshalInput(request, input, updateContentMd5, encodeSourceObject); err != nil {
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

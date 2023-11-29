@@ -979,21 +979,39 @@ func updateContentMd5(_ any, input *OperationInput) error {
 	return err
 }
 
-func encodeSourceObject(_ any, input *OperationInput) error {
-	var err error
-	if input.Headers["x-oss-copy-source"] != "" {
-		source := input.Headers["x-oss-copy-source"]
-		parts := strings.SplitN(source, "/", 3)
-		object := parts[len(parts)-1]
-		encodedObject := url.QueryEscape(object)
-		encodedSource := strings.Replace(source, object, encodedObject, 1)
-		if input.Headers["x-oss-copy-source-version-id"] != "" {
-			encodedSource += "?versionId=" + input.Headers["x-oss-copy-source-version-id"]
-			delete(input.Headers, "x-oss-copy-source-version-id")
+func encodeSourceObject(request any) string {
+	var source, sourceKey string
+	switch req := request.(type) {
+	case *CopyObjectRequest:
+		if req.SourceKey != nil {
+			sourceKey = url.QueryEscape(*req.SourceKey)
 		}
-		input.Headers["x-oss-copy-source"] = encodedSource
+		if req.SourceBucket != nil {
+			source = "/" + *req.SourceBucket + "/" + sourceKey
+		} else {
+			if req.Bucket != nil {
+				source = "/" + *req.Bucket + "/" + sourceKey
+			}
+		}
+		if req.SourceVersionId != nil {
+			source += "?versionId=" + *req.SourceVersionId
+		}
+	case *UploadPartCopyRequest:
+		if req.SourceKey != nil {
+			sourceKey = url.QueryEscape(*req.SourceKey)
+		}
+		if req.SourceBucket != nil {
+			source = "/" + *req.SourceBucket + "/" + sourceKey
+		} else {
+			if req.Bucket != nil {
+				source = "/" + *req.Bucket + "/" + sourceKey
+			}
+		}
+		if req.SourceVersionId != nil {
+			source += "?versionId=" + *req.SourceVersionId
+		}
 	}
-	return err
+	return source
 }
 
 func (c *Client) toClientError(err error, code string, output *OperationOutput) error {

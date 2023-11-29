@@ -848,23 +848,22 @@ func TestCopyObject(t *testing.T) {
 	objectCopyName := objectNamePrefix + randLowStr(6) + "copy"
 
 	copyRequest := &CopyObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		Source: Ptr(objectCopyName),
+		Bucket:    Ptr(bucketName),
+		Key:       Ptr(objectName),
+		SourceKey: Ptr(objectCopyName),
 	}
 	result, err := client.CopyObject(context.TODO(), copyRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
 	errors.As(err, &serr)
-	assert.Equal(t, int(400), serr.StatusCode)
-	assert.Equal(t, "InvalidArgument", serr.Code)
-	assert.Equal(t, "Copy Source must mention the source bucket and key: /sourcebucket/sourcekey.", serr.Message)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchKey", serr.Code)
+	assert.Equal(t, "The specified key does not exist.", serr.Message)
 
-	source := "/" + bucketName + "/" + objectName
 	copyRequest = &CopyObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectCopyName),
-		Source: Ptr(source),
+		Bucket:    Ptr(bucketName),
+		Key:       Ptr(objectCopyName),
+		SourceKey: Ptr(objectName),
 	}
 	result, err = client.CopyObject(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -877,7 +876,7 @@ func TestCopyObject(t *testing.T) {
 	copyRequest = &CopyObjectRequest{
 		Bucket:       Ptr(bucketName),
 		Key:          Ptr(objectCopyName),
-		Source:       Ptr(source),
+		SourceKey:    Ptr(objectName),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 	result, err = client.CopyObject(context.TODO(), copyRequest)
@@ -890,9 +889,9 @@ func TestCopyObject(t *testing.T) {
 
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	copyRequest = &CopyObjectRequest{
-		Bucket: Ptr(bucketNameNotExist),
-		Key:    Ptr(objectCopyName),
-		Source: Ptr(source),
+		Bucket:    Ptr(bucketNameNotExist),
+		Key:       Ptr(objectCopyName),
+		SourceKey: Ptr(objectName),
 	}
 	_, err = client.CopyObject(context.TODO(), copyRequest)
 	assert.NotNil(t, err)
@@ -920,10 +919,10 @@ func TestCopyObject(t *testing.T) {
 	assert.Nil(t, err)
 	sourceVersionId := *metaResult.VersionId
 	copyRequest = &CopyObjectRequest{
-		Bucket:    Ptr(bucketName),
-		Key:       Ptr(objectCopyName),
-		Source:    Ptr(source),
-		VersionId: Ptr(sourceVersionId),
+		Bucket:          Ptr(bucketName),
+		Key:             Ptr(objectCopyName),
+		SourceKey:       Ptr(objectName),
+		SourceVersionId: Ptr(sourceVersionId),
 	}
 	result, err = client.CopyObject(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -944,9 +943,10 @@ func TestCopyObject(t *testing.T) {
 	assert.Nil(t, err)
 
 	copyRequest = &CopyObjectRequest{
-		Bucket: Ptr(bucketCopyName),
-		Key:    Ptr(objectCopyName),
-		Source: Ptr("/" + bucketName + "/" + objectName),
+		Bucket:       Ptr(bucketCopyName),
+		Key:          Ptr(objectCopyName),
+		SourceKey:    Ptr(objectName),
+		SourceBucket: Ptr(bucketName),
 	}
 	result, err = client.CopyObject(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -1676,13 +1676,12 @@ func TestUploadPartCopy(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	source := "/" + bucketName + "/" + objectSrcName
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:       Ptr(bucketName),
 		Key:          Ptr(objectDestName),
 		PartNumber:   int32(1),
 		UploadId:     Ptr(*initResult.UploadId),
-		Source:       Ptr(source),
+		SourceKey:    Ptr(objectSrcName),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 	copyResult, err := client.UploadPartCopy(context.TODO(), copyRequest)
@@ -1709,12 +1708,12 @@ func TestUploadPartCopy(t *testing.T) {
 	assert.Nil(t, err)
 	sourceVersionId := *metaResult.VersionId
 	copyRequest = &UploadPartCopyRequest{
-		Bucket:     Ptr(bucketName),
-		Key:        Ptr(objectDestName),
-		PartNumber: int32(1),
-		UploadId:   Ptr(*initResult.UploadId),
-		Source:     Ptr(source),
-		VersionId:  Ptr(sourceVersionId),
+		Bucket:          Ptr(bucketName),
+		Key:             Ptr(objectDestName),
+		PartNumber:      int32(1),
+		UploadId:        Ptr(*initResult.UploadId),
+		SourceKey:       Ptr(objectSrcName),
+		SourceVersionId: Ptr(sourceVersionId),
 	}
 	copyResult, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -1739,7 +1738,7 @@ func TestUploadPartCopy(t *testing.T) {
 		Key:        Ptr(objectDestName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initResult.UploadId),
-		Source:     Ptr(source),
+		SourceKey:  Ptr(objectSrcName),
 	}
 	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.NotNil(t, err)
@@ -1862,13 +1861,12 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
 	assert.Nil(t, err)
-	source := "/" + bucketName + "/" + objectName
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectDestName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initCopyResult.UploadId),
-		Source:     Ptr(source),
+		SourceKey:  Ptr(objectName),
 	}
 	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -1893,7 +1891,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		Key:        Ptr(objectDestName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initCopyResult.UploadId),
-		Source:     Ptr(source),
+		SourceKey:  Ptr(objectName),
 	}
 	copyResult, err := client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
@@ -2078,13 +2076,12 @@ func TestListMultipartUploads(t *testing.T) {
 
 	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
 	assert.Nil(t, err)
-	source := "/" + bucketName + "/" + objectName
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectDestName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initCopyResult.UploadId),
-		Source:     Ptr(source),
+		SourceKey:  Ptr(objectName),
 	}
 	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)

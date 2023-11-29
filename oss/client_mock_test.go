@@ -3350,10 +3350,10 @@ var testMockCopyObjectSuccessCases = []struct {
 			assert.Equal(t, "/bucket/copy-object?versionId=CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk3****", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket:    Ptr("bucket"),
-			Key:       Ptr("object"),
-			Source:    Ptr("/bucket/copy-object"),
-			VersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk3****"),
+			Bucket:          Ptr("bucket"),
+			Key:             Ptr("object"),
+			SourceKey:       Ptr("copy-object"),
+			SourceVersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk3****"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3389,9 +3389,9 @@ var testMockCopyObjectSuccessCases = []struct {
 			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			Source: Ptr("/bucket/copy-object"),
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			SourceKey: Ptr("copy-object"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3428,10 +3428,10 @@ var testMockCopyObjectSuccessCases = []struct {
 			assert.Equal(t, "/bucket/copy-object?versionId=CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket:    Ptr("bucket"),
-			Key:       Ptr("object"),
-			Source:    Ptr("/bucket/copy-object"),
-			VersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
+			Bucket:          Ptr("bucket"),
+			Key:             Ptr("object"),
+			SourceKey:       Ptr("copy-object"),
+			SourceVersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3474,11 +3474,11 @@ var testMockCopyObjectSuccessCases = []struct {
 			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
 		},
 		&CopyObjectRequest{
-			Bucket:       Ptr("bucket"),
-			Key:          Ptr("object"),
-			Source:       Ptr("/bucket/copy-object"),
-			TrafficLimit: int64(100 * 1024 * 8),
-			VersionId:    Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
+			Bucket:          Ptr("bucket"),
+			Key:             Ptr("object"),
+			SourceKey:       Ptr("copy-object"),
+			TrafficLimit:    int64(100 * 1024 * 8),
+			SourceVersionId: Ptr("CAEQHxiBgICDvseg3hgiIGZmOGNjNWJiZDUzNjQxNDM4MWM2NDc1YjhkYTk4****"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3546,9 +3546,9 @@ var testMockCopyObjectErrorCases = []struct {
 			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			Source: Ptr("/bucket/copy-object"),
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			SourceKey: Ptr("copy-object"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Nil(t, o)
@@ -3584,9 +3584,9 @@ var testMockCopyObjectErrorCases = []struct {
 			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
 		},
 		&CopyObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			Source: Ptr("/bucket/copy-object"),
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			SourceKey: Ptr("copy-object"),
 		},
 		func(t *testing.T, o *CopyObjectResult, err error) {
 			assert.Nil(t, o)
@@ -6284,11 +6284,12 @@ var testMockUploadPartCopySuccessCases = []struct {
 			assert.Equal(t, r.Header.Get(HeaderOssCopySource), "/oss-src-bucket/"+url.QueryEscape("oss-src-object"))
 		},
 		&UploadPartCopyRequest{
-			Bucket:     Ptr("bucket"),
-			Key:        Ptr("object"),
-			UploadId:   Ptr("0004B9895DBBB6EC9"),
-			PartNumber: int32(1),
-			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(1),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -6326,13 +6327,14 @@ var testMockUploadPartCopySuccessCases = []struct {
 			Bucket:            Ptr("bucket"),
 			Key:               Ptr("object"),
 			UploadId:          Ptr("0004B9895DBBB6EC9"),
-			Source:            Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			SourceKey:         Ptr("oss-src-object"),
+			SourceBucket:      Ptr("oss-src-bucket"),
 			PartNumber:        int32(2),
 			IfMatch:           Ptr("\"D41D8CD98F00B204E9800998ECF8****\""),
 			IfNoneMatch:       Ptr("\"D41D8CD98F00B204E9800998ECF9****\""),
 			IfModifiedSince:   Ptr("Fri, 13 Nov 2023 14:47:53 GMT"),
 			IfUnmodifiedSince: Ptr("Fri, 13 Nov 2015 14:47:53 GMT"),
-			VersionId:         Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY"),
+			SourceVersionId:   Ptr("CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY"),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -6367,7 +6369,8 @@ var testMockUploadPartCopySuccessCases = []struct {
 			Bucket:       Ptr("bucket"),
 			Key:          Ptr("object"),
 			UploadId:     Ptr("0004B9895DBBB6EC9"),
-			Source:       Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
 			PartNumber:   int32(2),
 			TrafficLimit: int64(100 * 1024 * 8),
 		},
@@ -6432,11 +6435,12 @@ var testMockUploadPartCopyErrorCases = []struct {
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
 		},
 		&UploadPartCopyRequest{
-			Bucket:     Ptr("bucket"),
-			Key:        Ptr("object"),
-			UploadId:   Ptr("0004B9895DBBB6EC9"),
-			PartNumber: int32(1),
-			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(1),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Nil(t, o)
@@ -6472,11 +6476,12 @@ var testMockUploadPartCopyErrorCases = []struct {
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
 		},
 		&UploadPartCopyRequest{
-			Bucket:     Ptr("bucket"),
-			Key:        Ptr("object"),
-			UploadId:   Ptr("0004B9895DBBB6EC9"),
-			PartNumber: int32(1),
-			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(1),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Nil(t, o)
@@ -6513,11 +6518,12 @@ var testMockUploadPartCopyErrorCases = []struct {
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
 		},
 		&UploadPartCopyRequest{
-			Bucket:     Ptr("bucket"),
-			Key:        Ptr("object"),
-			UploadId:   Ptr("0004B9895DBBB6EC9"),
-			PartNumber: int32(1),
-			Source:     Ptr("/oss-src-bucket/" + url.QueryEscape("oss-src-object")),
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(1),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
 		},
 		func(t *testing.T, o *UploadPartCopyResult, err error) {
 			assert.Nil(t, o)
