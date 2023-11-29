@@ -447,14 +447,14 @@ func (c *Client) CopyObject(ctx context.Context, request *CopyObjectRequest, opt
 	if request == nil {
 		request = &CopyObjectRequest{}
 	}
-	source := encodeSourceObject(request)
+
 	input := &OperationInput{
 		OpName: "CopyObject",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
 		Headers: map[string]string{
-			"x-oss-copy-source": source,
+			"x-oss-copy-source": encodeSourceObject(request),
 		},
 	}
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
@@ -1374,14 +1374,13 @@ func (c *Client) UploadPartCopy(ctx context.Context, request *UploadPartCopyRequ
 	if request == nil {
 		request = &UploadPartCopyRequest{}
 	}
-	source := encodeSourceObject(request)
 	input := &OperationInput{
 		OpName: "UploadPartCopy",
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
 		Headers: map[string]string{
-			"x-oss-copy-source": source,
+			"x-oss-copy-source": encodeSourceObject(request),
 		},
 	}
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {

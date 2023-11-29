@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMarshalInput_PutObject(t *testing.T) {
@@ -776,7 +777,7 @@ func TestMarshalInput_CopyObject(t *testing.T) {
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-none-match"], "\"D41D8CD98F00B204E9800998ECF9****\"")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-modified-since"], "Fri, 13 Nov 2023 14:47:53 GMT")
 	assert.Equal(t, input.Headers["x-oss-copy-source-if-unmodified-since"], "Fri, 13 Nov 2015 14:47:53 GMT")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/"+url.QueryEscape("oss-dir/oss-obj")+"?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-bucket/oss-dir/oss-obj"+"?versionId=CAEQNhiBgM0BYiIDc4MGZjZGI2OTBjOTRmNTE5NmU5NmFhZjhjYmY*****")
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &CopyObjectRequest{
@@ -3085,7 +3086,7 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 		Key:          Ptr("oss-dest-object"),
 		PartNumber:   int32(1),
 		UploadId:     Ptr("0004B9895DBBB6EC9****"),
-		SourceKey:    Ptr("oss-src-dir/oss-src-obj"),
+		SourceKey:    Ptr("oss-src-dir/oss-src-obj+123"),
 		SourceBucket: Ptr("oss-src-bucket"),
 	}
 	source = encodeSourceObject(request)
@@ -3102,7 +3103,7 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj"))
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/oss-src-dir/oss-src-obj%2B123")
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
@@ -3127,7 +3128,7 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj"))
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/oss-src-dir/oss-src-obj")
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
@@ -3153,7 +3154,7 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj")+"?versionId=CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/oss-src-dir/oss-src-obj"+"?versionId=CAEQMxiBgMC0vs6D0BYiIGJiZWRjOTRjNTg0NzQ1MTRiN2Y1OTYxMTdkYjQ0****")
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &UploadPartCopyRequest{
@@ -3179,7 +3180,7 @@ func TestMarshalInput_UploadPartCopy(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["partNumber"], "1")
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
-	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/"+url.QueryEscape("oss-src-dir/oss-src-obj"))
+	assert.Equal(t, input.Headers["x-oss-copy-source"], "/oss-src-bucket/oss-src-dir/oss-src-obj")
 	assert.Equal(t, input.Headers["x-oss-traffic-limit"], strconv.FormatInt(100*1024*8, 10))
 	assert.Nil(t, input.OpMetadata.values)
 }

@@ -980,37 +980,31 @@ func updateContentMd5(_ any, input *OperationInput) error {
 }
 
 func encodeSourceObject(request any) string {
-	var source, sourceKey string
+	var bucket, key, versionId string
 	switch req := request.(type) {
 	case *CopyObjectRequest:
-		if req.SourceKey != nil {
-			sourceKey = url.QueryEscape(*req.SourceKey)
-		}
+		key = ToString(req.SourceKey)
 		if req.SourceBucket != nil {
-			source = "/" + *req.SourceBucket + "/" + sourceKey
+			bucket = *req.SourceBucket
 		} else {
-			if req.Bucket != nil {
-				source = "/" + *req.Bucket + "/" + sourceKey
-			}
+			bucket = ToString(req.Bucket)
 		}
-		if req.SourceVersionId != nil {
-			source += "?versionId=" + *req.SourceVersionId
-		}
+		versionId = ToString(req.SourceVersionId)
 	case *UploadPartCopyRequest:
-		if req.SourceKey != nil {
-			sourceKey = url.QueryEscape(*req.SourceKey)
-		}
+		key = ToString(req.SourceKey)
 		if req.SourceBucket != nil {
-			source = "/" + *req.SourceBucket + "/" + sourceKey
+			bucket = *req.SourceBucket
 		} else {
-			if req.Bucket != nil {
-				source = "/" + *req.Bucket + "/" + sourceKey
-			}
+			bucket = ToString(req.Bucket)
 		}
-		if req.SourceVersionId != nil {
-			source += "?versionId=" + *req.SourceVersionId
-		}
+		versionId = ToString(req.SourceVersionId)
 	}
+
+	source := fmt.Sprintf("/%s/%s", bucket, escapePath(key, false))
+	if versionId != "" {
+		source += "?versionId=" + versionId
+	}
+
 	return source
 }
 
