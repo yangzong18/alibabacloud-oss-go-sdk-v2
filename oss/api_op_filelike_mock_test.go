@@ -198,6 +198,19 @@ func TestMockOpenFile_DirectRead(t *testing.T) {
 		assert.Equal(t, hash1.Sum64(), hash.Sum64())
 	}
 
+	//seek to end
+	begin, err = f.Seek(0, io.SeekEnd)
+	assert.Nil(t, err)
+	written, err = io.Copy(io.Discard, f)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), written)
+
+	//
+	begin, err = f.Seek(0, io.SeekStart)
+	assert.Nil(t, err)
+	io.CopyN(io.Discard, f, 2)
+	time.Sleep(2 * time.Second)
+
 	err = f.Close()
 	assert.Nil(t, err)
 
@@ -398,6 +411,12 @@ func TestMockOpenFile_PrefetchRead(t *testing.T) {
 		assert.Equal(t, hash1.Sum64(), hash.Sum64())
 	}
 
+	f.numOOORead = 0
+	begin, err = f.Seek(0, io.SeekStart)
+	assert.Nil(t, err)
+	io.CopyN(io.Discard, f, 2)
+	time.Sleep(2 * time.Second)
+
 	err = f.Close()
 	assert.Nil(t, err)
 
@@ -429,10 +448,17 @@ func TestMockOpenFile_PrefetchRead(t *testing.T) {
 	assert.Equal(t, err, os.ErrInvalid)
 }
 
-func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
-	length := 1234
+func TestMockOpenFile_MixRead(t *testing.T) {
+	length := 11*1024*1024 + 13435
 	data := []byte(randStr(length))
 	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+
+	rangeReqCount := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -450,6 +476,129 @@ func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
 			//body
 			w.Write(nil)
 		case "GET":
+			rangeReqCount++
+			// header
+			var httpRange *HTTPRange
+			if r.Header.Get("Range") != "" {
+				httpRange, _ = ParseRange(r.Header.Get("Range"))
+			}
+
+			offset := int64(0)
+			statusCode := 200
+			sendLen := int64(length)
+			if httpRange != nil {
+				offset = httpRange.Offset
+				sendLen = int64(length) - httpRange.Offset
+				if httpRange.Count > 0 {
+					sendLen = httpRange.Count
+				}
+				cr := httpContentRange{
+					Offset: httpRange.Offset,
+					Count:  sendLen,
+					Total:  int64(length),
+				}
+				w.Header().Set("Content-Range", ToString(cr.FormatHTTPContentRange()))
+				statusCode = 206
+			}
+
+			if rangeReqCount > 3 && httpRange != nil && httpRange.Count > 0 {
+				time.Sleep(2 * time.Second)
+			}
+
+			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(sendLen))
+			w.Header().Set(HTTPHeaderLastModified, gmtTime)
+			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+			w.Header().Set(HTTPHeaderContentType, "text/plain")
+
+			//status code
+			w.WriteHeader(statusCode)
+
+			//body
+			sendData := data[int(offset):int(offset+sendLen)]
+			//fmt.Printf("sendData offset%d, len:%d, total:%d\n", offset, len(sendData), length)
+			w.Write(sendData)
+		}
+	}))
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(1 * time.Second).
+		WithRetryMaxAttempts(1)
+
+	client := NewClient(cfg)
+	f, err := client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+		oo.EnablePrefetch = true
+		oo.ChunkSize = 2 * 1024 * 1024
+		oo.PrefetchNum = 3
+		oo.PrefetchThreshold = 2*1024*1024 + 1234
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	assert.Equal(t, true, f.enablePrefetch)
+	assert.Equal(t, int64(2*1024*1024), f.chunkSize)
+	assert.Equal(t, 3, f.prefetchNum)
+
+	//stat
+	stat, err := f.Stat()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), stat.Size())
+	assert.Equal(t, gmtTime, stat.ModTime().Format(http.TimeFormat))
+	assert.Equal(t, os.FileMode(0644), stat.Mode())
+	assert.Equal(t, false, stat.IsDir())
+	assert.Equal(t, "oss://bucket/key", stat.Name())
+	h, ok := stat.Sys().(http.Header)
+	assert.True(t, ok)
+	assert.NotNil(t, h)
+	assert.Equal(t, "fba9dede5f27731c9771645a3986****", h.Get(HTTPHeaderETag))
+	assert.Equal(t, "text/plain", h.Get(HTTPHeaderContentType))
+
+	//seek ok
+	begin, err := f.Seek(0, io.SeekStart)
+	end, err := f.Seek(0, io.SeekEnd)
+	assert.Equal(t, stat.Size(), end-begin)
+	curr, err := f.Seek(0, io.SeekCurrent)
+	assert.Equal(t, stat.Size(), curr)
+
+	//read all
+	f.Seek(0, io.SeekStart)
+	hash := NewCRC64(0)
+
+	written, err := io.Copy(io.MultiWriter(io.Discard, hash), f)
+	assert.Equal(t, datasum, hash.Sum64())
+	assert.Equal(t, stat.Size(), written)
+
+}
+
+func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	setTimeout := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		switch r.Method {
+		case "HEAD":
+			// header
+			w.Header().Set(HTTPHeaderLastModified, gmtTime)
+			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(length))
+			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+			w.Header().Set(HTTPHeaderContentType, "text/plain")
+
+			//status code
+			w.WriteHeader(200)
+
+			//body
+			w.Write(nil)
+		case "GET":
+			if setTimeout {
+				time.Sleep(2 * time.Second)
+			}
+
 			// header
 			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(length))
 			w.Header().Set(HTTPHeaderLastModified, gmtTime)
@@ -500,17 +649,36 @@ func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, f)
 	assert.Contains(t, err.Error(), "offset is unavailable, offset")
+
+	//timeout
+	cfg = LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(1 * time.Second)
+
+	client = NewClient(cfg)
+	f, err = client.OpenFile(context.TODO(), "bucket", "key")
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	setTimeout = true
+	_, err = io.Copy(io.Discard, f)
+	assert.Contains(t, err.Error(), "i/o timeout")
 }
 
-func TestMockOpenFile_DirectRead_InvalidContentLength(t *testing.T) {
+func TestMockOpenFile_Constructor(t *testing.T) {
 	gmtTime := getNowGMT()
+	length := 0
+	url := ""
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		switch r.Method {
 		case "HEAD":
+			url = r.URL.String()
 			// header
 			w.Header().Set(HTTPHeaderLastModified, gmtTime)
-			w.Header().Set(HTTPHeaderContentLength, "adfs")
+			w.Header().Set(HTTPHeaderContentLength, fmt.Sprintf("%d", length))
 			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
 			w.Header().Set(HTTPHeaderContentType, "text/plain")
 
@@ -528,9 +696,35 @@ func TestMockOpenFile_DirectRead_InvalidContentLength(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
+	length = -1
 	f, err := client.OpenFile(context.TODO(), "bucket", "key")
 	assert.NotNil(t, err)
 	assert.Nil(t, f)
+
+	length = 0
+	f, err = client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+		oo.EnablePrefetch = true
+		oo.ChunkSize = -1
+		oo.PrefetchNum = -1
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	assert.Equal(t, defaultChunkSize, f.chunkSize)
+	assert.Equal(t, defaultPrefetchNum, f.prefetchNum)
+
+	//version Id
+	length = 0
+	f, err = client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+		oo.VersionId = Ptr("123")
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	assert.Contains(t, url, "versionId=123")
+
+	stat, err := f.Stat()
+	assert.Nil(t, err)
+	assert.NotNil(t, stat)
+	assert.Equal(t, "oss://bucket/key?versionId=123", stat.Name())
 }
 
 func TestMockOpenFile_DirectRead_FileChange(t *testing.T) {
@@ -792,7 +986,7 @@ func TestMockAppendFile_Exist(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.AppendFile(context.TODO(), "bucket", "key")
+	f, err := client.AppendFile(context.TODO(), "bucket", "key", func(*AppendOptions) {})
 	assert.Nil(t, err)
 	assert.NotNil(t, f)
 

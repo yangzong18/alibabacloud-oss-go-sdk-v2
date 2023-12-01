@@ -110,30 +110,21 @@ func (c *Client) OpenFile(ctx context.Context, bucket string, key string, optFns
 		prefetchThreshold: options.PrefetchThreshold,
 	}
 
-	var query map[string]string
-	if f.versionId != nil {
-		query["versionId"] = ToString(f.versionId)
-	}
-	result, err := f.client.InvokeOperation(f.context, &OperationInput{
-		OpName:     "HeadObject",
-		Method:     "HEAD",
-		Bucket:     Ptr(f.bucket),
-		Key:        Ptr(f.key),
-		Parameters: query,
+	result, err := f.client.HeadObject(f.context, &HeadObjectRequest{
+		Bucket:    &f.bucket,
+		Key:       &f.key,
+		VersionId: f.versionId,
 	})
 
 	if err != nil {
 		return nil, err
 	}
-	if result.Body != nil {
-		result.Body.Close()
-	}
 
 	//File info
+	f.sizeInBytes = result.ContentLength
 	f.modTime = result.Headers.Get(HTTPHeaderLastModified)
 	f.etag = result.Headers.Get(HTTPHeaderETag)
 	f.headers = result.Headers
-	_, f.sizeInBytes = parseOffsetAndSizeFromHeaders(result.Headers)
 
 	if f.sizeInBytes < 0 {
 		return nil, fmt.Errorf("file size is invaid, got %v", f.sizeInBytes)
@@ -269,7 +260,7 @@ func (f *ReadOnlyFile) Stat() (os.FileInfo, error) {
 func (f *ReadOnlyFile) name() string {
 	var name string
 	if f.versionId != nil {
-		name = fmt.Sprintf("oss://%s/%s?%s", f.bucket, f.key, *f.versionId)
+		name = fmt.Sprintf("oss://%s/%s?versionId=%s", f.bucket, f.key, *f.versionId)
 	} else {
 		name = fmt.Sprintf("oss://%s/%s", f.bucket, f.key)
 	}
@@ -334,15 +325,17 @@ func (f *ReadOnlyFile) readInternal(offset int64, p []byte) (bytesRead int, err 
 		err = f.prefetch(offset, len(p))
 		if err == nil {
 			bytesRead, err = f.readFromPrefetcher(offset, p)
-			return
-		} else {
-			// fall back to read serially
-			f.seqReadAmount = 0
-			for _, ar := range f.asyncReaders {
-				ar.Close()
+			if err == nil {
+				return
 			}
-			f.asyncReaders = nil
 		}
+
+		// fall back to read serially
+		f.seqReadAmount = 0
+		for _, ar := range f.asyncReaders {
+			ar.Close()
+		}
+		f.asyncReaders = nil
 	}
 
 	bytesRead, err = f.readDirect(offset, p)
@@ -403,6 +396,10 @@ func (f *ReadOnlyFile) readFromPrefetcher(offset int64, buf []byte) (bytesRead i
 	var nread int
 	for len(f.asyncReaders) != 0 {
 		asyncReader := f.asyncReaders[0]
+		//check offset
+		if offset != asyncReader.Offset() {
+			return 0, errors.New("out of order")
+		}
 		nread, err = asyncReader.Read(buf)
 		bytesRead += nread
 		if err != nil {
@@ -412,7 +409,7 @@ func (f *ReadOnlyFile) readFromPrefetcher(offset int64, buf []byte) (bytesRead i
 				f.asyncReaders = f.asyncReaders[1:]
 				err = nil
 			} else {
-				return
+				return 0, err
 			}
 		}
 		buf = buf[nread:]
@@ -677,7 +674,7 @@ func (f *AppendOnlyFile) Stat() (os.FileInfo, error) {
 	info, err := f.stat()
 
 	if err != nil {
-		return nil, f.wrapErr("seek", err)
+		return nil, f.wrapErr("stat", err)
 	}
 
 	return info, nil

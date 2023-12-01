@@ -336,6 +336,10 @@ func (a *AsyncReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
+func (a *AsyncReader) Offset() int64 {
+	return a.offset
+}
+
 func (a *AsyncReader) Close() (err error) {
 	a.abandon()
 	if a.closed {
