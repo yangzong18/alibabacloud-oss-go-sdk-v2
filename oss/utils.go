@@ -269,3 +269,36 @@ func minInt64(a, b int64) int64 {
 		return b
 	}
 }
+
+// ParseRange parses a HTTPRange from a Range: header.
+// It only accepts single ranges.
+func ParseRange(s string) (r *HTTPRange, err error) {
+	const preamble = "bytes="
+	if !strings.HasPrefix(s, preamble) {
+		return nil, errors.New("range: header invalid: doesn't start with " + preamble)
+	}
+	s = s[len(preamble):]
+	if strings.ContainsRune(s, ',') {
+		return nil, errors.New("range: header invalid: contains multiple ranges which isn't supported")
+	}
+	dash := strings.IndexRune(s, '-')
+	if dash < 0 {
+		return nil, errors.New("range: header invalid: contains no '-'")
+	}
+	start, end := strings.TrimSpace(s[:dash]), strings.TrimSpace(s[dash+1:])
+	o := HTTPRange{Offset: 0, Count: 0}
+	if start != "" {
+		o.Offset, err = strconv.ParseInt(start, 10, 64)
+		if err != nil || o.Offset < 0 {
+			return nil, errors.New("range: header invalid: bad start")
+		}
+	}
+	if end != "" {
+		e, err := strconv.ParseInt(end, 10, 64)
+		if err != nil || e < 0 {
+			return nil, errors.New("range: header invalid: bad end")
+		}
+		o.Count = e - o.Offset + 1
+	}
+	return &o, nil
+}

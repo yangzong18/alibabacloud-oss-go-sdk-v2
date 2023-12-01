@@ -233,4 +233,12 @@ func main() {
 	averSpeed = float64(stat.Size()/1024) / float64(duration.Seconds())
 	fmt.Printf("averSpeed :%.2f(KB/s), duration:%v\n", averSpeed, duration)
 	fmt.Printf("File-Like parallel read done, src file crc64:%v, dest file crc64:%v\n", (stat.Sys().(http.Header)).Get(oss.HeaderOssCRC64), hash.Sum64())
+
+	//使用File-Like Append 模式
+	afile, err := client.AppendFile(context.TODO(), BucketName, Key+"-append")
+	n, err := afile.Write([]byte("hello"))
+	fmt.Printf("append file: wirte reulst :%d\n", n)
+	n, err = afile.Write([]byte("world"))
+	fmt.Printf("append file: wirte reulst :%d\n", n)
+	afile.Close()
 }

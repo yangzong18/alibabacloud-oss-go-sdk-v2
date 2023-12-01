@@ -1,11 +1,14 @@
 package oss
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -58,6 +61,8 @@ type ReadOnlyFile struct {
 	asyncReaders  []*AsyncReader
 	seqReadAmount int64 // number of sequential read
 	numOOORead    int64 // number of out of order read
+
+	closed bool // whether we have closed the file
 }
 
 // OpenFile opens the named file for reading.
@@ -143,10 +148,28 @@ func (c *Client) OpenFile(ctx context.Context, bucket string, key string, optFns
 
 // Close closes the File.
 func (f *ReadOnlyFile) Close() error {
+	if f == nil {
+		return os.ErrInvalid
+	}
+	return f.close()
+}
+
+func (f *ReadOnlyFile) close() error {
+	if f.closed {
+		return nil
+	}
+
 	if f.reader != nil {
 		f.reader.Close()
+		f.reader = nil
 	}
-	f.reader = nil
+	for _, reader := range f.asyncReaders {
+		reader.Close()
+	}
+	f.asyncReaders = nil
+
+	f.closed = true
+	runtime.SetFinalizer(f, nil)
 	return nil
 }
 
@@ -154,6 +177,14 @@ func (f *ReadOnlyFile) Close() error {
 // It returns the number of bytes read and any error encountered.
 // At end of file, Read returns 0, io.EOF.
 func (f *ReadOnlyFile) Read(p []byte) (bytesRead int, err error) {
+	if err := f.checkValid("read"); err != nil {
+		return 0, err
+	}
+	n, e := f.read(p)
+	return n, f.wrapErr("read", e)
+}
+
+func (f *ReadOnlyFile) read(p []byte) (bytesRead int, err error) {
 	defer func() {
 		f.offset += int64(bytesRead)
 	}()
@@ -173,6 +204,17 @@ func (f *ReadOnlyFile) Read(p []byte) (bytesRead int, err error) {
 // relative to the current offset, and 2 means relative to the end.
 // It returns the new offset and an error.
 func (f *ReadOnlyFile) Seek(offset int64, whence int) (int64, error) {
+	if err := f.checkValid("seek"); err != nil {
+		return 0, err
+	}
+	r, e := f.seek(offset, whence)
+	if e != nil {
+		return 0, f.wrapErr("seek", e)
+	}
+	return r, nil
+}
+
+func (f *ReadOnlyFile) seek(offset int64, whence int) (int64, error) {
 	var abs int64
 	switch whence {
 	case io.SeekStart:
@@ -182,13 +224,13 @@ func (f *ReadOnlyFile) Seek(offset int64, whence int) (int64, error) {
 	case io.SeekEnd:
 		abs = f.sizeInBytes + offset
 	default:
-		return 0, fmt.Errorf("Seek: invalid whence")
+		return 0, fmt.Errorf("invalid whence")
 	}
 	if abs < 0 {
-		return 0, fmt.Errorf("Seek: negative position")
+		return 0, fmt.Errorf("negative position")
 	}
 	if abs > f.sizeInBytes {
-		return offset - (abs - f.sizeInBytes), fmt.Errorf("Seek: offset is unavailable")
+		return offset - (abs - f.sizeInBytes), fmt.Errorf("offset is unavailable")
 	}
 
 	f.offset = abs
@@ -212,19 +254,42 @@ func (fi *fileInfo) Sys() any           { return fi.header }
 
 // Stat returns the FileInfo structure describing file.
 func (f *ReadOnlyFile) Stat() (os.FileInfo, error) {
+	if err := f.checkValid("stat"); err != nil {
+		return nil, err
+	}
+	mtime, _ := http.ParseTime(f.modTime)
+	return &fileInfo{
+		name:    f.name(),
+		size:    f.sizeInBytes,
+		modTime: mtime,
+		header:  f.headers,
+	}, nil
+}
+
+func (f *ReadOnlyFile) name() string {
 	var name string
 	if f.versionId != nil {
 		name = fmt.Sprintf("oss://%s/%s?%s", f.bucket, f.key, *f.versionId)
 	} else {
 		name = fmt.Sprintf("oss://%s/%s", f.bucket, f.key)
 	}
-	mtime, _ := http.ParseTime(f.modTime)
-	return &fileInfo{
-		name:    name,
-		size:    f.sizeInBytes,
-		modTime: mtime,
-		header:  f.headers,
-	}, nil
+	return name
+}
+
+func (f *ReadOnlyFile) wrapErr(op string, err error) error {
+	if err == nil || err == io.EOF {
+		return err
+	}
+	return &os.PathError{Op: op, Path: f.name(), Err: err}
+}
+
+func (f *ReadOnlyFile) checkValid(op string) error {
+	if f == nil {
+		return os.ErrInvalid
+	} else if f.closed {
+		return os.ErrClosed
+	}
+	return nil
 }
 
 func (f *ReadOnlyFile) readInternal(offset int64, p []byte) (bytesRead int, err error) {
@@ -290,7 +355,8 @@ func (f *ReadOnlyFile) readDirect(offset int64, buf []byte) (bytesRead int, err 
 	}
 
 	if f.reader == nil {
-		result, err := f.client.GetObject(f.context, &GetObjectRequest{
+		var result *GetObjectResult
+		result, err = f.client.GetObject(f.context, &GetObjectRequest{
 			Bucket:        Ptr(f.bucket),
 			Key:           Ptr(f.key),
 			VersionId:     f.versionId,
@@ -301,7 +367,7 @@ func (f *ReadOnlyFile) readDirect(offset int64, buf []byte) (bytesRead int, err 
 			return bytesRead, err
 		}
 
-		if err = f.checkFileChanged(offset, result.Headers); err != nil {
+		if err = f.checkResultValid(offset, result.Headers); err != nil {
 			return bytesRead, err
 		}
 
@@ -318,7 +384,7 @@ func (f *ReadOnlyFile) readDirect(offset int64, buf []byte) (bytesRead int, err 
 	return
 }
 
-func (f *ReadOnlyFile) checkFileChanged(offset int64, header http.Header) error {
+func (f *ReadOnlyFile) checkResultValid(offset int64, header http.Header) error {
 	modTime := header.Get(HTTPHeaderLastModified)
 	etag := header.Get(HTTPHeaderETag)
 	gotOffset, _ := parseOffsetAndSizeFromHeaders(header)
@@ -381,7 +447,8 @@ func (f *ReadOnlyFile) prefetch(offset int64, needAtLeast int) (err error) {
 					request.Range = rangeStr
 					request.RangeBehavior = Ptr("standard")
 				}
-				result, err := f.client.GetObject(f.context, request)
+				var result *GetObjectResult
+				result, err = f.client.GetObject(f.context, request)
 				if err != nil {
 					return nil, 0, "", err
 				}
@@ -401,5 +468,246 @@ func (f *ReadOnlyFile) prefetch(offset int64, needAtLeast int) (err error) {
 			break
 		}
 	}
+	return nil
+}
+
+type AppendOptions struct {
+}
+
+type AppendOnlyFile struct {
+	client  *Client
+	context context.Context
+
+	// object info
+	bucket string
+	key    string
+
+	info os.FileInfo
+
+	// current write position
+	offset int64
+
+	closed bool
+}
+
+// AppendFile opens or creates the named file for appending.
+// If successful, methods on the returned file can be used for appending.
+func (c *Client) AppendFile(ctx context.Context, bucket string, key string, optFns ...func(*AppendOptions)) (*AppendOnlyFile, error) {
+	options := AppendOptions{}
+
+	for _, fn := range optFns {
+		fn(&options)
+	}
+
+	f := &AppendOnlyFile{
+		client:  c,
+		context: ctx,
+
+		bucket: bucket,
+		key:    key,
+	}
+
+	result, err := f.client.HeadObject(f.context, &HeadObjectRequest{Bucket: &f.bucket, Key: &f.key})
+	if err != nil {
+		var serr *ServiceError
+		if errors.As(err, &serr) && serr.StatusCode == 404 {
+			// not found
+		} else {
+			return nil, err
+		}
+	} else {
+		if ToString(result.ObjectType) != "Appendable" {
+			return nil, errors.New("Not a appendable file")
+		}
+		f.offset = result.ContentLength
+	}
+
+	return f, nil
+}
+
+// Write writes len(b) bytes from b to the AppendOnlyFile.
+// It returns the number of bytes written and an error, if any.
+// Write returns a non-nil error when n != len(b).
+func (f *AppendOnlyFile) Write(b []byte) (n int, err error) {
+	if err := f.checkValid("write"); err != nil {
+		return 0, err
+	}
+
+	n, e := f.write(b)
+	if n < 0 {
+		n = 0
+	}
+
+	if e == nil && n != len(b) {
+		err = io.ErrShortWrite
+	}
+
+	if e != nil {
+		err = f.wrapErr("write", e)
+	}
+
+	return n, err
+}
+
+// write writes len(b) bytes to the File.
+// It returns the number of bytes written and an error, if any.
+func (f *AppendOnlyFile) write(b []byte) (n int, err error) {
+	offset := f.offset
+
+	request := &AppendObjectRequest{
+		Bucket:   &f.bucket,
+		Key:      &f.key,
+		Position: Ptr(f.offset),
+		RequestCommon: RequestCommon{
+			Body: bytes.NewReader(b),
+		},
+	}
+
+	var result *AppendObjectResult
+	if result, err = f.client.AppendObject(f.context, request); err == nil {
+		f.offset = result.NextPosition
+	} else {
+		var serr *ServiceError
+		if errors.As(err, &serr) && serr.Code == "PositionNotEqualToLength" {
+			if position, ok := f.nextAppendPosition(); ok {
+				if offset+int64(len(b)) == position {
+					f.offset = position
+					err = nil
+				}
+			}
+		}
+	}
+
+	return int(f.offset - offset), err
+}
+
+// WriteFrom writes io.Reader to the File.
+// It returns the number of bytes written and an error, if any.
+func (f *AppendOnlyFile) WriteFrom(r io.Reader) (n int64, err error) {
+	if err := f.checkValid("write"); err != nil {
+		return 0, err
+	}
+
+	n, err = f.writeFrom(r)
+
+	if err != nil {
+		err = f.wrapErr("write", err)
+	}
+
+	return n, err
+}
+
+func (f *AppendOnlyFile) writeFrom(r io.Reader) (n int64, err error) {
+	offset := f.offset
+
+	request := &AppendObjectRequest{
+		Bucket:   &f.bucket,
+		Key:      &f.key,
+		Position: Ptr(f.offset),
+		RequestCommon: RequestCommon{
+			Body: r,
+		},
+	}
+
+	var roffset int64
+	var rs io.Seeker
+	rs, ok := r.(io.Seeker)
+	if ok {
+		roffset, _ = rs.Seek(0, io.SeekCurrent)
+	}
+
+	var result *AppendObjectResult
+	if result, err = f.client.AppendObject(f.context, request); err == nil {
+		f.offset = result.NextPosition
+	} else {
+		var serr *ServiceError
+		if errors.As(err, &serr) && serr.Code == "PositionNotEqualToLength" {
+			if position, ok := f.nextAppendPosition(); ok {
+				if rs != nil {
+					if curr, e := rs.Seek(0, io.SeekCurrent); e == nil {
+						if offset+(curr-roffset) == position {
+							f.offset = position
+							err = nil
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return f.offset - offset, err
+}
+
+func (f *AppendOnlyFile) nextAppendPosition() (int64, bool) {
+	if h, e := f.client.HeadObject(f.context, &HeadObjectRequest{Bucket: &f.bucket, Key: &f.key}); e == nil {
+		return h.ContentLength, true
+	}
+	return 0, false
+}
+
+// wrapErr wraps an error that occurred during an operation on an open file.
+// It passes io.EOF through unchanged, otherwise converts
+// Wraps the error in a PathError.
+func (f *AppendOnlyFile) wrapErr(op string, err error) error {
+	if err == nil || err == io.EOF {
+		return err
+	}
+	return &os.PathError{Op: op, Path: f.name(), Err: err}
+}
+
+func (f *AppendOnlyFile) checkValid(op string) error {
+	if f == nil {
+		return os.ErrInvalid
+	} else if f.closed {
+		return os.ErrClosed
+	}
+	return nil
+}
+
+func (f *AppendOnlyFile) name() string {
+	return fmt.Sprintf("oss://%s/%s", f.bucket, f.key)
+}
+
+// Stat returns the FileInfo structure describing file.
+func (f *AppendOnlyFile) Stat() (os.FileInfo, error) {
+	if err := f.checkValid("stat"); err != nil {
+		return nil, err
+	}
+
+	info, err := f.stat()
+
+	if err != nil {
+		return nil, f.wrapErr("seek", err)
+	}
+
+	return info, nil
+}
+
+func (f *AppendOnlyFile) stat() (os.FileInfo, error) {
+	var err error
+	if f.info == nil || f.info.Size() != f.offset {
+		f.info = nil
+		if result, err := f.client.HeadObject(f.context, &HeadObjectRequest{Bucket: &f.bucket, Key: &f.key}); err == nil {
+			f.info = &fileInfo{
+				name:    f.name(),
+				size:    result.ContentLength,
+				modTime: ToTime(result.LastModified),
+				header:  result.Headers,
+			}
+		}
+	}
+	return f.info, err
+}
+
+// Close closes the File.
+func (f *AppendOnlyFile) Close() error {
+	if f == nil {
+		return os.ErrInvalid
+	}
+	return f.close()
+}
+
+func (f *AppendOnlyFile) close() error {
+	f.closed = true
 	return nil
 }
