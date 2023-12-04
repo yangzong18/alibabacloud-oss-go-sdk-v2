@@ -142,6 +142,8 @@ func marshalMetaRequest(request any, input *OperationInput) error {
 			builder.WriteString("</OverwriteIfExists>")
 		}
 		builder.WriteString("</CsvMetaRequest>")
+	default:
+		return NewErrParamInvalid("MetaRequest")
 	}
 	input.Body = strings.NewReader(builder.String())
 	if input.Parameters == nil {

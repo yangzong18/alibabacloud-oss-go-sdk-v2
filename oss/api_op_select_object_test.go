@@ -2,14 +2,12 @@ package oss
 
 import (
 	"bytes"
-	"encoding/csv"
 	"encoding/hex"
 	"github.com/stretchr/testify/assert"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 )
@@ -17,17 +15,6 @@ import (
 func hexStrToByte(hexString string) string {
 	byteData, _ := hex.DecodeString(hexString)
 	return string(byteData)
-}
-
-func readCsvLine(fileName string) (int, error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-	rd := csv.NewReader(file)
-	rc, err := rd.ReadAll()
-	return len(rc), err
 }
 
 func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
@@ -65,6 +52,15 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &CreateSelectObjectMetaRequest{
+		Bucket:      Ptr("oss-demo"),
+		Key:         Ptr("oss-key"),
+		MetaRequest: &SelectRequest{},
+	}
+	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid field, MetaRequest.")
 
 	request = &CreateSelectObjectMetaRequest{
 		Bucket:      Ptr("oss-demo"),
