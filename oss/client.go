@@ -738,7 +738,7 @@ func marshalDeleteObjects(request any, input *OperationInput) error {
 			builder.WriteString("</Object>")
 		}
 	} else {
-		return NewErrParamRequired("Objects")
+		return NewErrParamInvalid("Objects")
 	}
 	builder.WriteString("</Delete>")
 	input.Body = strings.NewReader(builder.String())

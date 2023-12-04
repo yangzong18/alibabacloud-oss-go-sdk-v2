@@ -957,10 +957,12 @@ func TestUnmarshalOutput_CopyObject(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	var resultErr PutBucketAclResult
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_AppendObject(t *testing.T) {
@@ -1454,6 +1456,14 @@ func TestMarshalInput_DeleteMultipleObjects(t *testing.T) {
 
 	request = &DeleteMultipleObjectsRequest{
 		Bucket:  Ptr("oss-bucket"),
+		Objects: []DeleteObject{},
+	}
+	err = c.marshalInput(request, input, marshalDeleteObjects, updateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
+	request = &DeleteMultipleObjectsRequest{
+		Bucket:  Ptr("oss-bucket"),
 		Objects: []DeleteObject{{Key: Ptr("key1.txt")}, {Key: Ptr("key2.txt")}},
 	}
 	input = &OperationInput{
@@ -1665,10 +1675,11 @@ func TestUnmarshalOutput_DeleteMultipleObjects(t *testing.T) {
 		},
 		Body: io.NopCloser(bytes.NewReader([]byte(body))),
 	}
-	var resultErr DeleteMultipleObjectsResult
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
-	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "deserialization failed, non-pointer passed to Unmarshal")
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "MalformedXML")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "6555AC764311A73931E0****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_HeadObject(t *testing.T) {
@@ -2433,13 +2444,12 @@ func TestUnmarshalOutput_PutObjectAcl(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &PutObjectAclResult{}
-	err = c.unmarshalOutput(resultErr, output, discardBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, resultErr.Headers.Get("X-Oss-Request-Id"), "568D5566F2D0F89F5C0E****")
-	assert.Equal(t, resultErr.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "568D5566F2D0F89F5C0E****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 }
 
 func TestMarshalInput_GetObjectAcl(t *testing.T) {
@@ -2613,12 +2623,11 @@ func TestUnmarshalOutput_GetObjectAcl(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &PutObjectAclResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -2802,12 +2811,11 @@ func TestUnmarshalOutput_InitiateMultipartUpload(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &InitiateMultipartUploadResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -2976,12 +2984,11 @@ func TestUnmarshalOutput_UploadPart(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &UploadPartResult{}
-	err = c.unmarshalOutput(resultErr, output, discardBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -3285,12 +3292,11 @@ func TestUnmarshalOutput_UploadPartCopy(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &UploadPartResult{}
-	err = c.unmarshalOutput(resultErr, output, discardBody, unmarshalHeader)
+	err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -3486,12 +3492,11 @@ func TestUnmarshalOutput_CompleteMultipartUpload(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &UploadPartResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalHeader, unmarshalEncodeType)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -3625,12 +3630,11 @@ func TestUnmarshalOutput_AbortMultipartUpload(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &InitiateMultipartUploadResult{}
-	err = c.unmarshalOutput(resultErr, output, discardBody)
+	err = c.unmarshalOutput(result, output, discardBody)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -3910,12 +3914,11 @@ func TestUnmarshalOutput_ListMultipartUploads(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &ListMultipartUploadsResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalEncodeType)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 
@@ -4165,12 +4168,11 @@ func TestUnmarshalOutput_ListParts(t *testing.T) {
 			"Content-Type":     {"application/xml"},
 		},
 	}
-	resultErr := &ListPartsResult{}
-	err = c.unmarshalOutput(resultErr, output, unmarshalBodyXml, unmarshalEncodeType)
+	err = c.unmarshalOutput(result, output, unmarshalBodyXml, unmarshalEncodeType)
 	assert.Nil(t, err)
-	assert.Equal(t, resultErr.StatusCode, 403)
-	assert.Equal(t, resultErr.Status, "AccessDenied")
-	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "534B371674E88A4D8906****")
+	assert.Equal(t, result.StatusCode, 403)
+	assert.Equal(t, result.Status, "AccessDenied")
+	assert.Equal(t, result.Headers.Get(HeaderOssRequestID), "568D5566F2D0F89F5C0E****")
 	assert.Equal(t, result.Headers.Get(HTTPHeaderContentType), "application/xml")
 }
 

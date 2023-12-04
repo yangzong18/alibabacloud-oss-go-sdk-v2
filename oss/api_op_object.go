@@ -659,7 +659,7 @@ type DeleteMultipleObjectsRequest struct {
 	ContentLength int64 `input:"header,Content-Length"`
 
 	// The container that stores information about you want to delete objects.
-	Objects []DeleteObject
+	Objects []DeleteObject `input:"nop,objects,required"`
 
 	// Specifies whether to enable the Quiet return mode.
 	// The DeleteMultipleObjects operation provides the following return modes: Valid value: true,false
