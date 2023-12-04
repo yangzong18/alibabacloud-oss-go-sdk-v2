@@ -31,6 +31,8 @@ type CreateSelectObjectMetaRequest struct {
 	Key *string `input:"path,key,required"`
 
 	MetaRequest any `input:"nop,meta-request,required"`
+
+	RequestCommon
 }
 
 type JsonMetaRequest struct {
