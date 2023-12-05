@@ -104,12 +104,67 @@ func (c *Client) marshalPresignInput(request any, input *OperationInput) error {
 		input.Bucket = t.Bucket
 		input.Key = t.Key
 	// TODO
-	//case *PutObjectRequest:
-	//case *HeadObjectRequest:
-	//case *InitiateMultipartUpload:
-	//case *UploadPartRequest:
-	//case *CompleteMultipartUpload:
-	//case *AbortMultipartUpload:
+	case *PutObjectRequest:
+		input.OpName = "PutObject"
+		input.Method = "PUT"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+	case *CopyObjectRequest:
+		input.OpName = "CopyObject"
+		input.Method = "PUT"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+		input.Headers = map[string]string{
+			"x-oss-copy-source": encodeSourceObject(request),
+		}
+	case *HeadObjectRequest:
+		input.OpName = "HeadObject"
+		input.Method = "HEAD"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+	case *AppendObjectRequest:
+		input.OpName = "AppendObject"
+		input.Method = "POST"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+		input.Parameters = map[string]string{
+			"append": "",
+		}
+	case *InitiateMultipartUploadRequest:
+		input.OpName = "InitiateMultipartUpload"
+		input.Method = "POST"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+		input.Parameters = map[string]string{
+			"uploads":       "",
+			"encoding-type": "url",
+		}
+	case *UploadPartRequest:
+		input.OpName = "UploadPart"
+		input.Method = "PUT"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+	case *UploadPartCopyRequest:
+		input.OpName = "UploadPartCopy"
+		input.Method = "PUT"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+		input.Headers = map[string]string{
+			"x-oss-copy-source": encodeSourceObject(request),
+		}
+	case *CompleteMultipartUploadRequest:
+		input.OpName = "CompleteMultipartUpload"
+		input.Method = "POST"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
+		input.Parameters = map[string]string{
+			"encoding-type": "url",
+		}
+	case *AbortMultipartUploadRequest:
+		input.OpName = "AbortMultipartUpload"
+		input.Method = "DELETE"
+		input.Bucket = t.Bucket
+		input.Key = t.Key
 	default:
 		return NewErrParamInvalid(fmt.Sprintf("request %v", reflect.ValueOf(request).Type().String()))
 	}

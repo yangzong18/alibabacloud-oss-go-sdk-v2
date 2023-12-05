@@ -43,7 +43,6 @@ func TestMarshalInput_PutObject(t *testing.T) {
 		Method: "PUT",
 		Bucket: request.Bucket,
 		Key:    request.Key,
-		Body:   request.Body,
 	}
 	err = c.marshalInput(request, input)
 	assert.NotNil(t, err)
@@ -3337,15 +3336,15 @@ func TestMarshalInput_CompleteMultipartUpload(t *testing.T) {
 		UploadId:     Ptr("0004B9895DBBB6EC9****"),
 		EncodingType: Ptr("url"),
 		CompleteMultipartUpload: &CompleteMultipartUpload{
-			Part: []UploadPart{
+			Parts: []UploadPart{
 				{PartNumber: int32(3), ETag: Ptr("\"3349DC700140D7F86A0784842780****\"")},
 				{PartNumber: int32(1), ETag: Ptr("\"8EFDA8BE206636A695359836FE0A****\"")},
 				{PartNumber: int32(2), ETag: Ptr("\"8C315065167132444177411FDA14****\"")},
 			},
 		},
 	}
-	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Part) > 0 {
-		sort.Sort(UploadParts(request.CompleteMultipartUpload.Part))
+	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
+		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
 	}
 	input = &OperationInput{
 		OpName: "CompleteMultipartUpload",
@@ -3992,11 +3991,10 @@ func TestMarshalInput_ListParts(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &ListPartsRequest{
-		Bucket:           Ptr("oss-demo"),
-		Key:              Ptr("oss-object"),
-		UploadId:         Ptr("89F0105AA66942638E35300618DF5EE7"),
-		MaxParts:         int32(10),
-		PartNumberMarker: Ptr(""),
+		Bucket:   Ptr("oss-demo"),
+		Key:      Ptr("oss-object"),
+		UploadId: Ptr("89F0105AA66942638E35300618DF5EE7"),
+		MaxParts: int32(10),
 	}
 	input = &OperationInput{
 		OpName: "ListParts",

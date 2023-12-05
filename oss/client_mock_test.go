@@ -6593,7 +6593,7 @@ var testMockCompleteMultipartUploadSuccessCases = []struct {
 			Key:      Ptr("object"),
 			UploadId: Ptr("0004B9895DBBB6EC9"),
 			CompleteMultipartUpload: &CompleteMultipartUpload{
-				Part: []UploadPart{
+				Parts: []UploadPart{
 					{PartNumber: int32(3), ETag: Ptr("\"3349DC700140D7F86A0784842780****\"")},
 					{PartNumber: int32(1), ETag: Ptr("\"8EFDA8BE206636A695359836FE0A****\"")},
 					{PartNumber: int32(2), ETag: Ptr("\"8C315065167132444177411FDA14****\"")},
@@ -6749,7 +6749,7 @@ var testMockCompleteMultipartUploadErrorCases = []struct {
 			UploadId:    Ptr("0004B9895DBBB6EC9"),
 			CompleteAll: Ptr("yes"),
 			CompleteMultipartUpload: &CompleteMultipartUpload{
-				Part: []UploadPart{
+				Parts: []UploadPart{
 					{PartNumber: int32(3), ETag: Ptr("\"3349DC700140D7F86A0784842780****\"")},
 					{PartNumber: int32(1), ETag: Ptr("\"8EFDA8BE206636A695359836FE0A****\"")},
 					{PartNumber: int32(2), ETag: Ptr("\"8C315065167132444177411FDA14****\"")},

@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/base64"
+	"encoding/xml"
 	"errors"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -73,7 +75,6 @@ func randLowStr(n int) string {
 }
 
 func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
-	var err error
 	assert.NotEmpty(t, *bucketInfo.Name)
 	var c *Client
 	if strings.Contains(endpoint_, *bucketInfo.ExtranetEndpoint) ||
@@ -83,20 +84,50 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		c = getClient(*bucketInfo.Region, *bucketInfo.ExtranetEndpoint)
 	}
 	assert.NotNil(t, c)
+	cleanObjects(c, *bucketInfo.Name, t)
+}
+
+func deleteBucket(bucketName string, t *testing.T) {
+	assert.NotEmpty(t, bucketName)
+	var c *Client
+	c = getDefaultClient()
+	assert.NotNil(t, c)
+	cleanObjects(c, bucketName, t)
+}
+
+func cleanBuckets(prefix string, t *testing.T) {
+	c := getDefaultClient()
+	for {
+		request := &ListBucketsRequest{
+			Prefix: Ptr(prefix),
+		}
+		result, err := c.ListBuckets(context.TODO(), request)
+		assert.Nil(t, err)
+		if len(result.Buckets) == 0 {
+			return
+		}
+		for _, b := range result.Buckets {
+			cleanBucket(b, t)
+		}
+	}
+}
+
+func cleanObjects(c *Client, bucketName string, t *testing.T) {
+	var err error
 	var listRequest *ListObjectsRequest
 	var delObjRequest *DeleteObjectRequest
 	var lor *ListObjectsResult
 	marker := ""
 	for {
 		listRequest = &ListObjectsRequest{
-			Bucket: Ptr(*bucketInfo.Name),
+			Bucket: Ptr(bucketName),
 			Marker: Ptr(marker),
 		}
 		lor, err = c.ListObjects(context.TODO(), listRequest)
 		assert.Nil(t, err)
 		for _, object := range lor.Contents {
 			delObjRequest = &DeleteObjectRequest{
-				Bucket: Ptr(*bucketInfo.Name),
+				Bucket: Ptr(bucketName),
 				Key:    Ptr(*object.Key),
 			}
 			_, err = c.DeleteObject(context.TODO(), delObjRequest)
@@ -116,7 +147,7 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 	uploadIdMarker := ""
 	for {
 		listUploadRequest = &ListMultipartUploadsRequest{
-			Bucket:         Ptr(*bucketInfo.Name),
+			Bucket:         Ptr(bucketName),
 			KeyMarker:      Ptr(keyMarker),
 			UploadIdMarker: Ptr(uploadIdMarker),
 		}
@@ -124,7 +155,7 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		assert.Nil(t, err)
 		for _, upload := range lsRes.Uploads {
 			abortRequest = &AbortMultipartUploadRequest{
-				Bucket:   Ptr(*bucketInfo.Name),
+				Bucket:   Ptr(bucketName),
 				Key:      Ptr(*upload.Key),
 				UploadId: Ptr(*upload.UploadId),
 			}
@@ -143,7 +174,7 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 	VersionIdMarker := ""
 	for {
 		lsVersionRq = &ListObjectVersionsRequest{
-			Bucket:          Ptr(*bucketInfo.Name),
+			Bucket:          Ptr(bucketName),
 			KeyMarker:       Ptr(versionKeyMarker),
 			VersionIdMarker: Ptr(VersionIdMarker),
 		}
@@ -151,7 +182,7 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		assert.Nil(t, err)
 		for _, object := range lsVersionRs.ObjectDeleteMarkers {
 			delObjRequest = &DeleteObjectRequest{
-				Bucket:    Ptr(*bucketInfo.Name),
+				Bucket:    Ptr(bucketName),
 				Key:       Ptr(*object.Key),
 				VersionId: Ptr(*object.VersionId),
 			}
@@ -160,7 +191,7 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		}
 		for _, object := range lsVersionRs.ObjectVersions {
 			delObjRequest = &DeleteObjectRequest{
-				Bucket:    Ptr(*bucketInfo.Name),
+				Bucket:    Ptr(bucketName),
 				Key:       Ptr(*object.Key),
 				VersionId: Ptr(*object.VersionId),
 			}
@@ -174,27 +205,10 @@ func cleanBucket(bucketInfo BucketProperties, t *testing.T) {
 		VersionIdMarker = *lsVersionRs.NextVersionIdMarker
 	}
 	delRequest := &DeleteBucketRequest{
-		Bucket: Ptr(*bucketInfo.Name),
+		Bucket: Ptr(bucketName),
 	}
 	_, err = c.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-}
-
-func cleanBuckets(prefix string, t *testing.T) {
-	c := getDefaultClient()
-	for {
-		request := &ListBucketsRequest{
-			Prefix: Ptr(prefix),
-		}
-		result, err := c.ListBuckets(context.TODO(), request)
-		assert.Nil(t, err)
-		if len(result.Buckets) == 0 {
-			return
-		}
-		for _, b := range result.Buckets {
-			cleanBucket(b, t)
-		}
-	}
 }
 
 func before(t *testing.T) func(t *testing.T) {
@@ -1896,7 +1910,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		Key:      Ptr(objectName),
 		UploadId: Ptr(*initResult.UploadId),
 		CompleteMultipartUpload: &CompleteMultipartUpload{
-			Part: parts,
+			Parts: parts,
 		},
 	}
 	result, err := client.CompleteMultipartUpload(context.TODO(), request)
@@ -1978,7 +1992,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		UploadId:    Ptr(*initCopyResult.UploadId),
 		CompleteAll: Ptr("yes"),
 		CompleteMultipartUpload: &CompleteMultipartUpload{
-			Part: []UploadPart{
+			Parts: []UploadPart{
 				copyPart,
 			},
 		},
@@ -3310,4 +3324,435 @@ func TestSelectObject(t *testing.T) {
 	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
 	assert.Equal(t, "0015-00000101", serr.EC)
 	assert.NotEmpty(t, serr.RequestID)
+}
+
+func TestPresign(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	putRequest := &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	}
+
+	client := getDefaultClient()
+	_, err := client.PutBucket(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	time.Sleep(2 * time.Second)
+	body := randLowStr(1000)
+	objectName := objectNamePrefix + randLowStr(6)
+	putObjRequest := &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	result, err := client.Presign(context.TODO(), putObjRequest)
+	assert.Nil(t, err)
+	req, err := http.NewRequest(result.Method, result.URL, strings.NewReader(body))
+	assert.Nil(t, err)
+	c := &http.Client{}
+	resp, err := c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	time.Sleep(1 * time.Second)
+
+	getObjRequest := &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	expiration := time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), getObjRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	assert.Equal(t, "GET", result.Method)
+	assert.NotEmpty(t, result.Expiration)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	data, _ := ioutil.ReadAll(resp.Body)
+	assert.Equal(t, string(data), body)
+	time.Sleep(1 * time.Second)
+
+	copyObjectName := objectName + "-copy"
+	copyObjRequest := &CopyObjectRequest{
+		Bucket:    Ptr(bucketName),
+		Key:       Ptr(copyObjectName),
+		SourceKey: Ptr(objectName),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), copyObjRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	assert.NotEmpty(t, result.Expiration)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	req.Header["x-oss-copy-source"] = []string{encodeSourceObject(copyObjRequest)}
+	resp, err = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	time.Sleep(1 * time.Second)
+
+	headObjRequest := &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(copyObjectName),
+	}
+	headResult, err := client.HeadObject(context.TODO(), headObjRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, headResult.Headers.Get(HTTPHeaderContentLength), strconv.FormatInt(int64(len(body)), 10))
+	assert.Equal(t, *headResult.ObjectType, "Normal")
+	time.Sleep(1 * time.Second)
+
+	appendObjectName := objectName + "-append"
+	appendObjRequest := &AppendObjectRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(appendObjectName),
+		Position: Ptr(int64(0)),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), appendObjRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	time.Sleep(1 * time.Second)
+
+	headObjRequest = &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(appendObjectName),
+	}
+	headResult, err = client.HeadObject(context.TODO(), headObjRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), headResult.ContentLength)
+	assert.Equal(t, *headResult.ObjectType, "Appendable")
+
+	headObjRequest = &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), headObjRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	assert.Equal(t, resp.Header.Get(HTTPHeaderContentLength), strconv.Itoa(len(body)))
+	time.Sleep(1 * time.Second)
+
+	objectNameMultipart := objectNamePrefix + randLowStr(6) + "-multi-part"
+	initRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameMultipart),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), initRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	defer resp.Body.Close()
+	data, err = ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
+	initResult := &InitiateMultipartUploadResult{}
+	err = xml.Unmarshal(data, initResult)
+	assert.Equal(t, *initResult.Key, objectNameMultipart)
+	uploadId := initResult.UploadId
+	time.Sleep(1 * time.Second)
+
+	partRequest := &UploadPartRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectNameMultipart),
+		PartNumber: int32(1),
+		UploadId:   uploadId,
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), partRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, strings.NewReader(body))
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	time.Sleep(1 * time.Second)
+
+	var parts []UploadPart
+	uploadResult := &UploadPartResult{}
+	err = xml.Unmarshal(data, uploadResult)
+	part := UploadPart{
+		PartNumber: partRequest.PartNumber,
+		ETag:       Ptr(resp.Header.Get("ETag")),
+	}
+	parts = append(parts, part)
+	completeRequest := &CompleteMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectNameMultipart),
+		UploadId: uploadId,
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), completeRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+
+	upload := CompleteMultipartUpload{
+		Parts: parts,
+	}
+	xmlData, err := xml.Marshal(upload)
+	req, err = http.NewRequest(result.Method, result.URL, strings.NewReader(string(xmlData)))
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+
+	time.Sleep(1 * time.Second)
+	headObjRequest = &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameMultipart),
+	}
+	headResult, err = client.HeadObject(context.TODO(), headObjRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, headResult.Headers.Get(HTTPHeaderContentLength), strconv.FormatInt(int64(len(body)), 10))
+	assert.Equal(t, *headResult.ObjectType, "Multipart")
+	time.Sleep(1 * time.Second)
+
+	objectNameMultipartCopy := objectNamePrefix + randLowStr(6) + "-multi-part-copy"
+	initCopyRequest := &InitiateMultipartUploadRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameMultipartCopy),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), initCopyRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, nil)
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	defer resp.Body.Close()
+	data, err = ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
+	initCopyResult := &InitiateMultipartUploadResult{}
+	err = xml.Unmarshal(data, initCopyResult)
+	assert.Equal(t, *initCopyResult.Key, objectNameMultipartCopy)
+	copyUploadId := *initCopyResult.UploadId
+	time.Sleep(1 * time.Second)
+
+	partCopyRequest := &UploadPartCopyRequest{
+		Bucket:     Ptr(bucketName),
+		Key:        Ptr(objectNameMultipartCopy),
+		SourceKey:  Ptr(objectNameMultipart),
+		PartNumber: int32(1),
+		UploadId:   Ptr(copyUploadId),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), partCopyRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, strings.NewReader(body))
+	assert.Nil(t, err)
+	req.Header["x-oss-copy-source"] = []string{encodeSourceObject(partCopyRequest)}
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 200)
+	time.Sleep(1 * time.Second)
+
+	listPartsRequest := &ListPartsRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectNameMultipartCopy),
+		UploadId: Ptr(copyUploadId),
+	}
+	lsRes, err := client.ListParts(context.TODO(), listPartsRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, len(lsRes.Parts), 1)
+	time.Sleep(1 * time.Second)
+
+	abortRequest := &AbortMultipartUploadRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectNameMultipartCopy),
+		UploadId: Ptr(copyUploadId),
+	}
+	expiration = time.Now().Add(100 * time.Second)
+	result, err = client.Presign(context.TODO(), abortRequest, PresignExpiration(expiration))
+	assert.Nil(t, err)
+	req, err = http.NewRequest(result.Method, result.URL, strings.NewReader(body))
+	assert.Nil(t, err)
+	resp, _ = c.Do(req)
+	assert.Equal(t, resp.StatusCode, 204)
+	time.Sleep(1 * time.Second)
+
+	listPartsRequest = &ListPartsRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectNameMultipartCopy),
+		UploadId: Ptr(copyUploadId),
+	}
+	lsRes, err = client.ListParts(context.TODO(), listPartsRequest)
+	var serr *ServiceError
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchUpload", serr.Code)
+	assert.Equal(t, "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", serr.Message)
+	assert.Equal(t, "0042-00000002", serr.EC)
+	assert.NotEmpty(t, serr.RequestID)
+
+	deleteBucket(bucketName, t)
+}
+
+func TestPaginator(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	var bucketName string
+	client := getDefaultClient()
+	count := 10
+	bucketNameTestPrefix := bucketNamePrefix + randLowStr(6) + "-"
+	for i := 0; i < count; i++ {
+		bucketName = bucketNameTestPrefix + strconv.Itoa(i)
+		putRequest := &PutBucketRequest{
+			Bucket: Ptr(bucketName),
+		}
+		_, err := client.PutBucket(context.TODO(), putRequest)
+		assert.Nil(t, err)
+	}
+	time.Sleep(1 * time.Second)
+
+	lbRequest := &ListBucketsRequest{
+		MaxKeys: int32(4),
+		Prefix:  Ptr(bucketNameTestPrefix),
+	}
+	lbPaginator := client.NewListBucketsPaginator(lbRequest)
+	countBucket := 0
+	for lbPaginator.HasNext() {
+		result, err := lbPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		countBucket += len(result.Buckets)
+	}
+	assert.Equal(t, countBucket, count)
+	time.Sleep(1 * time.Second)
+
+	listBucket, err := client.ListBuckets(context.TODO(), &ListBucketsRequest{
+		Prefix: Ptr(bucketNameTestPrefix),
+	})
+	assert.Nil(t, err)
+	bucketNameTest := *listBucket.Buckets[0].Name
+
+	var objName string
+	countObj := 10
+	objectNameTestPrefix := objectNamePrefix + randLowStr(6) + "-"
+	for i := 0; i < countObj; i++ {
+		objName = objectNameTestPrefix + strconv.Itoa(i)
+		putRequest := &PutObjectRequest{
+			Bucket: Ptr(bucketNameTest),
+			Key:    Ptr(objName),
+		}
+		_, err = client.PutObject(context.TODO(), putRequest)
+		assert.Nil(t, err)
+	}
+	time.Sleep(1 * time.Second)
+
+	var listObjCount int
+	listObjRequest := &ListObjectsRequest{
+		Bucket:  Ptr(bucketNameTest),
+		MaxKeys: int32(4),
+	}
+	listObjPaginator := client.NewListObjectsPaginator(listObjRequest)
+	for listObjPaginator.HasNext() {
+		result, err := listObjPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		listObjCount += len(result.Contents)
+	}
+	assert.Equal(t, countObj, listObjCount)
+
+	var listObjCountV2 int
+	listObjV2Request := &ListObjectsRequestV2{
+		Bucket:  Ptr(bucketNameTest),
+		MaxKeys: int32(4),
+	}
+	listObjV2Paginator := client.NewListObjectsV2Paginator(listObjV2Request)
+	for listObjV2Paginator.HasNext() {
+		result, err := listObjV2Paginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		listObjCountV2 += len(result.Contents)
+	}
+	assert.Equal(t, countObj, listObjCountV2)
+
+	var listObjVersionCount, listObjDeleted int
+	lovRequest := &ListObjectVersionsRequest{
+		Bucket:  Ptr(bucketNameTest),
+		MaxKeys: int32(4),
+	}
+	lovPaginator := client.NewListObjectVersionsPaginator(lovRequest)
+	for lovPaginator.HasNext() {
+		result, err := lovPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		listObjVersionCount += len(result.ObjectVersions)
+		listObjDeleted += len(result.ObjectDeleteMarkers)
+	}
+	assert.Equal(t, countObj, listObjVersionCount)
+	assert.Equal(t, 0, listObjDeleted)
+
+	var objMultiName string
+	countObjMulti := 20
+	for i := 0; i < countObjMulti; i++ {
+		objMultiName = objectNameTestPrefix + "multi-part-" + strconv.Itoa(i)
+		_, err = client.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+			Bucket: Ptr(bucketNameTest),
+			Key:    Ptr(objMultiName),
+		})
+		assert.Nil(t, err)
+	}
+	time.Sleep(1 * time.Second)
+
+	var countUploads int
+	lmuRequest := &ListMultipartUploadsRequest{
+		Bucket:     Ptr(bucketNameTest),
+		MaxUploads: int32(8),
+	}
+	lmuPaginator := client.NewListMultipartUploadsPaginator(lmuRequest)
+	for lmuPaginator.HasNext() {
+		result, err := lmuPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		countUploads += len(result.Uploads)
+	}
+	assert.Equal(t, countObjMulti, countUploads)
+
+	uploadsResult, err := client.ListMultipartUploads(context.TODO(), &ListMultipartUploadsRequest{
+		Bucket: Ptr(bucketNameTest),
+	})
+	assert.Nil(t, err)
+	time.Sleep(1 * time.Second)
+
+	objectName := *uploadsResult.Uploads[0].Key
+	uploadId := *uploadsResult.Uploads[0].UploadId
+	data := randLowStr(1024 * 1024 * 20)
+	countPart := 20
+	lenStr := len(data)
+	avgLen := lenStr / countPart
+	result := make([]string, 0)
+	for i := 0; i < lenStr; i += avgLen {
+		end := i + avgLen
+		if end > lenStr {
+			end = lenStr
+		}
+		result = append(result, data[i:end])
+	}
+
+	for k, content := range result {
+		_, err = client.UploadPart(context.TODO(), &UploadPartRequest{
+			Bucket:     Ptr(bucketNameTest),
+			Key:        Ptr(objectName),
+			UploadId:   Ptr(uploadId),
+			PartNumber: int32(k + 1),
+			RequestCommon: RequestCommon{
+				Body: strings.NewReader(content),
+			},
+		})
+		assert.Nil(t, err)
+	}
+	time.Sleep(1 * time.Second)
+	var countPartResult int
+	lpRequest := &ListPartsRequest{
+		Bucket:   Ptr(bucketNameTest),
+		Key:      Ptr(objectName),
+		UploadId: Ptr(uploadId),
+		MaxParts: int32(6),
+	}
+	lpPaginator := client.NewListPartsPaginator(lpRequest)
+	for lpPaginator.HasNext() {
+		result, err := lpPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		countPartResult += len(result.Parts)
+	}
+	assert.Equal(t, countPart, countPartResult)
 }

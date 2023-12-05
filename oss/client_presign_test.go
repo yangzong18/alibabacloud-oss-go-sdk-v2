@@ -19,13 +19,13 @@ func TestPresignPresignOptions(t *testing.T) {
 
 	client := NewClient(cfg)
 
-	reqeust := &GetObjectRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
 
 	expiration := time.Now().Add(1 * time.Hour)
-	result, err := client.Presign(context.TODO(), reqeust, PresignExpiration(expiration))
+	result, err := client.Presign(context.TODO(), request, PresignExpiration(expiration))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.Equal(t, expiration, result.Expiration)
@@ -37,11 +37,11 @@ func TestPresignPresignOptions(t *testing.T) {
 
 	expires := 50 * time.Minute
 	expiration = time.Now().Add(expires)
-	result, err = client.Presign(context.TODO(), reqeust, PresignExpires(expires))
+	result, err = client.Presign(context.TODO(), request, PresignExpires(expires))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
-	assert.True(t, (result.Expiration.Unix()-expiration.Unix() < 2))
+	assert.True(t, result.Expiration.Unix()-expiration.Unix() < 2)
 	assert.Empty(t, result.SignedHeaders)
 	assert.Contains(t, result.URL, "bucket.oss-cn-hangzhou.aliyuncs.com/key?")
 	assert.Contains(t, result.URL, "OSSAccessKeyId=ak")
@@ -57,13 +57,13 @@ func TestPresignWithToken(t *testing.T) {
 
 	client := NewClient(cfg)
 
-	reqeust := &GetObjectRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
 
 	expiration := time.Now().Add(1 * time.Hour)
-	result, err := client.Presign(context.TODO(), reqeust, PresignExpiration(expiration))
+	result, err := client.Presign(context.TODO(), request, PresignExpiration(expiration))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
@@ -83,7 +83,7 @@ func TestPresignWithHeader(t *testing.T) {
 
 	client := NewClient(cfg)
 
-	reqeust := &GetObjectRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 		RequestCommon: RequestCommon{
@@ -94,7 +94,7 @@ func TestPresignWithHeader(t *testing.T) {
 	}
 
 	expiration := time.Now().Add(1 * time.Hour)
-	result, err := client.Presign(context.TODO(), reqeust, PresignExpiration(expiration))
+	result, err := client.Presign(context.TODO(), request, PresignExpiration(expiration))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
@@ -145,7 +145,7 @@ func TestPresignOperationInput(t *testing.T) {
 
 	client := NewClient(cfg)
 
-	reqeust := &OperationInput{
+	request := &OperationInput{
 		OpName: "GetObject",
 		Method: "GET",
 		Bucket: Ptr("bucket"),
@@ -156,7 +156,7 @@ func TestPresignOperationInput(t *testing.T) {
 	}
 
 	expiration, _ := http.ParseTime("Sun, 12 Nov 2023 16:43:40 GMT")
-	result, err := client.Presign(context.TODO(), reqeust, PresignExpiration(expiration))
+	result, err := client.Presign(context.TODO(), request, PresignExpiration(expiration))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
@@ -174,7 +174,7 @@ func TestPresignOperationInput(t *testing.T) {
 
 	client = NewClient(cfg)
 
-	reqeust = &OperationInput{
+	request = &OperationInput{
 		OpName: "GetObject",
 		Method: "GET",
 		Bucket: Ptr("bucket"),
@@ -185,7 +185,7 @@ func TestPresignOperationInput(t *testing.T) {
 	}
 
 	expiration, _ = http.ParseTime("Sun, 12 Nov 2023 16:56:44 GMT")
-	result, err = client.Presign(context.TODO(), reqeust, PresignExpiration(expiration))
+	result, err = client.Presign(context.TODO(), request, PresignExpiration(expiration))
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
@@ -207,10 +207,10 @@ func TestPresignWithError(t *testing.T) {
 	client := NewClient(cfg)
 
 	// unsupport request
-	reqeust := &ListObjectsRequest{
+	request := &ListObjectsRequest{
 		Bucket: Ptr("bucket"),
 	}
-	_, err := client.Presign(context.TODO(), reqeust)
+	_, err := client.Presign(context.TODO(), request)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request *oss.ListObjectsRequest")
 

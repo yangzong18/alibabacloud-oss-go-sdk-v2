@@ -2,7 +2,6 @@ package oss
 
 import (
 	"context"
-	"encoding/xml"
 	"fmt"
 	"io"
 	"sort"
@@ -1440,8 +1439,7 @@ type UploadPart struct {
 }
 
 type CompleteMultipartUpload struct {
-	XMLName xml.Name     `xml:"CompleteMultipartUpload"`
-	Part    []UploadPart `xml:"Part"`
+	Parts []UploadPart `xml:"Part"`
 }
 type UploadParts []UploadPart
 
@@ -1500,8 +1498,8 @@ func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteM
 			"encoding-type": "url",
 		},
 	}
-	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Part) > 0 {
-		sort.Sort(UploadParts(request.CompleteMultipartUpload.Part))
+	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
+		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
 	}
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
@@ -1704,7 +1702,7 @@ type ListPartsRequest struct {
 
 	// The position from which the list starts.
 	// All parts whose part numbers are greater than the value of this parameter are listed.
-	PartNumberMarker *string `input:"query,part-number-marker"`
+	PartNumberMarker int32 `input:"query,part-number-marker"`
 
 	RequestCommon
 }
