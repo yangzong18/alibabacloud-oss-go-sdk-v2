@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -458,7 +460,7 @@ func TestMockOpenFile_MixRead(t *testing.T) {
 		return h.Sum64()
 	}()
 
-	rangeReqCount := 0
+	rangeReqCount := int32(0)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -476,7 +478,7 @@ func TestMockOpenFile_MixRead(t *testing.T) {
 			//body
 			w.Write(nil)
 		case "GET":
-			rangeReqCount++
+			atomic.AddInt32(&rangeReqCount, 1)
 			// header
 			var httpRange *HTTPRange
 			if r.Header.Get("Range") != "" {
@@ -501,7 +503,7 @@ func TestMockOpenFile_MixRead(t *testing.T) {
 				statusCode = 206
 			}
 
-			if rangeReqCount > 3 && httpRange != nil && httpRange.Count > 0 {
+			if atomic.LoadInt32(&rangeReqCount) > 3 && httpRange != nil && httpRange.Count > 0 {
 				time.Sleep(2 * time.Second)
 			}
 
@@ -1220,10 +1222,29 @@ func TestMockAppendFile_NoAppenable(t *testing.T) {
 }
 
 func TestMockAppendFile_PositionNotEqualToLength(t *testing.T) {
+	var dataMu sync.Mutex
 	data := []byte("start:")
 	gmtTime := getNowGMT()
 
-	count := 0
+	count := int32(0)
+
+	getDataLen := func() int {
+		dataMu.Lock()
+		defer dataMu.Unlock()
+		return len(data)
+	}
+
+	getDataValue := func() []byte {
+		dataMu.Lock()
+		defer dataMu.Unlock()
+		return data
+	}
+
+	setDataValue := func(v []byte) {
+		dataMu.Lock()
+		defer dataMu.Unlock()
+		data = v
+	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
@@ -1246,8 +1267,8 @@ func TestMockAppendFile_PositionNotEqualToLength(t *testing.T) {
 		case "POST":
 			query, _ := url.ParseQuery(r.URL.RawQuery)
 			position, _ := strconv.ParseInt(query.Get("position"), 10, 64)
-			count++
-			if position != int64(len(data)) {
+			atomic.AddInt32(&count, 1)
+			if position != int64(getDataLen()) {
 				//fmt.Printf("position != int64(len(data), position:%d, len:%d\n", position, len(data))
 
 				s := `<?xml version="1.0" encoding="UTF-8"?>
@@ -1267,13 +1288,13 @@ func TestMockAppendFile_PositionNotEqualToLength(t *testing.T) {
 				assert.Nil(t, err)
 
 				var buffer bytes.Buffer
-				buffer.Write(data)
+				buffer.Write(getDataValue())
 				buffer.Write(in)
-				data = buffer.Bytes()
+				setDataValue(buffer.Bytes())
 
 				//fmt.Printf("position = int64(len(data), position:%d, new len:%d\n", position, len(data))
 
-				if count <= 1 {
+				if atomic.LoadInt32(&count) <= 1 {
 					time.Sleep(5 * time.Second)
 				} else {
 					// header
@@ -1342,7 +1363,7 @@ func TestMockAppendFile_PositionNotEqualToLength(t *testing.T) {
 	// next time
 	pattern = "second:"
 	data = []byte(pattern)
-	count = 0
+	atomic.StoreInt32(&count, 0)
 	f, err = client.AppendFile(context.TODO(), "bucket", "key")
 	assert.Nil(t, err)
 	assert.NotNil(t, f)

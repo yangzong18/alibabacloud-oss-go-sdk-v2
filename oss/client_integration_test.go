@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
@@ -237,6 +237,7 @@ func TestListBuckets(t *testing.T) {
 
 		client := getDefaultClient()
 		_, err := client.PutBucket(context.TODO(), putRequest)
+		assert.NoError(t, err)
 		assert.Nil(t, err)
 	}
 
@@ -1839,7 +1840,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
 	bufReader := bufio.NewReader(reader)
-	content, err := ioutil.ReadAll(bufReader)
+	content, err := io.ReadAll(bufReader)
 	assert.Nil(t, err)
 	count := 3
 	partSize := len(content) / count
@@ -1929,7 +1930,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	getObjresult, err := client.GetObject(context.TODO(), getObj)
 	assert.Nil(t, err)
-	data, _ := ioutil.ReadAll(getObjresult.Body)
+	data, _ := io.ReadAll(getObjresult.Body)
 	assert.Nil(t, err)
 	assert.Equal(t, string(data), body)
 
@@ -2085,7 +2086,7 @@ func TestListMultipartUploads(t *testing.T) {
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
 	bufReader := bufio.NewReader(reader)
-	content, err := ioutil.ReadAll(bufReader)
+	content, err := io.ReadAll(bufReader)
 	assert.Nil(t, err)
 	count := 3
 	partSize := len(content) / count
@@ -2236,7 +2237,7 @@ func TestListParts(t *testing.T) {
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
 	bufReader := bufio.NewReader(reader)
-	content, err := ioutil.ReadAll(bufReader)
+	content, err := io.ReadAll(bufReader)
 	assert.Nil(t, err)
 	count := 3
 	partSize := len(content) / count
@@ -3243,7 +3244,7 @@ func TestSelectObject(t *testing.T) {
 	}
 	result, err := client.SelectObject(context.TODO(), request)
 	assert.Nil(t, err)
-	dataByte, err := ioutil.ReadAll(result.Body)
+	dataByte, err := io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte), "name\nLora Francis\nEleanor Little\nRosie Hughes\nLawrence Ross\n")
 	time.Sleep(1 * time.Second)
 
@@ -3295,7 +3296,7 @@ func TestSelectObject(t *testing.T) {
 	}
 	result, err = client.SelectObject(context.TODO(), request)
 	assert.Nil(t, err)
-	dataByte, err = ioutil.ReadAll(result.Body)
+	dataByte, err = io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte), "name\nLora Francis\nEleanor Little\nRosie Hughes\nLawrence Ross\n")
 	time.Sleep(1 * time.Second)
 
@@ -3368,7 +3369,7 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	data, _ := ioutil.ReadAll(resp.Body)
+	data, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, string(data), body)
 	time.Sleep(1 * time.Second)
 
@@ -3450,7 +3451,7 @@ func TestPresign(t *testing.T) {
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
 	defer resp.Body.Close()
-	data, err = ioutil.ReadAll(resp.Body)
+	data, err = io.ReadAll(resp.Body)
 	assert.Nil(t, err)
 	initResult := &InitiateMultipartUploadResult{}
 	err = xml.Unmarshal(data, initResult)
@@ -3523,7 +3524,7 @@ func TestPresign(t *testing.T) {
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
 	defer resp.Body.Close()
-	data, err = ioutil.ReadAll(resp.Body)
+	data, err = io.ReadAll(resp.Body)
 	assert.Nil(t, err)
 	initCopyResult := &InitiateMultipartUploadResult{}
 	err = xml.Unmarshal(data, initCopyResult)

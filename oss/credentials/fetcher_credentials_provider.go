@@ -16,6 +16,7 @@ var (
 	defaultRefreshDuration = 120 * time.Second
 )
 
+// CredentialsFetcherOptions are the options
 type CredentialsFetcherOptions struct {
 	ExpiredFactor   float64
 	RefreshDuration time.Duration
@@ -25,17 +26,30 @@ type CredentialsFetcher interface {
 	Fetch(ctx context.Context) (Credentials, error)
 }
 
+// CredentialsFetcherFunc provides a helper wrapping a function value to
+// satisfy the CredentialsFetcher interface.
+type CredentialsFetcherFunc func(context.Context) (Credentials, error)
+
+// Fetch delegates to the function value the CredentialsFetcherFunc wraps.
+func (fn CredentialsFetcherFunc) Fetch(ctx context.Context) (Credentials, error) {
+	return fn(ctx)
+}
+
 type CredentialsFetcherProvider struct {
 	m sync.Mutex
 
-	//credentials *Credentials
+	//credentials *fetcherCredentials
 	credentials atomic.Value
 
 	fetcher CredentialsFetcher
 
 	expiredFactor   float64
 	refreshDuration time.Duration
-	nextRefreshTime *time.Time
+}
+
+type fetcherCredentials struct {
+	Creds        Credentials
+	ExpiryWindow time.Duration
 }
 
 func NewCredentialsFetcherProvider(fetcher CredentialsFetcher, optFns ...func(*CredentialsFetcherOptions)) CredentialsProvider {
@@ -56,36 +70,32 @@ func NewCredentialsFetcherProvider(fetcher CredentialsFetcher, optFns ...func(*C
 }
 
 func (c *CredentialsFetcherProvider) GetCredentials(ctx context.Context) (Credentials, error) {
-	var curCreds *Credentials
-	if v := c.credentials.Load(); v != nil {
-		curCreds, _ = v.(*Credentials)
-	}
-	if c.isExpired(curCreds) {
+	fcreds := c.getCreds()
+	if c.isExpired(fcreds) {
 		c.m.Lock()
 		defer c.m.Unlock()
 		creds, err := c.fetch(ctx)
 		if err == nil {
-			c.update(&creds)
+			c.updateCreds(&creds)
 		}
 		return creds, err
 	} else {
-		if c.isSoonExpire(curCreds) && c.m.TryLock() {
+		if c.isSoonExpire(fcreds) && c.m.TryLock() {
 			defer c.m.Unlock()
-			curCreds1 := c.credentials.Load().(*Credentials)
-			if curCreds1 != curCreds {
-				curCreds = curCreds1
-			} else {
+			fcreds1 := c.getCreds()
+			if fcreds1 == fcreds {
 				creds, err := c.fetch(ctx)
 				if err == nil {
-					c.update(&creds)
-					curCreds = &creds
+					c.updateCreds(&creds)
+					return creds, nil
 				} else {
-					c.updateNextRefreshTime()
+					c.updateExpiryWindow(fcreds1)
 					err = nil
 				}
 			}
+			fcreds = fcreds1
 		}
-		return *curCreds, nil
+		return fcreds.Creds, nil
 	}
 }
 
@@ -122,39 +132,51 @@ func (c *CredentialsFetcherProvider) fetch(ctx context.Context) (Credentials, er
 	}
 }
 
-func (c *CredentialsFetcherProvider) update(cred *Credentials) {
-	c.credentials.Store(cred)
-	c.nextRefreshTime = nil
+func (p *CredentialsFetcherProvider) getCreds() *fetcherCredentials {
+	v := p.credentials.Load()
+	if v == nil {
+		return nil
+	}
+	creds, _ := v.(*fetcherCredentials)
+	return creds
+}
+
+func (c *CredentialsFetcherProvider) updateCreds(cred *Credentials) {
+	fcred := fetcherCredentials{
+		Creds: *cred,
+	}
 	if cred.Expires != nil {
 		curr := time.Now().Round(0)
 		durationS := c.expiredFactor * float64(cred.Expires.Sub(curr).Seconds())
 		duration := time.Duration(durationS * float64(time.Second))
 		if duration > c.refreshDuration {
-			curr = curr.Add(duration)
-			c.nextRefreshTime = &curr
+			fcred.ExpiryWindow = duration
 		}
 	}
+	c.credentials.Store(&fcred)
 }
 
-func (c *CredentialsFetcherProvider) updateNextRefreshTime() {
-	if c.nextRefreshTime != nil {
-		//next := c.nextRefreshTime.Add(c.refreshDuration)
-		next := time.Now().Round(0).Add(c.refreshDuration)
-		c.nextRefreshTime = &next
+func (c *CredentialsFetcherProvider) updateExpiryWindow(fcreds *fetcherCredentials) {
+	if fcreds.ExpiryWindow > 0 {
+		fcreds1 := *fcreds
+		fcreds1.ExpiryWindow -= c.refreshDuration
+		c.credentials.Store(&fcreds1)
 	}
 }
 
-func (c *CredentialsFetcherProvider) isExpired(creds *Credentials) bool {
-	return creds == nil || creds.Expired()
+func (c *CredentialsFetcherProvider) isExpired(fcreds *fetcherCredentials) bool {
+	return fcreds == nil || fcreds.Creds.Expired()
 }
 
-func (c *CredentialsFetcherProvider) isSoonExpire(creds *Credentials) bool {
-	if creds == nil || creds.Expired() {
+func (c *CredentialsFetcherProvider) isSoonExpire(fcreds *fetcherCredentials) bool {
+	if fcreds == nil || fcreds.Creds.Expired() {
 		return true
 	}
 
-	if c.nextRefreshTime != nil && !c.nextRefreshTime.After(time.Now().Round(0)) {
-		return true
+	if fcreds.ExpiryWindow > 0 && fcreds.Creds.Expires != nil {
+		if !fcreds.Creds.Expires.After(time.Now().Round(0).Add(fcreds.ExpiryWindow)) {
+			return true
+		}
 	}
 
 	return false

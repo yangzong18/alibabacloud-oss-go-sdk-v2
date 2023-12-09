@@ -27,6 +27,15 @@ type CredentialsProvider interface {
 	GetCredentials(ctx context.Context) (Credentials, error)
 }
 
+// CredentialsProviderFunc provides a helper wrapping a function value to
+// satisfy the CredentialsProvider interface.
+type CredentialsProviderFunc func(context.Context) (Credentials, error)
+
+// GetCredentials delegates to the function value the CredentialsProviderFunc wraps.
+func (fn CredentialsProviderFunc) GetCredentials(ctx context.Context) (Credentials, error) {
+	return fn(ctx)
+}
+
 type AnonymousCredentialsProvider struct{}
 
 func NewAnonymousCredentialsProvider() CredentialsProvider {

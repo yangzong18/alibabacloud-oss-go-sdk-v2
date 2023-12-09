@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -139,7 +140,7 @@ func (s *stubCredentialsFetcher) Fetch(ctx context.Context) (Credentials, error)
 		expires = &new
 	}
 
-	s.count++
+	atomic.AddInt64(&s.count, 1)
 
 	return Credentials{
 		AccessKeyID:     "ak",
@@ -157,9 +158,7 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.NotNil(t, fetcherProvider)
 	assert.Equal(t, defaultExpiredFactor, fetcherProvider.expiredFactor)
 	assert.Equal(t, defaultRefreshDuration, fetcherProvider.refreshDuration)
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 	assert.Nil(t, fetcherProvider.fetcher)
-	//assert.Nil(t, fetcherProvider.credentials)
 
 	_, err := provider.GetCredentials(context.TODO())
 	assert.NotNil(t, err)
@@ -192,7 +191,6 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.NotNil(t, provider)
 	fetcherProvider, ok = provider.(*CredentialsFetcherProvider)
 	assert.NotNil(t, fetcherProvider)
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 
 	// 1st
 	cred1, err := provider.GetCredentials(context.TODO())
@@ -202,7 +200,6 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.Equal(t, "token", cred1.SessionToken)
 	assert.NotNil(t, cred1.Expires)
 	assert.False(t, cred1.Expired())
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 
 	// 2st
 	cred2, err := provider.GetCredentials(context.TODO())
@@ -243,27 +240,29 @@ func TestCredentialsFetcherProvider_Soon(t *testing.T) {
 	fetcherProvider, ok := provider.(*CredentialsFetcherProvider)
 	assert.True(t, ok)
 	assert.NotNil(t, fetcherProvider)
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 
 	// 1st
 	cred1, err := provider.GetCredentials(context.TODO())
+	cred1_1, err := provider.GetCredentials(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred1.AccessKeyID)
 	assert.Equal(t, "sk", cred1.AccessKeySecret)
 	assert.Equal(t, "token", cred1.SessionToken)
 	assert.NotNil(t, cred1.Expires)
 	assert.False(t, cred1.Expired())
-	assert.NotNil(t, fetcherProvider.nextRefreshTime)
+	assert.EqualValues(t, cred1, cred1_1)
 
 	// 2st
 	time.Sleep(6 * time.Second)
 	assert.False(t, cred1.Expired())
 	cred2, err := provider.GetCredentials(context.TODO())
+	cred3, _ := provider.GetCredentials(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred2.AccessKeyID)
 	assert.Equal(t, "sk", cred2.AccessKeySecret)
 	assert.Equal(t, "token", cred2.SessionToken)
 	assert.True(t, cred2.Expires.After(*cred1.Expires))
+	assert.EqualValues(t, cred2, cred3)
 }
 
 func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
@@ -284,12 +283,12 @@ func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
 	fetcherProvider, ok := provider.(*CredentialsFetcherProvider)
 	assert.True(t, ok)
 	assert.NotNil(t, fetcherProvider)
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 
-	run := true
+	var run atomic.Bool
+	run.Store(true)
 	testFn := func() {
 		count := int64(0)
-		for run {
+		for run.Load() {
 			cred, err := provider.GetCredentials(context.TODO())
 			assert.Nil(t, err)
 			assert.Equal(t, "ak", cred.AccessKeyID)
@@ -299,26 +298,23 @@ func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
 			assert.False(t, cred.Expired())
 			count++
 		}
-		assert.Greater(t, count, int64(1000))
+		assert.Greater(t, count, int64(5000))
 	}
 
 	for i := 0; i < 20; i++ {
 		go testFn()
 	}
 
-	time.Sleep(1 * time.Second)
-	assert.NotNil(t, fetcherProvider.nextRefreshTime)
-
-	time.Sleep(8 * time.Second)
-	run = false
-	assert.Less(t, fetcher.count, int64(4))
+	time.Sleep(15 * time.Second)
+	run.Store(false)
+	assert.Less(t, atomic.LoadInt64(&fetcher.count), int64(6))
 }
 
 type stubCredentialsFetcher2 struct {
 	delay        time.Duration
 	token        string
 	returnErr    bool
-	returnTimout bool
+	returnTimout atomic.Bool
 }
 
 func (s *stubCredentialsFetcher2) Fetch(ctx context.Context) (Credentials, error) {
@@ -329,7 +325,7 @@ func (s *stubCredentialsFetcher2) Fetch(ctx context.Context) (Credentials, error
 		expires = &new
 	}
 
-	if s.returnTimout {
+	if s.returnTimout.Load() {
 		time.Sleep(10 * time.Second)
 		return Credentials{}, fmt.Errorf("returnTimout")
 	} else if s.returnErr {
@@ -362,7 +358,6 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	fetcherProvider, ok := provider.(*CredentialsFetcherProvider)
 	assert.True(t, ok)
 	assert.NotNil(t, fetcherProvider)
-	assert.Nil(t, fetcherProvider.nextRefreshTime)
 
 	// Get Fail
 	_, err := provider.GetCredentials(context.TODO())
@@ -389,7 +384,6 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Equal(t, "sk", cred2.AccessKeySecret)
 	assert.Equal(t, "token", cred2.SessionToken)
 	assert.Equal(t, *cred1.Expires, *cred2.Expires)
-	assert.True(t, fetcherProvider.nextRefreshTime.After(time.Now()))
 
 	// Fetch Timeout
 	fetcher = &stubCredentialsFetcher2{
@@ -410,12 +404,12 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.NotNil(t, fetcherProvider)
 	ctxt1, cancel1 := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel1()
-	fetcher.returnTimout = true
+	fetcher.returnTimout.Store(true)
 	_, err = provider.GetCredentials(ctxt1)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "FetchCredentialsCanceled")
 
-	fetcher.returnTimout = false
+	fetcher.returnTimout.Store(false)
 	cred3, err := provider.GetCredentials(context.TODO())
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred3.AccessKeyID)
@@ -427,7 +421,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	time.Sleep(4 * time.Second)
 	ctxt2, cancel2 := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel2()
-	fetcher.returnTimout = true
+	fetcher.returnTimout.Store(true)
 	cred4, err := provider.GetCredentials(ctxt2)
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred4.AccessKeyID)
