@@ -125,14 +125,16 @@ func cleanObjects(c *Client, bucketName string, t *testing.T) {
 		}
 		lor, err = c.ListObjects(context.TODO(), listRequest)
 		assert.Nil(t, err)
+		var deleteObjects []DeleteObject
 		for _, object := range lor.Contents {
-			delObjRequest = &DeleteObjectRequest{
-				Bucket: Ptr(bucketName),
-				Key:    Ptr(*object.Key),
-			}
-			_, err = c.DeleteObject(context.TODO(), delObjRequest)
-			assert.Nil(t, err)
+			deleteObjects = append(deleteObjects, DeleteObject{Key: object.Key})
 		}
+		_, err = c.DeleteMultipleObjects(context.TODO(), &DeleteMultipleObjectsRequest{
+			Bucket:  Ptr(bucketName),
+			Objects: deleteObjects,
+		})
+		assert.Nil(t, err)
+
 		if !lor.IsTruncated {
 			break
 		}
@@ -267,13 +269,13 @@ func TestPutBucket(t *testing.T) {
 	assert.Equal(t, result.Status, "200 OK")
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id") != "", true)
-	time.Sleep(2 * time.Second)
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
+	bucketName = bucketNamePrefix + randLowStr(6)
 	putRequest = &PutBucketRequest{
 		Bucket: Ptr(bucketName),
 		CreateBucketConfiguration: &CreateBucketConfiguration{
@@ -286,7 +288,6 @@ func TestPutBucket(t *testing.T) {
 	assert.Equal(t, result.Status, "200 OK")
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id") != "", true)
-	time.Sleep(2 * time.Second)
 	delRequest = &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -307,7 +308,6 @@ func TestDeleteBucket(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -316,7 +316,6 @@ func TestDeleteBucket(t *testing.T) {
 	assert.Equal(t, result.Status, "204 No Content")
 	assert.Equal(t, result.StatusCode, 204)
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id") != "", true)
-	time.Sleep(2 * time.Second)
 	result, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -341,7 +340,6 @@ func TestListObjects(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &ListObjectsRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -354,7 +352,6 @@ func TestListObjects(t *testing.T) {
 	assert.Empty(t, result.Marker)
 	assert.Empty(t, result.Delimiter)
 	assert.Equal(t, result.IsTruncated, false)
-	time.Sleep(2 * time.Second)
 	bucketNotExist := bucketNamePrefix + "not-exist" + randLowStr(5)
 	request = &ListObjectsRequest{
 		Bucket: Ptr(bucketNotExist),
@@ -389,7 +386,6 @@ func TestListObjectsV2(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &ListObjectsRequestV2{
 		Bucket: Ptr(bucketName),
 	}
@@ -402,7 +398,6 @@ func TestListObjectsV2(t *testing.T) {
 	assert.Empty(t, result.StartAfter)
 	assert.Empty(t, result.Delimiter)
 	assert.Equal(t, result.IsTruncated, false)
-	time.Sleep(2 * time.Second)
 	bucketNotExist := bucketNamePrefix + "not-exist" + randLowStr(5)
 	request = &ListObjectsRequestV2{
 		Bucket: Ptr(bucketNotExist),
@@ -437,7 +432,7 @@ func TestGetBucketInfo(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	getRequest := &GetBucketInfoRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -462,13 +457,11 @@ func TestGetBucketInfo(t *testing.T) {
 	assert.Equal(t, *info.BucketInfo.SseRule.SSEAlgorithm, "")
 	assert.Nil(t, info.BucketInfo.SseRule.KMSDataEncryption)
 	assert.Nil(t, info.BucketInfo.SseRule.KMSMasterKeyID)
-	time.Sleep(2 * time.Second)
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	_, err = client.GetBucketInfo(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -493,7 +486,7 @@ func TestGetBucketLocation(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	getRequest := &GetBucketLocationRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -513,7 +506,6 @@ func TestGetBucketLocation(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	_, err = client.GetBucketLocation(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -538,7 +530,7 @@ func TestGetBucketStat(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	getRequest := &GetBucketStatRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -560,13 +552,11 @@ func TestGetBucketStat(t *testing.T) {
 	assert.Equal(t, int64(0), stat.ColdArchiveStorage)
 	assert.Equal(t, int64(0), stat.ColdArchiveRealStorage)
 	assert.Equal(t, int64(0), stat.ColdArchiveObjectCount)
-	time.Sleep(2 * time.Second)
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	_, err = client.GetBucketStat(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -591,7 +581,6 @@ func TestPutBucketAcl(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &PutBucketAclRequest{
 		Bucket: Ptr(bucketName),
 		Acl:    BucketACLPublicRead,
@@ -608,7 +597,6 @@ func TestPutBucketAcl(t *testing.T) {
 	info, err := client.GetBucketInfo(context.TODO(), infoRequest)
 	assert.Nil(t, err)
 	assert.Equal(t, string(BucketACLPublicRead), *info.BucketInfo.ACL)
-	time.Sleep(2 * time.Second)
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -628,13 +616,11 @@ func TestPutBucketAcl(t *testing.T) {
 	info, err = client.GetBucketInfo(context.TODO(), infoRequest)
 	assert.Nil(t, err)
 	assert.Equal(t, string(BucketACLPrivate), *info.BucketInfo.ACL)
-	time.Sleep(2 * time.Second)
 	delRequest = &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request = &PutBucketAclRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -656,7 +642,6 @@ func TestGetBucketAcl(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &GetBucketAclRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -673,7 +658,6 @@ func TestGetBucketAcl(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request = &GetBucketAclRequest{
 		Bucket: Ptr(bucketName),
@@ -702,7 +686,6 @@ func TestPutObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(1000)
 	request := &PutObjectRequest{
@@ -720,7 +703,6 @@ func TestPutObject(t *testing.T) {
 	assert.NotEmpty(t, *result.HashCRC64)
 	assert.NotEmpty(t, *result.ContentMD5)
 	assert.Nil(t, result.VersionId)
-	time.Sleep(2 * time.Second)
 
 	request = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -738,7 +720,6 @@ func TestPutObject(t *testing.T) {
 	assert.NotEmpty(t, *result.HashCRC64)
 	assert.NotEmpty(t, *result.ContentMD5)
 	assert.Nil(t, result.VersionId)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	request = &PutObjectRequest{
@@ -789,7 +770,6 @@ func TestGetObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(1000)
 	request := &PutObjectRequest{
@@ -801,7 +781,6 @@ func TestGetObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	getRequest := &GetObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -858,7 +837,6 @@ func TestCopyObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(1000)
 	request := &PutObjectRequest{
@@ -870,7 +848,6 @@ func TestCopyObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	objectCopyName := objectNamePrefix + randLowStr(6) + "copy"
 	copyRequest := &CopyObjectRequest{
@@ -898,7 +875,6 @@ func TestCopyObject(t *testing.T) {
 	assert.NotEmpty(t, *result.LastModified)
 	assert.NotEmpty(t, *result.HashCRC64)
 	assert.Nil(t, result.VersionId)
-	time.Sleep(2 * time.Second)
 
 	copyRequest = &CopyObjectRequest{
 		Bucket:       Ptr(bucketName),
@@ -946,7 +922,6 @@ func TestCopyObject(t *testing.T) {
 	metaResult, err := client.GetObjectMeta(context.TODO(), metaRequest)
 	assert.Nil(t, err)
 	sourceVersionId := *metaResult.VersionId
-	time.Sleep(2 * time.Second)
 
 	copyRequest = &CopyObjectRequest{
 		Bucket:          Ptr(bucketName),
@@ -970,7 +945,6 @@ func TestCopyObject(t *testing.T) {
 	client = getDefaultClient()
 	_, err = client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	copyRequest = &CopyObjectRequest{
 		Bucket:       Ptr(bucketCopyName),
@@ -1000,7 +974,6 @@ func TestAppendObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	var result *AppendObjectResult
 	content := randLowStr(100)
@@ -1014,7 +987,6 @@ func TestAppendObject(t *testing.T) {
 	_, err = client.AppendObject(context.TODO(), request)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
-	time.Sleep(2 * time.Second)
 
 	request = &AppendObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1030,7 +1002,6 @@ func TestAppendObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.NextPosition, int64(len(content)))
 	assert.NotEmpty(t, result.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	nextPosition := result.NextPosition
 	request = &AppendObjectRequest{
@@ -1048,7 +1019,6 @@ func TestAppendObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.NextPosition, int64(len(content)*2))
 	assert.NotEmpty(t, result.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	nextPosition = result.NextPosition
 	request = &AppendObjectRequest{
@@ -1067,7 +1037,6 @@ func TestAppendObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.NextPosition, int64(len(content)*3))
 	assert.NotEmpty(t, result.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	objectName2 := objectName + "-kms-sm4"
 	request = &AppendObjectRequest{
@@ -1088,7 +1057,6 @@ func TestAppendObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.NextPosition, int64(len(content)))
 	assert.NotEmpty(t, result.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	nextPosition = result.NextPosition
 	request = &AppendObjectRequest{
@@ -1110,7 +1078,6 @@ func TestAppendObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.NextPosition, int64(len(content)*2))
 	assert.NotEmpty(t, result.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	request = &AppendObjectRequest{
@@ -1160,7 +1127,6 @@ func TestDeleteObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(1000)
 	request := &PutObjectRequest{
@@ -1172,7 +1138,6 @@ func TestDeleteObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	delRequest := &DeleteObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1186,7 +1151,6 @@ func TestDeleteObject(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Nil(t, result.VersionId)
 	assert.False(t, result.DeleteMarker)
-	time.Sleep(2 * time.Second)
 
 	objectNameNotExist := objectNamePrefix + randLowStr(6) + "-not-exist"
 	delRequest = &DeleteObjectRequest{
@@ -1201,7 +1165,6 @@ func TestDeleteObject(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Nil(t, result.VersionId)
 	assert.False(t, result.DeleteMarker)
-	time.Sleep(2 * time.Second)
 
 	delRequest = &DeleteObjectRequest{
 		Bucket:    Ptr(bucketName),
@@ -1246,7 +1209,6 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(10)
@@ -1259,7 +1221,6 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	delRequest := &DeleteMultipleObjectsRequest{
 		Bucket:  Ptr(bucketName),
@@ -1273,7 +1234,6 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Len(t, result.DeletedObjects, 1)
 	assert.Equal(t, *result.DeletedObjects[0].Key, objectName)
-	time.Sleep(2 * time.Second)
 
 	str := "\x01\x02\x03\x04\x05\x06\a\b\t\n\v\f\r\x0e\x0f\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F"
 	objectNameSpecial := objectNamePrefix + randLowStr(6) + str
@@ -1301,7 +1261,6 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Len(t, result.DeletedObjects, 1)
 	assert.Equal(t, *result.DeletedObjects[0].Key, objectNameSpecial)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
@@ -1332,7 +1291,6 @@ func TestHeadObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(10)
 	request := &PutObjectRequest{
@@ -1344,7 +1302,6 @@ func TestHeadObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	headRequest := &HeadObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1387,7 +1344,6 @@ func TestGetObjectMeta(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(10)
@@ -1400,7 +1356,6 @@ func TestGetObjectMeta(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	headRequest := &GetObjectMetaRequest{
 		Bucket: Ptr(bucketName),
@@ -1442,7 +1397,6 @@ func TestRestoreObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(10)
@@ -1456,7 +1410,6 @@ func TestRestoreObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	restoreRequest := &RestoreObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1508,7 +1461,6 @@ func TestPutObjectAcl(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	objectRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1516,7 +1468,6 @@ func TestPutObjectAcl(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), objectRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &PutObjectAclRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -1526,7 +1477,6 @@ func TestPutObjectAcl(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
-	time.Sleep(2 * time.Second)
 	infoRequest := &HeadObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -1562,7 +1512,6 @@ func TestGetObjectAcl(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	objectRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -1571,7 +1520,6 @@ func TestGetObjectAcl(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), objectRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request := &GetObjectAclRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -1611,7 +1559,6 @@ func TestInitiateMultipartUpload(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	initRequest := &InitiateMultipartUploadRequest{
 		Bucket: Ptr(bucketName),
@@ -1624,7 +1571,6 @@ func TestInitiateMultipartUpload(t *testing.T) {
 	assert.Equal(t, *initResult.Bucket, bucketName)
 	assert.Equal(t, *initResult.Key, objectName)
 	assert.NotEmpty(t, *initResult.UploadId)
-	time.Sleep(2 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -1661,7 +1607,6 @@ func TestUploadPart(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	initRequest := &InitiateMultipartUploadRequest{
 		Bucket: Ptr(bucketName),
@@ -1669,7 +1614,6 @@ func TestUploadPart(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	partRequest := &UploadPartRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectName),
@@ -1687,7 +1631,6 @@ func TestUploadPart(t *testing.T) {
 	assert.NotEmpty(t, *partResult.ETag)
 	assert.NotEmpty(t, *partResult.ContentMD5)
 	assert.NotEmpty(t, *partResult.HashCRC64)
-	time.Sleep(2 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -1696,7 +1639,6 @@ func TestUploadPart(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	abortRequest = &AbortMultipartUploadRequest{
@@ -1725,7 +1667,6 @@ func TestUploadPartCopy(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	body := randLowStr(100000)
 	objectSrcName := objectNamePrefix + randLowStr(6) + "src"
 	objRequest := &PutObjectRequest{
@@ -1737,7 +1678,6 @@ func TestUploadPartCopy(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), objRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectDestName := objectNamePrefix + randLowStr(6) + "dest"
 	initRequest := &InitiateMultipartUploadRequest{
 		Bucket: Ptr(bucketName),
@@ -1745,7 +1685,6 @@ func TestUploadPartCopy(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:       Ptr(bucketName),
 		Key:          Ptr(objectDestName),
@@ -1760,7 +1699,6 @@ func TestUploadPartCopy(t *testing.T) {
 	assert.NotEmpty(t, copyResult.Headers.Get(HeaderOssRequestID))
 	assert.NotEmpty(t, *copyResult.ETag)
 	assert.NotEmpty(t, *copyResult.LastModified)
-	time.Sleep(2 * time.Second)
 
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -1796,7 +1734,6 @@ func TestUploadPartCopy(t *testing.T) {
 	assert.NotEmpty(t, *copyResult.LastModified)
 	assert.NotEmpty(t, *copyResult.VersionId)
 	assert.Equal(t, *copyResult.VersionId, sourceVersionId)
-	time.Sleep(2 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -1805,7 +1742,6 @@ func TestUploadPartCopy(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	copyRequest = &UploadPartCopyRequest{
@@ -1836,7 +1772,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
 	bufReader := bufio.NewReader(reader)
@@ -1866,7 +1801,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part := UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -1883,7 +1817,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part = UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -1900,7 +1833,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part = UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -1916,14 +1848,12 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	result, err := client.CompleteMultipartUpload(context.TODO(), request)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
 	assert.NotEmpty(t, *result.ETag)
 	assert.NotEmpty(t, *result.Location)
 	assert.Equal(t, *result.Bucket, bucketName)
 	assert.Equal(t, *result.Key, objectName)
-	time.Sleep(2 * time.Second)
 	getObj := &GetObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -1941,7 +1871,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectDestName),
@@ -1951,7 +1880,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	request = &CompleteMultipartUploadRequest{
 		Bucket:      Ptr(bucketName),
 		Key:         Ptr(objectDestName),
@@ -1965,11 +1893,9 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	assert.NotEmpty(t, *result.Location)
 	assert.Equal(t, *result.Bucket, bucketName)
 	assert.Equal(t, *result.Key, objectDestName)
-	time.Sleep(2 * time.Second)
 
 	initCopyResult, err = client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	copyRequest = &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
@@ -1980,7 +1906,6 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	}
 	copyResult, err := client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	copyPart := UploadPart{
 		PartNumber: copyRequest.PartNumber,
@@ -2035,7 +1960,6 @@ func TestAbortMultipartUpload(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6)
 	initRequest := &InitiateMultipartUploadRequest{
 		Bucket: Ptr(bucketName),
@@ -2043,7 +1967,6 @@ func TestAbortMultipartUpload(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
 		Key:      Ptr(objectName),
@@ -2053,7 +1976,6 @@ func TestAbortMultipartUpload(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 204)
 	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	abortRequest = &AbortMultipartUploadRequest{
@@ -2081,7 +2003,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
-	time.Sleep(2 * time.Second)
 	objectName := objectNamePrefix + randLowStr(6) + "\v\n\f"
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
@@ -2100,7 +2021,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	partRequest := &UploadPartRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectName),
@@ -2113,7 +2033,6 @@ func TestListMultipartUploads(t *testing.T) {
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part := UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -2130,7 +2049,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part = UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -2147,7 +2065,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	part = UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -2164,7 +2081,6 @@ func TestListMultipartUploads(t *testing.T) {
 
 	_, err = client.PutObject(context.TODO(), putObj)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	objectDestName := objectNamePrefix + randLowStr(6) + "dest" + "\f\v\n"
 	initCopyRequest := &InitiateMultipartUploadRequest{
 		Bucket: Ptr(bucketName),
@@ -2173,7 +2089,6 @@ func TestListMultipartUploads(t *testing.T) {
 
 	initCopyResult, err := client.InitiateMultipartUpload(context.TODO(), initCopyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 	copyRequest := &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectDestName),
@@ -2183,7 +2098,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	_, err = client.UploadPartCopy(context.TODO(), copyRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	listRequest := &ListMultipartUploadsRequest{
 		Bucket: Ptr(bucketName),
@@ -2195,7 +2109,6 @@ func TestListMultipartUploads(t *testing.T) {
 	assert.Equal(t, *listResult.Bucket, bucketName)
 	assert.Empty(t, *listResult.KeyMarker, bucketName)
 	assert.Len(t, listResult.Uploads, 2)
-	time.Sleep(2 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -2204,7 +2117,6 @@ func TestListMultipartUploads(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	bucketNameNotExist := bucketName + "-not-exist"
 	listRequest = &ListMultipartUploadsRequest{
@@ -2232,7 +2144,7 @@ func TestListParts(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	objectName := objectNamePrefix + randLowStr(6) + "-\v\n\f"
 	body := randLowStr(400000)
 	reader := strings.NewReader(body)
@@ -2251,7 +2163,7 @@ func TestListParts(t *testing.T) {
 	}
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	partRequest := &UploadPartRequest{
 		Bucket:     Ptr(bucketName),
 		Key:        Ptr(objectName),
@@ -2264,7 +2176,7 @@ func TestListParts(t *testing.T) {
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	part := UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -2281,7 +2193,7 @@ func TestListParts(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	part = UploadPart{
 		PartNumber: partRequest.PartNumber,
 		ETag:       partResult.ETag,
@@ -2298,7 +2210,6 @@ func TestListParts(t *testing.T) {
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	listRequest := &ListPartsRequest{
 		Bucket:   Ptr(bucketName),
@@ -2318,7 +2229,6 @@ func TestListParts(t *testing.T) {
 	assert.Equal(t, listResult.NextPartNumberMarker, int32(3))
 	assert.Equal(t, listResult.MaxParts, int32(1000))
 	assert.Len(t, listResult.Parts, count)
-	time.Sleep(2 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -2327,7 +2237,6 @@ func TestListParts(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	bucketNameNotExist := bucketName + "-not-exist"
 	listRequest = &ListPartsRequest{
@@ -2359,7 +2268,7 @@ func TestPutBucketVersioning(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	request := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 		VersioningConfiguration: &VersioningConfiguration{
@@ -2370,7 +2279,7 @@ func TestPutBucketVersioning(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
+
 	request = &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 		VersioningConfiguration: &VersioningConfiguration{
@@ -2381,7 +2290,6 @@ func TestPutBucketVersioning(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2414,7 +2322,7 @@ func TestGetBucketVersioning(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	request := &GetBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -2423,7 +2331,7 @@ func TestGetBucketVersioning(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Nil(t, result.VersionStatus)
-	time.Sleep(2 * time.Second)
+
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 		VersioningConfiguration: &VersioningConfiguration{
@@ -2432,7 +2340,6 @@ func TestGetBucketVersioning(t *testing.T) {
 	}
 	_, err = client.PutBucketVersioning(context.TODO(), versionRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request = &GetBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2442,7 +2349,6 @@ func TestGetBucketVersioning(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Equal(t, *result.VersionStatus, "Enabled")
-	time.Sleep(2 * time.Second)
 
 	versionRequest = &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2452,7 +2358,6 @@ func TestGetBucketVersioning(t *testing.T) {
 	}
 	_, err = client.PutBucketVersioning(context.TODO(), versionRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request = &GetBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2462,7 +2367,6 @@ func TestGetBucketVersioning(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Equal(t, *result.VersionStatus, "Suspended")
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2492,7 +2396,7 @@ func TestListObjectVersions(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 		VersioningConfiguration: &VersioningConfiguration{
@@ -2526,7 +2430,7 @@ func TestListObjectVersions(t *testing.T) {
 	assert.Nil(t, err)
 	versionIdV1 := putObjResult.Headers.Get("x-oss-version-id")
 	assert.True(t, len(versionIdV1) > 0)
-	time.Sleep(2 * time.Second)
+
 	// put object v2
 	content2 := randLowStr(200)
 	putObjRequest = &PutObjectRequest{
@@ -2541,7 +2445,6 @@ func TestListObjectVersions(t *testing.T) {
 	versionIdV2 := putObjResult.Headers.Get("x-oss-version-id")
 	assert.True(t, len(versionIdV2) > 0)
 	assert.NotEqual(t, versionIdV1, versionIdV2)
-	time.Sleep(2 * time.Second)
 
 	delObjRequest := &DeleteObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -2552,7 +2455,6 @@ func TestListObjectVersions(t *testing.T) {
 	assert.True(t, delObjResult.DeleteMarker)
 	markVersionId := delObjResult.Headers.Get("x-oss-version-id")
 	assert.True(t, len(markVersionId) > 0)
-	time.Sleep(2 * time.Second)
 
 	delObjRequest = &DeleteObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -2564,7 +2466,6 @@ func TestListObjectVersions(t *testing.T) {
 	markVersionIdAgain := delObjResult.Headers.Get("x-oss-version-id")
 	assert.True(t, len(markVersionIdAgain) > 0)
 	assert.NotEqual(t, markVersionId, markVersionIdAgain)
-	time.Sleep(2 * time.Second)
 
 	versions := &ListObjectVersionsRequest{
 		Bucket: Ptr(bucketName),
@@ -2573,7 +2474,6 @@ func TestListObjectVersions(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Len(t, versionsResult.ObjectDeleteMarkers, 2)
 	assert.Len(t, versionsResult.ObjectVersions, 2)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2603,7 +2503,7 @@ func TestPutSymlink(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(100)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -2615,7 +2515,7 @@ func TestPutSymlink(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	symlinkName := objectName + "-symlink"
 	request := &PutSymlinkRequest{
 		Bucket: Ptr(bucketName),
@@ -2626,7 +2526,6 @@ func TestPutSymlink(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
 
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2648,7 +2547,6 @@ func TestPutSymlink(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.NotEmpty(t, *result.VersionId)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2680,7 +2578,7 @@ func TestGetSymlink(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(100)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -2700,7 +2598,7 @@ func TestGetSymlink(t *testing.T) {
 	}
 	_, err = client.PutSymlink(context.TODO(), putSymRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	request := &GetSymlinkRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(symlinkName),
@@ -2711,7 +2609,6 @@ func TestGetSymlink(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.NotEmpty(t, result.ETag)
 	assert.Equal(t, *result.Target, objectName)
-	time.Sleep(2 * time.Second)
 
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2734,7 +2631,6 @@ func TestGetSymlink(t *testing.T) {
 	assert.NotEmpty(t, result.ETag)
 	assert.Equal(t, *result.Target, objectName)
 	assert.NotEmpty(t, *result.VersionId)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2765,7 +2661,7 @@ func TestPutObjectTagging(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(100)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -2777,7 +2673,6 @@ func TestPutObjectTagging(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request := &PutObjectTaggingRequest{
 		Bucket: Ptr(bucketName),
@@ -2801,7 +2696,6 @@ func TestPutObjectTagging(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
 
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2822,7 +2716,7 @@ func TestPutObjectTagging(t *testing.T) {
 	}
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	versionId := *putObjResult.VersionId
 	request = &PutObjectTaggingRequest{
 		Bucket:    Ptr(bucketName),
@@ -2844,7 +2738,6 @@ func TestPutObjectTagging(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Equal(t, *result.VersionId, versionId)
-	time.Sleep(2 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2889,7 +2782,7 @@ func TestGetObjectTagging(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(100)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -2901,7 +2794,6 @@ func TestGetObjectTagging(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request := &GetObjectTaggingRequest{
 		Bucket: Ptr(bucketName),
@@ -2912,7 +2804,6 @@ func TestGetObjectTagging(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Len(t, result.Tags, 0)
-	time.Sleep(2 * time.Second)
 
 	putTagRequest := &PutObjectTaggingRequest{
 		Bucket: Ptr(bucketName),
@@ -2934,7 +2825,6 @@ func TestGetObjectTagging(t *testing.T) {
 	}
 	_, err = client.PutObjectTagging(context.TODO(), putTagRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
 
 	request = &GetObjectTaggingRequest{
 		Bucket: Ptr(bucketName),
@@ -2945,7 +2835,6 @@ func TestGetObjectTagging(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Len(t, result.Tags, 2)
-	time.Sleep(2 * time.Second)
 
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2967,7 +2856,7 @@ func TestGetObjectTagging(t *testing.T) {
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
 	versionId := *putObjResult.VersionId
-	time.Sleep(2 * time.Second)
+
 	request = &GetObjectTaggingRequest{
 		Bucket:    Ptr(bucketName),
 		Key:       Ptr(objectName),
@@ -2978,7 +2867,7 @@ func TestGetObjectTagging(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Len(t, result.Tags, 0)
-	time.Sleep(2 * time.Second)
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
 	request = &GetObjectTaggingRequest{
@@ -3008,7 +2897,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(100)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -3041,7 +2930,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	}
 	_, err = client.PutObjectTagging(context.TODO(), putTagRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	request := &DeleteObjectTaggingRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -3050,7 +2939,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 204, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
+
 	versionRequest := &PutBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
 		VersioningConfiguration: &VersioningConfiguration{
@@ -3070,7 +2959,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
 	versionId := *putObjResult.VersionId
-	time.Sleep(2 * time.Second)
+
 	request = &DeleteObjectTaggingRequest{
 		Bucket:    Ptr(bucketName),
 		Key:       Ptr(objectName),
@@ -3080,7 +2969,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 204, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
-	time.Sleep(2 * time.Second)
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
 	request = &DeleteObjectTaggingRequest{
@@ -3110,7 +2999,7 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := "name,school,company,age\r\nLora Francis,School A,Staples Inc,27\r\n" + "Eleanor Little,School B,\"Conectiv, Inc\",43\r\n" + "Rosie Hughes,School C,Western Gas Resources Inc,44\r\n" + "Lawrence Ross,School D,MetLife Inc.,24"
 	objectNameCsv := objectNamePrefix + randLowStr(6) + ".csv"
 	putObjRequest := &PutObjectRequest{
@@ -3122,7 +3011,6 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
 
 	csvMeta := &CreateSelectObjectMetaRequest{
 		Bucket: Ptr(bucketName),
@@ -3134,7 +3022,6 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	result, err := client.CreateSelectObjectMeta(context.TODO(), csvMeta)
 	assert.Nil(t, err)
 	assert.Equal(t, result.RowsCount, int64(5))
-	time.Sleep(1 * time.Second)
 
 	body = "{\n" +
 		"\t\"name\": \"Lora Francis\",\n" +
@@ -3166,7 +3053,6 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
 	csvMeta = &CreateSelectObjectMetaRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameJson),
@@ -3181,7 +3067,6 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	result, err = client.CreateSelectObjectMeta(context.TODO(), csvMeta)
 	assert.Nil(t, err)
 	assert.Equal(t, result.RowsCount, int64(4))
-	time.Sleep(1 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -3213,7 +3098,7 @@ func TestSelectObject(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := "name,school,company,age\r\nLora Francis,School A,Staples Inc,27\r\n" + "Eleanor Little,School B,\"Conectiv, Inc\",43\r\n" + "Rosie Hughes,School C,Western Gas Resources Inc,44\r\n" + "Lawrence Ross,School D,MetLife Inc.,24"
 	objectNameCsv := objectNamePrefix + randLowStr(6) + ".csv"
 	putObjRequest := &PutObjectRequest{
@@ -3225,7 +3110,6 @@ func TestSelectObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
 
 	request := &SelectObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -3246,7 +3130,6 @@ func TestSelectObject(t *testing.T) {
 	assert.Nil(t, err)
 	dataByte, err := io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte), "name\nLora Francis\nEleanor Little\nRosie Hughes\nLawrence Ross\n")
-	time.Sleep(1 * time.Second)
 
 	body = "{\n" +
 		"\t\"name\": \"Lora Francis\",\n" +
@@ -3278,7 +3161,6 @@ func TestSelectObject(t *testing.T) {
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
 	request = &SelectObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameCsv),
@@ -3298,7 +3180,6 @@ func TestSelectObject(t *testing.T) {
 	assert.Nil(t, err)
 	dataByte, err = io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte), "name\nLora Francis\nEleanor Little\nRosie Hughes\nLawrence Ross\n")
-	time.Sleep(1 * time.Second)
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -3340,7 +3221,7 @@ func TestPresign(t *testing.T) {
 	client := getDefaultClient()
 	_, err := client.PutBucket(context.TODO(), putRequest)
 	assert.Nil(t, err)
-	time.Sleep(2 * time.Second)
+
 	body := randLowStr(1000)
 	objectName := objectNamePrefix + randLowStr(6)
 	putObjRequest := &PutObjectRequest{
@@ -3354,7 +3235,6 @@ func TestPresign(t *testing.T) {
 	c := &http.Client{}
 	resp, err := c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	time.Sleep(1 * time.Second)
 
 	getObjRequest := &GetObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -3371,7 +3251,6 @@ func TestPresign(t *testing.T) {
 	assert.Equal(t, resp.StatusCode, 200)
 	data, _ := io.ReadAll(resp.Body)
 	assert.Equal(t, string(data), body)
-	time.Sleep(1 * time.Second)
 
 	copyObjectName := objectName + "-copy"
 	copyObjRequest := &CopyObjectRequest{
@@ -3388,7 +3267,6 @@ func TestPresign(t *testing.T) {
 	req.Header["x-oss-copy-source"] = []string{encodeSourceObject(copyObjRequest)}
 	resp, err = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	time.Sleep(1 * time.Second)
 
 	headObjRequest := &HeadObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -3398,7 +3276,6 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, headResult.Headers.Get(HTTPHeaderContentLength), strconv.FormatInt(int64(len(body)), 10))
 	assert.Equal(t, *headResult.ObjectType, "Normal")
-	time.Sleep(1 * time.Second)
 
 	appendObjectName := objectName + "-append"
 	appendObjRequest := &AppendObjectRequest{
@@ -3413,7 +3290,6 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	time.Sleep(1 * time.Second)
 
 	headObjRequest = &HeadObjectRequest{
 		Bucket: Ptr(bucketName),
@@ -3436,7 +3312,6 @@ func TestPresign(t *testing.T) {
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
 	assert.Equal(t, resp.Header.Get(HTTPHeaderContentLength), strconv.Itoa(len(body)))
-	time.Sleep(1 * time.Second)
 
 	objectNameMultipart := objectNamePrefix + randLowStr(6) + "-multi-part"
 	initRequest := &InitiateMultipartUploadRequest{
@@ -3457,7 +3332,6 @@ func TestPresign(t *testing.T) {
 	err = xml.Unmarshal(data, initResult)
 	assert.Equal(t, *initResult.Key, objectNameMultipart)
 	uploadId := initResult.UploadId
-	time.Sleep(1 * time.Second)
 
 	partRequest := &UploadPartRequest{
 		Bucket:     Ptr(bucketName),
@@ -3472,7 +3346,6 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	time.Sleep(1 * time.Second)
 
 	var parts []UploadPart
 	uploadResult := &UploadPartResult{}
@@ -3500,7 +3373,6 @@ func TestPresign(t *testing.T) {
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
 
-	time.Sleep(1 * time.Second)
 	headObjRequest = &HeadObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameMultipart),
@@ -3509,7 +3381,6 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, headResult.Headers.Get(HTTPHeaderContentLength), strconv.FormatInt(int64(len(body)), 10))
 	assert.Equal(t, *headResult.ObjectType, "Multipart")
-	time.Sleep(1 * time.Second)
 
 	objectNameMultipartCopy := objectNamePrefix + randLowStr(6) + "-multi-part-copy"
 	initCopyRequest := &InitiateMultipartUploadRequest{
@@ -3530,7 +3401,6 @@ func TestPresign(t *testing.T) {
 	err = xml.Unmarshal(data, initCopyResult)
 	assert.Equal(t, *initCopyResult.Key, objectNameMultipartCopy)
 	copyUploadId := *initCopyResult.UploadId
-	time.Sleep(1 * time.Second)
 
 	partCopyRequest := &UploadPartCopyRequest{
 		Bucket:     Ptr(bucketName),
@@ -3547,7 +3417,6 @@ func TestPresign(t *testing.T) {
 	req.Header["x-oss-copy-source"] = []string{encodeSourceObject(partCopyRequest)}
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 200)
-	time.Sleep(1 * time.Second)
 
 	listPartsRequest := &ListPartsRequest{
 		Bucket:   Ptr(bucketName),
@@ -3557,7 +3426,6 @@ func TestPresign(t *testing.T) {
 	lsRes, err := client.ListParts(context.TODO(), listPartsRequest)
 	assert.Nil(t, err)
 	assert.Equal(t, len(lsRes.Parts), 1)
-	time.Sleep(1 * time.Second)
 
 	abortRequest := &AbortMultipartUploadRequest{
 		Bucket:   Ptr(bucketName),
@@ -3571,7 +3439,6 @@ func TestPresign(t *testing.T) {
 	assert.Nil(t, err)
 	resp, _ = c.Do(req)
 	assert.Equal(t, resp.StatusCode, 204)
-	time.Sleep(1 * time.Second)
 
 	listPartsRequest = &ListPartsRequest{
 		Bucket:   Ptr(bucketName),
@@ -3606,7 +3473,6 @@ func TestPaginator(t *testing.T) {
 		_, err := client.PutBucket(context.TODO(), putRequest)
 		assert.Nil(t, err)
 	}
-	time.Sleep(1 * time.Second)
 
 	lbRequest := &ListBucketsRequest{
 		MaxKeys: int32(4),
@@ -3620,7 +3486,6 @@ func TestPaginator(t *testing.T) {
 		countBucket += len(result.Buckets)
 	}
 	assert.Equal(t, countBucket, count)
-	time.Sleep(1 * time.Second)
 
 	listBucket, err := client.ListBuckets(context.TODO(), &ListBucketsRequest{
 		Prefix: Ptr(bucketNameTestPrefix),
@@ -3640,7 +3505,6 @@ func TestPaginator(t *testing.T) {
 		_, err = client.PutObject(context.TODO(), putRequest)
 		assert.Nil(t, err)
 	}
-	time.Sleep(1 * time.Second)
 
 	var listObjCount int
 	listObjRequest := &ListObjectsRequest{
@@ -3693,7 +3557,6 @@ func TestPaginator(t *testing.T) {
 		})
 		assert.Nil(t, err)
 	}
-	time.Sleep(1 * time.Second)
 
 	var countUploads int
 	lmuRequest := &ListMultipartUploadsRequest{
@@ -3712,7 +3575,6 @@ func TestPaginator(t *testing.T) {
 		Bucket: Ptr(bucketNameTest),
 	})
 	assert.Nil(t, err)
-	time.Sleep(1 * time.Second)
 
 	objectName := *uploadsResult.Uploads[0].Key
 	uploadId := *uploadsResult.Uploads[0].UploadId
@@ -3741,7 +3603,7 @@ func TestPaginator(t *testing.T) {
 		})
 		assert.Nil(t, err)
 	}
-	time.Sleep(1 * time.Second)
+
 	var countPartResult int
 	lpRequest := &ListPartsRequest{
 		Bucket:   Ptr(bucketNameTest),

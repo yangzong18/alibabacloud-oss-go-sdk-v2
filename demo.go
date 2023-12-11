@@ -183,7 +183,7 @@ func main() {
 
 	//part 1
 	hash = oss.NewCRC64(0)
-	reader, err := oss.NewAsyncReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 0, Count: 15597568}, "", 4)
+	reader, err := oss.NewAsyncRangeReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 0, Count: 15597568}, "", 4)
 	if err != nil {
 		fmt.Printf("error")
 	}
@@ -193,7 +193,7 @@ func main() {
 
 	//part 2
 	hash1 = oss.NewCRC64(hash.Sum64())
-	reader1, err := oss.NewAsyncReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 15597568, Count: 8362724}, "", 4)
+	reader1, err := oss.NewAsyncRangeReader(context.TODO(), getFn, &oss.HTTPRange{Offset: 15597568, Count: 8362724}, "", 4)
 	if err != nil {
 		fmt.Printf("error")
 	}

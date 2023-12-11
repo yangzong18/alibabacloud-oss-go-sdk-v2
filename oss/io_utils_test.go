@@ -16,14 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAsyncReader(t *testing.T) {
+func TestAsyncRangeReader(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 	buf := io.NopCloser(bytes.NewBufferString(data))
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
 		return buf, 0, "", nil
 	}
-	ar, err := NewAsyncReader(ctx, getFn, nil, "", 4)
+	ar, err := NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
 
 	var dst = make([]byte, 100)
@@ -52,18 +52,18 @@ func TestAsyncReader(t *testing.T) {
 	getFn = func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
 		return buf, 0, "", nil
 	}
-	ar, err = NewAsyncReader(ctx, getFn, nil, "", 4)
+	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
 	err = ar.Close()
 	require.NoError(t, err)
 }
 
-func TestAsyncReaderErrors(t *testing.T) {
+func TestAsyncRangeReaderErrors(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 
 	// test nil reader
-	_, err := NewAsyncReader(ctx, nil, nil, "", 4)
+	_, err := NewAsyncRangeReader(ctx, nil, nil, "", 4)
 	require.Error(t, err)
 
 	// invalid buffer number
@@ -71,9 +71,9 @@ func TestAsyncReaderErrors(t *testing.T) {
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
 		return buf, 0, "", nil
 	}
-	_, err = NewAsyncReader(ctx, getFn, nil, "", 0)
+	_, err = NewAsyncRangeReader(ctx, getFn, nil, "", 0)
 	require.Error(t, err)
-	_, err = NewAsyncReader(ctx, getFn, nil, "", -1)
+	_, err = NewAsyncRangeReader(ctx, getFn, nil, "", -1)
 	require.Error(t, err)
 }
 
@@ -129,7 +129,7 @@ var bufsizes = []int{
 }
 
 // Test various  input buffer sizes, number of buffers and read sizes.
-func TestAsyncReaderSizes(t *testing.T) {
+func TestAsyncRangeReaderSizes(t *testing.T) {
 	ctx := context.Background()
 	var texts [31]string
 	str := ""
@@ -155,9 +155,9 @@ func TestAsyncReaderSizes(t *testing.T) {
 						getFn := func(_ context.Context, httpRange HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
 							return io.NopCloser(buf), httpRange.Offset, "", nil
 						}
-						ar, _ := NewAsyncReader(ctx, getFn, nil, "", 1)
+						ar, _ := NewAsyncRangeReader(ctx, getFn, nil, "", 1)
 						s := bufreader.fn(ar)
-						// "timeout" expects the Reader to recover, AsyncReader does not.
+						// "timeout" expects the Reader to recover, AsyncRangeReader does not.
 						if s != text && readmaker.name != "timeout" {
 							t.Errorf("reader=%s fn=%s bufsize=%d want=%q got=%q",
 								readmaker.name, bufreader.name, bufsize, text, s)
@@ -195,13 +195,13 @@ func (z *zeroReader) Close() error {
 }
 
 // Test closing and abandoning
-func TestAsyncReaderClose(t *testing.T) {
+func TestAsyncRangeReaderClose(t *testing.T) {
 	ctx := context.Background()
 	zr := &zeroReader{}
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
 		return zr, 0, "", nil
 	}
-	a, err := NewAsyncReader(ctx, getFn, nil, "", 16)
+	a, err := NewAsyncRangeReader(ctx, getFn, nil, "", 16)
 	require.NoError(t, err)
 	var copyN int64
 	var copyErr error
@@ -235,7 +235,7 @@ func TestAsyncReaderClose(t *testing.T) {
 	assert.True(t, copyN > 0)
 }
 
-func TestAsyncReaderEtagCheck(t *testing.T) {
+func TestAsyncRangeReaderEtagCheck(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
@@ -243,7 +243,7 @@ func TestAsyncReaderEtagCheck(t *testing.T) {
 	}
 
 	// don't set etag
-	ar, err := NewAsyncReader(ctx, getFn, nil, "", 4)
+	ar, err := NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
 
 	var dst = make([]byte, 100)
@@ -253,7 +253,7 @@ func TestAsyncReaderEtagCheck(t *testing.T) {
 	assert.Equal(t, data, string(dst[0:n]))
 
 	// set etag to "etag"
-	ar, err = NewAsyncReader(ctx, getFn, nil, "etag", 4)
+	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "etag", 4)
 	require.NoError(t, err)
 
 	dst = make([]byte, 100)
@@ -263,7 +263,7 @@ func TestAsyncReaderEtagCheck(t *testing.T) {
 	assert.Equal(t, data, string(dst[:n]))
 
 	// set etag to "invalid-etag"
-	ar, err = NewAsyncReader(ctx, getFn, nil, "invalid-etag", 4)
+	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "invalid-etag", 4)
 	require.NoError(t, err)
 
 	dst = make([]byte, 100)
@@ -271,7 +271,7 @@ func TestAsyncReaderEtagCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "Source file is changed, expect etag:invalid-etag")
 }
 
-func TestAsyncReaderOffsetCheck(t *testing.T) {
+func TestAsyncRangeReaderOffsetCheck(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
@@ -279,7 +279,7 @@ func TestAsyncReaderOffsetCheck(t *testing.T) {
 	}
 
 	// don't set etag
-	ar, err := NewAsyncReader(ctx, getFn, nil, "", 4)
+	ar, err := NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
 
 	var dst = make([]byte, 100)
@@ -299,7 +299,7 @@ func TestAsyncReaderOffsetCheck(t *testing.T) {
 		}
 	}
 
-	ar, err = NewAsyncReader(ctx, getFn, nil, "etag", 4)
+	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "etag", 4)
 	require.NoError(t, err)
 
 	dst = make([]byte, 100)
@@ -310,7 +310,7 @@ func TestAsyncReaderOffsetCheck(t *testing.T) {
 	assert.Equal(t, data, string(dst[:10]))
 }
 
-func TestAsyncReaderRangeGetError(t *testing.T) {
+func TestAsyncRangeReaderGetError(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
@@ -318,7 +318,7 @@ func TestAsyncReaderRangeGetError(t *testing.T) {
 	}
 
 	// don't set etag
-	ar, err := NewAsyncReader(ctx, getFn, nil, "", 4)
+	ar, err := NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
 
 	var dst = make([]byte, 100)
@@ -335,7 +335,7 @@ func TestAsyncReaderRangeGetError(t *testing.T) {
 		}
 	}
 
-	ar, err = NewAsyncReader(ctx, getFn, nil, "etag", 4)
+	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "etag", 4)
 	require.NoError(t, err)
 	dst = make([]byte, 100)
 	n, err := ar.Read(dst)

@@ -16,6 +16,8 @@ const (
 	defaultPrefetchThreshold = int64(20 * 1024 * 1024)
 	defaultChunkSize         = int64(8 * 1024 * 1024)
 	defaultPrefetchNum       = 3
+
+	defaultPartSize = int64(8 * 1024 * 1024)
 )
 
 type OpenOptions struct {
@@ -58,7 +60,7 @@ type ReadOnlyFile struct {
 	prefetchNum       int
 	prefetchThreshold int64
 
-	asyncReaders  []*AsyncReader
+	asyncReaders  []*AsyncRangeReader
 	seqReadAmount int64 // number of sequential read
 	numOOORead    int64 // number of out of order read
 
@@ -453,7 +455,7 @@ func (f *ReadOnlyFile) prefetch(offset int64, needAtLeast int) (err error) {
 				offset, _ = parseOffsetAndSizeFromHeaders(result.Headers)
 				return result.Body, offset, result.Headers.Get(HTTPHeaderETag), nil
 			}
-			ar, err := NewAsyncReader(f.context, getFn, &HTTPRange{off, size}, f.etag, int(cnt))
+			ar, err := NewAsyncRangeReader(f.context, getFn, &HTTPRange{off, size}, f.etag, int(cnt))
 			if err != nil {
 				break
 			}

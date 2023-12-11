@@ -134,9 +134,9 @@ const (
 	softStartInitial     = 512 * 1024
 )
 
-type AsyncReaderRangeGet func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error)
+type AsyncRangeReaderGet func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error)
 
-type AsyncReader struct {
+type AsyncRangeReader struct {
 	in      io.ReadCloser // Input reader
 	ready   chan *buffer  // Buffers ready to be handed to the reader
 	token   chan struct{} // Tokens which allow a buffer to be taken
@@ -150,7 +150,7 @@ type AsyncReader struct {
 	mu      sync.Mutex    // lock for Read/WriteTo/Abandon/Close
 
 	//Range Getter
-	rangeGet  AsyncReaderRangeGet
+	rangeGet  AsyncRangeReaderGet
 	httpRange HTTPRange
 
 	// For reader
@@ -167,13 +167,13 @@ type AsyncReader struct {
 	modTime string
 }
 
-// NewAsyncReader returns a reader that will asynchronously read from
+// NewAsyncRangeReader returns a reader that will asynchronously read from
 // the Reader returued by getter from the given offset into a number of buffers each of size AsyncReadeBufferSize
 // The input can be read from the returned reader.
 // When done use Close to release the buffers and close the supplied input.
 // The etag is used to identify the content of the object. If not set, the first ETag returned value will be used instead.
-func NewAsyncReader(ctx context.Context,
-	rangeGet AsyncReaderRangeGet, httpRange *HTTPRange, etag string, buffers int) (*AsyncReader, error) {
+func NewAsyncRangeReader(ctx context.Context,
+	rangeGet AsyncRangeReaderGet, httpRange *HTTPRange, etag string, buffers int) (*AsyncRangeReader, error) {
 
 	if buffers <= 0 {
 		return nil, errors.New("number of buffers too small")
@@ -189,7 +189,7 @@ func NewAsyncReader(ctx context.Context,
 		range_ = *httpRange
 	}
 
-	a := &AsyncReader{
+	a := &AsyncRangeReader{
 		rangeGet:     rangeGet,
 		context:      context,
 		cancel:       cancel,
@@ -201,13 +201,13 @@ func NewAsyncReader(ctx context.Context,
 		buffers:      buffers,
 	}
 
-	//fmt.Printf("NewAsyncReader, range: %s, etag:%s, buffer count:%v\n", ToString(a.httpRange.FormatHTTPRange()), a.etag, a.buffers)
+	//fmt.Printf("NewAsyncRangeReader, range: %s, etag:%s, buffer count:%v\n", ToString(a.httpRange.FormatHTTPRange()), a.etag, a.buffers)
 
 	a.init(buffers)
 	return a, nil
 }
 
-func (a *AsyncReader) init(buffers int) {
+func (a *AsyncRangeReader) init(buffers int) {
 	a.ready = make(chan *buffer, buffers)
 	a.token = make(chan struct{}, buffers)
 	a.exit = make(chan struct{})
@@ -290,7 +290,7 @@ func (a *AsyncReader) init(buffers int) {
 	}()
 }
 
-func (a *AsyncReader) fill() (err error) {
+func (a *AsyncRangeReader) fill() (err error) {
 	if a.cur.isEmpty() {
 		if a.cur != nil {
 			a.putBuffer(a.cur)
@@ -311,7 +311,7 @@ func (a *AsyncReader) fill() (err error) {
 }
 
 // Read will return the next available data.
-func (a *AsyncReader) Read(p []byte) (n int, err error) {
+func (a *AsyncRangeReader) Read(p []byte) (n int, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	defer func() {
@@ -336,11 +336,11 @@ func (a *AsyncReader) Read(p []byte) (n int, err error) {
 	return n, nil
 }
 
-func (a *AsyncReader) Offset() int64 {
+func (a *AsyncRangeReader) Offset() int64 {
 	return a.offset
 }
 
-func (a *AsyncReader) Close() (err error) {
+func (a *AsyncRangeReader) Close() (err error) {
 	a.abandon()
 	if a.closed {
 		return nil
@@ -353,7 +353,7 @@ func (a *AsyncReader) Close() (err error) {
 	return
 }
 
-func (a *AsyncReader) abandon() {
+func (a *AsyncRangeReader) abandon() {
 	a.stop()
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -366,7 +366,7 @@ func (a *AsyncReader) abandon() {
 	}
 }
 
-func (a *AsyncReader) stop() {
+func (a *AsyncRangeReader) stop() {
 	select {
 	case <-a.exit:
 		return
@@ -382,12 +382,12 @@ var bufferPool *sync.Pool
 var bufferPoolOnce sync.Once
 
 // TODO use pool
-func (a *AsyncReader) putBuffer(b *buffer) {
+func (a *AsyncRangeReader) putBuffer(b *buffer) {
 	b.buf = b.buf[0:cap(b.buf)]
 	bufferPool.Put(b.buf)
 }
 
-func (a *AsyncReader) getBuffer() *buffer {
+func (a *AsyncRangeReader) getBuffer() *buffer {
 	bufferPoolOnce.Do(func() {
 		// Initialise the buffer pool when used
 		bufferPool = &sync.Pool{
