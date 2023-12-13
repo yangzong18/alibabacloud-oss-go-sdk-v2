@@ -410,3 +410,132 @@ func readFill(r io.Reader, buf []byte) (n int, err error) {
 	}
 	return n, err
 }
+
+// A Reader implements the io.Reader, io.Seeker interfaces by reading from multi byte slice.
+type MultiBytesReader struct {
+	s    [][]byte
+	i    int64 // current reading index
+	size int64
+	rbuf int
+	rp   int
+}
+
+// Len returns the number of bytes of the unread portion of the slice.
+func (r *MultiBytesReader) Len() int {
+	if r.i >= r.size {
+		return 0
+	}
+	return int(r.size - r.i)
+}
+
+// Size returns the original length of the underlying byte slice.
+func (r *MultiBytesReader) Size() int64 { return r.size }
+
+// Read implements the io.Reader interface.
+func (r *MultiBytesReader) Read(b []byte) (n int, err error) {
+	if r.i >= r.size {
+		return 0, io.EOF
+	}
+
+	var nn int
+	for n < len(b) && err == nil {
+		nn, err = r.read(b[n:])
+		n += nn
+	}
+
+	if err == io.EOF {
+		err = nil
+	}
+
+	return n, err
+}
+
+func (r *MultiBytesReader) read(b []byte) (n int, err error) {
+	if r.i >= r.size {
+		return 0, io.EOF
+	}
+
+	if r.rp == cap(r.s[r.rbuf]) {
+		r.rbuf++
+		r.rp = 0
+	}
+
+	if r.rbuf == len(r.s) {
+		err = io.EOF
+		return
+	} else if r.rbuf > len(r.s) {
+		return 0, fmt.Errorf("read overflow, rbuf:%d, buf len%d", r.rbuf, len(r.s))
+	}
+
+	n = copy(b, r.s[r.rbuf][r.rp:])
+	r.rp += n
+	r.i += int64(n)
+
+	return
+}
+
+// Seek implements the io.Seeker interface.
+func (r *MultiBytesReader) Seek(offset int64, whence int) (int64, error) {
+	var abs int64
+	switch whence {
+	case io.SeekStart:
+		abs = offset
+	case io.SeekCurrent:
+		abs = r.i + offset
+	case io.SeekEnd:
+		abs = r.size + offset
+	default:
+		return 0, errors.New("MultiSliceReader.Seek: invalid whence")
+	}
+	if abs < 0 {
+		return 0, errors.New("MultiSliceReader.Seek: negative position")
+	}
+	r.i = abs
+	r.updateRp()
+	return abs, nil
+}
+
+// Reset resets the Reader to be reading from b.
+func (r *MultiBytesReader) Reset(b [][]byte) {
+	n := MultiBytesReader{
+		s: b,
+		i: 0,
+	}
+	n.size = int64(r.calcSize(n.s))
+	n.updateRp()
+	*r = n
+}
+
+func (r *MultiBytesReader) calcSize(b [][]byte) int {
+	size := 0
+	for i := 0; i < len(b); i++ {
+		size += len(r.s[i])
+	}
+	return size
+}
+
+func (r *MultiBytesReader) updateRp() {
+	remains := r.i
+	rbuf := 0
+	for remains > 0 && rbuf < len(r.s) {
+		slen := int64(len(r.s[rbuf]))
+		if remains < slen {
+			break
+		}
+		rbuf++
+		remains -= slen
+	}
+	r.rbuf = rbuf
+	r.rp = int(remains)
+}
+
+// NewReader returns a new Reader reading from b.
+func NewMultiBytesReader(b [][]byte) *MultiBytesReader {
+	r := &MultiBytesReader{
+		s: b,
+		i: 0,
+	}
+	r.size = int64(r.calcSize(r.s))
+	r.updateRp()
+	return r
+}

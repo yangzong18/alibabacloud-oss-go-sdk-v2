@@ -345,3 +345,215 @@ func TestAsyncRangeReaderGetError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "range get fail")
 }
+
+func TestMultiBytesReader(t *testing.T) {
+	datas := []struct {
+		data [][]byte
+	}{
+		{[][]byte{[]byte("0123456789")}},
+		{[][]byte{[]byte("01"), []byte("23"), []byte("45"), []byte("67"), []byte("89")}},
+		{[][]byte{[]byte("0"), []byte("12"), []byte("345"), []byte("6789")}},
+		{[][]byte{nil, []byte("0"), []byte("12"), nil, []byte("345"), []byte("6789"), nil}},
+	}
+
+	for _, d := range datas {
+		r := NewMultiBytesReader(d.data)
+		tests := []struct {
+			off     int64
+			seek    int
+			n       int
+			want    string
+			wantpos int64
+			readerr error
+			seekerr string
+		}{
+			{seek: io.SeekStart, off: 0, n: 20, want: "0123456789"},
+			{seek: io.SeekStart, off: 1, n: 1, want: "1"},
+			{seek: io.SeekCurrent, off: 1, wantpos: 3, n: 2, want: "34"},
+			{seek: io.SeekStart, off: -1, seekerr: "MultiSliceReader.Seek: negative position"},
+			{seek: io.SeekStart, off: 1 << 33, wantpos: 1 << 33, readerr: io.EOF},
+			{seek: io.SeekCurrent, off: 1, wantpos: 1<<33 + 1, readerr: io.EOF},
+			{seek: io.SeekStart, n: 5, want: "01234"},
+			{seek: io.SeekCurrent, n: 5, want: "56789"},
+			{seek: io.SeekEnd, off: -1, n: 1, wantpos: 9, want: "9"},
+		}
+
+		for i, tt := range tests {
+			pos, err := r.Seek(tt.off, tt.seek)
+			if err == nil && tt.seekerr != "" {
+				t.Errorf("%d. want seek error %q", i, tt.seekerr)
+				continue
+			}
+			if err != nil && err.Error() != tt.seekerr {
+				t.Errorf("%d. seek error = %q; want %q", i, err.Error(), tt.seekerr)
+				continue
+			}
+			if tt.wantpos != 0 && tt.wantpos != pos {
+				t.Errorf("%d. pos = %d, want %d", i, pos, tt.wantpos)
+			}
+			buf := make([]byte, tt.n)
+			n, err := r.Read(buf)
+			if err != tt.readerr {
+				t.Errorf("%d. read = %v; want %v", i, err, tt.readerr)
+				continue
+			}
+			got := string(buf[:n])
+			if got != tt.want {
+				t.Errorf("%d. got %q; want %q", i, got, tt.want)
+			}
+		}
+	}
+}
+
+func TestMultiBytesReaderAfterBigSeek(t *testing.T) {
+	datas := []struct {
+		data [][]byte
+	}{
+		{[][]byte{[]byte("0123456789")}},
+		{[][]byte{[]byte("01"), []byte("23"), []byte("45"), []byte("67"), []byte("89")}},
+		{[][]byte{[]byte("0"), []byte("12"), []byte("345"), []byte("6789")}},
+		{[][]byte{nil, []byte("0"), []byte("12"), nil, []byte("345"), []byte("6789"), nil}},
+	}
+
+	for _, d := range datas {
+		r := NewMultiBytesReader(d.data)
+		if _, err := r.Seek(1<<31+5, io.SeekStart); err != nil {
+			t.Fatal(err)
+		}
+		if n, err := r.Read(make([]byte, 10)); n != 0 || err != io.EOF {
+			t.Errorf("Read = %d, %v; want 0, EOF", n, err)
+		}
+	}
+}
+
+func TestEmptyMultiBytesReaderConcurrent(t *testing.T) {
+	datas := []struct {
+		data [][]byte
+	}{
+		{[][]byte{[]byte("0123456789")}},
+		{[][]byte{[]byte("01"), []byte("23"), []byte("45"), []byte("67"), []byte("89")}},
+		{[][]byte{[]byte("0"), []byte("12"), []byte("345"), []byte("6789")}},
+		{[][]byte{nil, []byte("0"), []byte("12"), nil, []byte("345"), []byte("6789"), nil}},
+	}
+
+	for _, d := range datas {
+		r := NewMultiBytesReader(d.data)
+		var wg sync.WaitGroup
+		for i := 0; i < 5; i++ {
+			wg.Add(2)
+			go func() {
+				defer wg.Done()
+				var buf [1]byte
+				r.Read(buf[:])
+			}()
+			go func() {
+				defer wg.Done()
+				r.Read(nil)
+			}()
+		}
+		wg.Wait()
+	}
+}
+
+func TestMultiBytesReaderLen(t *testing.T) {
+	datas := []struct {
+		data [][]byte
+	}{
+		{[][]byte{[]byte("hello world")}},
+		{[][]byte{[]byte("hello"), []byte(" world")}},
+		{[][]byte{[]byte("hello"), nil, []byte(" world")}},
+	}
+
+	for _, d := range datas {
+		r := NewMultiBytesReader(d.data)
+		if got, want := r.Len(), 11; got != want {
+			t.Errorf("r.Len(): got %d, want %d", got, want)
+		}
+		if n, err := r.Read(make([]byte, 10)); err != nil || n != 10 {
+			t.Errorf("Read failed: read %d %v", n, err)
+		}
+		if got, want := r.Len(), 1; got != want {
+			t.Errorf("r.Len(): got %d, want %d", got, want)
+		}
+		if n, err := r.Read(make([]byte, 1)); err != nil || n != 1 {
+			t.Errorf("Read failed: read %d %v; want 1, nil", n, err)
+		}
+		if got, want := r.Len(), 0; got != want {
+			t.Errorf("r.Len(): got %d, want %d", got, want)
+		}
+	}
+}
+func TestMultiBytesReaderCopyNothing(t *testing.T) {
+	type nErr struct {
+		n   int64
+		err error
+	}
+	type justReader struct {
+		io.Reader
+	}
+	type justWriter struct {
+		io.Writer
+	}
+	discard := justWriter{io.Discard} // hide ReadFrom
+
+	var with, withOut nErr
+	with.n, with.err = io.Copy(discard, NewMultiBytesReader(nil))
+	withOut.n, withOut.err = io.Copy(discard, justReader{NewMultiBytesReader(nil)})
+	if with != withOut {
+		t.Errorf("behavior differs: with = %#v; without: %#v", with, withOut)
+	}
+}
+
+// tests that Len is affected by reads, but Size is not.
+func TestMultiBytesReaderLenSize(t *testing.T) {
+	datas := []struct {
+		data [][]byte
+	}{
+		{[][]byte{[]byte("abc")}},
+		{[][]byte{[]byte("a"), []byte("bc")}},
+		{[][]byte{[]byte("ab"), nil, []byte("c")}},
+	}
+
+	for _, d := range datas {
+		r := NewMultiBytesReader(d.data)
+		io.CopyN(io.Discard, r, 1)
+		if r.Len() != 2 {
+			t.Errorf("Len = %d; want 2", r.Len())
+		}
+		if r.Size() != 3 {
+			t.Errorf("Size = %d; want 3", r.Size())
+		}
+	}
+}
+
+func TestMultiBytesReaderReset(t *testing.T) {
+	r := NewMultiBytesReader([][]byte{[]byte("世界")})
+	const want = "abcdef"
+	r.Reset([][]byte{[]byte(want)})
+
+	buf, err := io.ReadAll(r)
+	if err != nil {
+		t.Errorf("ReadAll: unexpected error: %v", err)
+	}
+	if got := string(buf); got != want {
+		t.Errorf("ReadAll: got %q, want %q", got, want)
+	}
+}
+
+func TestReaderZero(t *testing.T) {
+	if l := (&MultiBytesReader{}).Len(); l != 0 {
+		t.Errorf("Len: got %d, want 0", l)
+	}
+
+	if n, err := (&MultiBytesReader{}).Read(nil); n != 0 || err != io.EOF {
+		t.Errorf("Read: got %d, %v; want 0, io.EOF", n, err)
+	}
+
+	if offset, err := (&MultiBytesReader{}).Seek(11, io.SeekStart); offset != 11 || err != nil {
+		t.Errorf("Seek: got %d, %v; want 11, nil", offset, err)
+	}
+
+	if s := (&MultiBytesReader{}).Size(); s != 0 {
+		t.Errorf("Size: got %d, want 0", s)
+	}
+}
