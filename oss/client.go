@@ -47,6 +47,8 @@ type Options struct {
 	OpReadWriteTimeout *time.Duration
 
 	AuthMethod *AuthMethodType
+
+	AdditionalHeaders []string
 }
 
 func (c Options) Copy() Options {
@@ -178,8 +180,10 @@ func resolveSigner(cfg *Config, o *Options) {
 	}
 
 	switch cfg.SignatureVersion {
-	default:
+	case SignatureVersionV1:
 		o.Signer = &signer.SignerV1{}
+	default:
+		o.Signer = &signer.SignerV4{}
 	}
 }
 
@@ -272,9 +276,9 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	} else {
 		body = ReadSeekNopCloser(input.Body)
 	}
-	len, _ := body.GetLen()
-	if len >= 0 && request.Header.Get("Content-Length") == "" {
-		request.ContentLength = len
+	length, _ := body.GetLen()
+	if length >= 0 && request.Header.Get("Content-Length") == "" {
+		request.ContentLength = length
 	}
 	request.Body = body
 

@@ -191,6 +191,7 @@ type SignatureVersionType int
 
 const (
 	SignatureVersionV1 SignatureVersionType = iota
+	SignatureVersionV4
 )
 
 func (f SignatureVersionType) String() string {

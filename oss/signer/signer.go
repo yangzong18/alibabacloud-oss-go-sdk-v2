@@ -25,15 +25,18 @@ type SigningContext struct {
 
 	Credentials *credentials.Credentials
 
-	AuthMethodQuery bool
-
+	AuthMethodQuery   bool
+	AdditionalHeaders []string
 	// input and output
 	Time        time.Time
 	ClockOffset time.Duration
 
 	// output
 	SignedHeaders map[string]string
-	StringToSign  string
+
+	StringToSign string
+
+	currentTime time.Time
 }
 
 type Signer interface {
