@@ -97,6 +97,24 @@ func isReaderSeekable(r io.Reader) bool {
 	}
 }
 
+func getReaderLen(r io.Reader) int64 {
+	type lenner interface {
+		Len() int
+	}
+
+	if lr, ok := r.(lenner); ok {
+		return int64(lr.Len())
+	}
+
+	if s, ok := r.(io.Seeker); ok {
+		if l, err := seekerLen(s); err == nil {
+			return l
+		}
+	}
+
+	return -1
+}
+
 type buffer struct {
 	buf    []byte
 	err    error
@@ -455,7 +473,8 @@ func (r *MultiBytesReader) read(b []byte) (n int, err error) {
 		return 0, io.EOF
 	}
 
-	if r.rp == cap(r.s[r.rbuf]) {
+	//if r.rp == cap(r.s[r.rbuf]) {
+	if r.rp == len(r.s[r.rbuf]) {
 		r.rbuf++
 		r.rp = 0
 	}
