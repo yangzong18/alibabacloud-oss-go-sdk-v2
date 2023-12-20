@@ -21,22 +21,23 @@ type SigningContext struct {
 	Key     *string
 	Request *http.Request
 
-	SubResource []string
+	SubResource       []string
+	AdditionalHeaders []string
 
 	Credentials *credentials.Credentials
 
-	AuthMethodQuery   bool
-	AdditionalHeaders []string
+	AuthMethodQuery bool
+
 	// input and output
 	Time        time.Time
 	ClockOffset time.Duration
 
 	// output
 	SignedHeaders map[string]string
+	StringToSign  string
 
-	StringToSign string
-
-	currentTime time.Time
+	// for test
+	signTime *time.Time
 }
 
 type Signer interface {

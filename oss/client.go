@@ -295,7 +295,10 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		AuthMethodQuery: opts.AuthMethod != nil && *opts.AuthMethod == AuthMethodQuery,
 		ClockOffset:     clockOffset,
 	}
-	if signTime, ok := input.OpMetadata.Get(signer.SignTime).(time.Time); ok {
+
+	if date := request.Header.Get(HeaderOssDate); date != "" {
+		signingCtx.Time, _ = http.ParseTime(date)
+	} else if signTime, ok := input.OpMetadata.Get(signer.SignTime).(time.Time); ok {
 		signingCtx.Time = signTime
 	}
 

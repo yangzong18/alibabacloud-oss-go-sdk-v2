@@ -80,14 +80,7 @@ func isSubResource(list []string, key string) bool {
 	return false
 }
 
-func formatDate(time time.Time, unix bool) string {
-	if unix {
-		return fmt.Sprintf("%v", time.Unix())
-	}
-	return time.Format(http.TimeFormat)
-}
-
-func (*SignerV1) calcStringToSign(signingCtx *SigningContext) string {
+func (*SignerV1) calcStringToSign(date string, signingCtx *SigningContext) string {
 	/*
 		SignToString =
 			VERB + "\n"
@@ -102,7 +95,6 @@ func (*SignerV1) calcStringToSign(signingCtx *SigningContext) string {
 
 	contentMd5 := request.Header.Get(contentMd5Header)
 	contentType := request.Header.Get(contentTypeHeader)
-	date := formatDate(signingCtx.Time, signingCtx.AuthMethodQuery)
 
 	//CanonicalizedOSSHeaders
 	var headers []string
@@ -175,16 +167,11 @@ func (s *SignerV1) authHeader(ctx context.Context, signingCtx *SigningContext) e
 	cred := signingCtx.Credentials
 
 	// Date
-	time := time.Now().UTC()
-	if signingCtx.ClockOffset != 0 {
-		time = time.Add(signingCtx.ClockOffset)
+	if signingCtx.Time.IsZero() {
+		signingCtx.Time = time.Now().Add(signingCtx.ClockOffset)
 	}
-	date := request.Header.Get(ossDateHeader)
-	if len(date) > 0 {
-		time, _ = http.ParseTime(date)
-	}
-	request.Header.Set(dateHeader, formatDate(time, false))
-	signingCtx.Time = time
+	datetime := signingCtx.Time.UTC().Format(http.TimeFormat)
+	request.Header.Set(dateHeader, datetime)
 
 	// Credentials information
 	if cred.SessionToken != "" {
@@ -192,7 +179,7 @@ func (s *SignerV1) authHeader(ctx context.Context, signingCtx *SigningContext) e
 	}
 
 	// StringToSign
-	stringToSign := s.calcStringToSign(signingCtx)
+	stringToSign := s.calcStringToSign(datetime, signingCtx)
 	signingCtx.StringToSign = stringToSign
 
 	// Signature
@@ -214,8 +201,9 @@ func (s *SignerV1) authQuery(ctx context.Context, signingCtx *SigningContext) er
 
 	// Date
 	if signingCtx.Time.IsZero() {
-		signingCtx.Time = time.Now().Add(defaultExpiresDuration)
+		signingCtx.Time = time.Now().UTC().Add(defaultExpiresDuration)
 	}
+	datetime := fmt.Sprintf("%v", signingCtx.Time.UTC().Unix())
 
 	// Credentials information
 	query, _ := url.ParseQuery(request.URL.RawQuery)
@@ -225,7 +213,7 @@ func (s *SignerV1) authQuery(ctx context.Context, signingCtx *SigningContext) er
 	}
 
 	// StringToSign
-	stringToSign := s.calcStringToSign(signingCtx)
+	stringToSign := s.calcStringToSign(datetime, signingCtx)
 	signingCtx.StringToSign = stringToSign
 
 	// Signature
@@ -236,10 +224,10 @@ func (s *SignerV1) authQuery(ctx context.Context, signingCtx *SigningContext) er
 	signature := base64.StdEncoding.EncodeToString(h.Sum(nil))
 
 	// Authorization query
-	query.Add(expiresQuery, fmt.Sprintf("%v", signingCtx.Time.Unix()))
+	query.Add(expiresQuery, datetime)
 	query.Add(accessKeyIdQuery, cred.AccessKeyID)
 	query.Add(signatureQuery, signature)
-	request.URL.RawQuery = query.Encode()
+	request.URL.RawQuery = strings.Replace(query.Encode(), "+", "%20", -1)
 
 	return nil
 }
