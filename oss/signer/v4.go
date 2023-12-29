@@ -255,8 +255,8 @@ func (s *SignerV4) authHeader(ctx context.Context, signingCtx *SigningContext) e
 	request.Header.Set(dateHeader, utcTime.Format(http.TimeFormat))
 
 	// Credentials information
-	if cred.SessionToken != "" {
-		request.Header.Set(securityTokenHeader, cred.SessionToken)
+	if cred.SecurityToken != "" {
+		request.Header.Set(securityTokenHeader, cred.SecurityToken)
 	}
 
 	// Other Headers
@@ -292,9 +292,9 @@ func (s *SignerV4) authHeader(ctx context.Context, signingCtx *SigningContext) e
 
 	request.Header.Set(authorizationHeader, buf.String())
 
-	//fmt.Printf("canonicalRequest:\n%s\n", canonicalRequest)
+	fmt.Printf("canonicalRequest:\n%s\n", canonicalRequest)
 
-	//fmt.Printf("stringToSign:\n%s\n", stringToSign)
+	fmt.Printf("stringToSign:\n%s\n", stringToSign)
 
 	return nil
 }
@@ -324,8 +324,8 @@ func (s *SignerV4) authQuery(ctx context.Context, signingCtx *SigningContext) er
 
 	// Credentials information
 	query, _ := url.ParseQuery(request.URL.RawQuery)
-	if cred.SessionToken != "" {
-		query.Add("x-oss-security-token", cred.SessionToken)
+	if cred.SecurityToken != "" {
+		query.Add("x-oss-security-token", cred.SecurityToken)
 	}
 	query.Add("x-oss-signature-version", algorithmV4)
 	query.Add("x-oss-date", datetime)

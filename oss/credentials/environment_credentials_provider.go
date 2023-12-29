@@ -18,7 +18,7 @@ func (s *EnvironmentVariableCredentialsProvider) GetCredentials(ctx context.Cont
 	return Credentials{
 		AccessKeyID:     id,
 		AccessKeySecret: secret,
-		SessionToken:    os.Getenv("OSS_SESSION_TOKEN"),
+		SecurityToken:   os.Getenv("OSS_SESSION_TOKEN"),
 	}, nil
 }
 

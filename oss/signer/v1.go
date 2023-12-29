@@ -174,8 +174,8 @@ func (s *SignerV1) authHeader(ctx context.Context, signingCtx *SigningContext) e
 	request.Header.Set(dateHeader, datetime)
 
 	// Credentials information
-	if cred.SessionToken != "" {
-		request.Header.Set(securityTokenHeader, cred.SessionToken)
+	if cred.SecurityToken != "" {
+		request.Header.Set(securityTokenHeader, cred.SecurityToken)
 	}
 
 	// StringToSign
@@ -207,8 +207,8 @@ func (s *SignerV1) authQuery(ctx context.Context, signingCtx *SigningContext) er
 
 	// Credentials information
 	query, _ := url.ParseQuery(request.URL.RawQuery)
-	if cred.SessionToken != "" {
-		query.Add(securityTokenQuery, cred.SessionToken)
+	if cred.SecurityToken != "" {
+		query.Add(securityTokenQuery, cred.SecurityToken)
 		request.URL.RawQuery = query.Encode()
 	}
 

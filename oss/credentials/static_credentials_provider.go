@@ -17,7 +17,7 @@ func NewStaticCredentialsProvider(id, secret string, tokens ...string) Credentia
 		credentials: Credentials{
 			AccessKeyID:     id,
 			AccessKeySecret: secret,
-			SessionToken:    token,
+			SecurityToken:   token,
 		}}
 }
 

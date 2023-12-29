@@ -51,7 +51,7 @@ func TestStaticCredentialsProvider(t *testing.T) {
 	assert.True(t, cred.HasKeys())
 	assert.Equal(t, "ak", cred.AccessKeyID)
 	assert.Equal(t, "sk", cred.AccessKeySecret)
-	assert.Equal(t, "", cred.SessionToken)
+	assert.Equal(t, "", cred.SecurityToken)
 
 	provider = NewStaticCredentialsProvider("ak1", "sk1", "token1")
 	cred, err = provider.GetCredentials(context.TODO())
@@ -61,7 +61,7 @@ func TestStaticCredentialsProvider(t *testing.T) {
 	assert.True(t, cred.HasKeys())
 	assert.Equal(t, "ak1", cred.AccessKeyID)
 	assert.Equal(t, "sk1", cred.AccessKeySecret)
-	assert.Equal(t, "token1", cred.SessionToken)
+	assert.Equal(t, "token1", cred.SecurityToken)
 }
 
 func TestEnvironmentVariableCredentialsProvider(t *testing.T) {
@@ -100,7 +100,7 @@ func TestEnvironmentVariableCredentialsProvider(t *testing.T) {
 	assert.True(t, cred.HasKeys())
 	assert.Equal(t, "myak", cred.AccessKeyID)
 	assert.Equal(t, "mysk", cred.AccessKeySecret)
-	assert.Equal(t, "", cred.SessionToken)
+	assert.Equal(t, "", cred.SecurityToken)
 
 	err = os.Setenv("OSS_SESSION_TOKEN", "mytoken")
 
@@ -112,7 +112,7 @@ func TestEnvironmentVariableCredentialsProvider(t *testing.T) {
 	assert.True(t, cred.HasKeys())
 	assert.Equal(t, "myak", cred.AccessKeyID)
 	assert.Equal(t, "mysk", cred.AccessKeySecret)
-	assert.Equal(t, "mytoken", cred.SessionToken)
+	assert.Equal(t, "mytoken", cred.SecurityToken)
 }
 
 func TestAnonymousCredentialsProvider(t *testing.T) {
@@ -145,7 +145,7 @@ func (s *stubCredentialsFetcher) Fetch(ctx context.Context) (Credentials, error)
 	return Credentials{
 		AccessKeyID:     "ak",
 		AccessKeySecret: "sk",
-		SessionToken:    s.token,
+		SecurityToken:   s.token,
 		Expires:         expires,
 	}, nil
 }
@@ -197,7 +197,7 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred1.AccessKeyID)
 	assert.Equal(t, "sk", cred1.AccessKeySecret)
-	assert.Equal(t, "token", cred1.SessionToken)
+	assert.Equal(t, "token", cred1.SecurityToken)
 	assert.NotNil(t, cred1.Expires)
 	assert.False(t, cred1.Expired())
 
@@ -206,7 +206,7 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred2.AccessKeyID)
 	assert.Equal(t, "sk", cred2.AccessKeySecret)
-	assert.Equal(t, "token", cred2.SessionToken)
+	assert.Equal(t, "token", cred2.SecurityToken)
 	assert.Equal(t, cred1.Expires, cred2.Expires)
 
 	time.Sleep(3 * time.Second)
@@ -217,7 +217,7 @@ func TestCredentialsFetcherProvider(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred3.AccessKeyID)
 	assert.Equal(t, "sk", cred3.AccessKeySecret)
-	assert.Equal(t, "token", cred3.SessionToken)
+	assert.Equal(t, "token", cred3.SecurityToken)
 	assert.False(t, cred3.Expired())
 
 	assert.True(t, cred3.Expires.After(*cred1.Expires))
@@ -247,7 +247,7 @@ func TestCredentialsFetcherProvider_Soon(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred1.AccessKeyID)
 	assert.Equal(t, "sk", cred1.AccessKeySecret)
-	assert.Equal(t, "token", cred1.SessionToken)
+	assert.Equal(t, "token", cred1.SecurityToken)
 	assert.NotNil(t, cred1.Expires)
 	assert.False(t, cred1.Expired())
 	assert.EqualValues(t, cred1, cred1_1)
@@ -260,7 +260,7 @@ func TestCredentialsFetcherProvider_Soon(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred2.AccessKeyID)
 	assert.Equal(t, "sk", cred2.AccessKeySecret)
-	assert.Equal(t, "token", cred2.SessionToken)
+	assert.Equal(t, "token", cred2.SecurityToken)
 	assert.True(t, cred2.Expires.After(*cred1.Expires))
 	assert.EqualValues(t, cred2, cred3)
 }
@@ -293,7 +293,7 @@ func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, "ak", cred.AccessKeyID)
 			assert.Equal(t, "sk", cred.AccessKeySecret)
-			assert.Equal(t, "token", cred.SessionToken)
+			assert.Equal(t, "token", cred.SecurityToken)
 			assert.NotNil(t, cred.Expires)
 			assert.False(t, cred.Expired())
 			count++
@@ -334,7 +334,7 @@ func (s *stubCredentialsFetcher2) Fetch(ctx context.Context) (Credentials, error
 		return Credentials{
 			AccessKeyID:     "ak",
 			AccessKeySecret: "sk",
-			SessionToken:    s.token,
+			SecurityToken:   s.token,
 			Expires:         expires,
 		}, nil
 	}
@@ -370,7 +370,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred1.AccessKeyID)
 	assert.Equal(t, "sk", cred1.AccessKeySecret)
-	assert.Equal(t, "token", cred1.SessionToken)
+	assert.Equal(t, "token", cred1.SecurityToken)
 	assert.NotNil(t, cred1.Expires)
 	assert.False(t, cred1.Expired())
 
@@ -382,7 +382,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred2.AccessKeyID)
 	assert.Equal(t, "sk", cred2.AccessKeySecret)
-	assert.Equal(t, "token", cred2.SessionToken)
+	assert.Equal(t, "token", cred2.SecurityToken)
 	assert.Equal(t, *cred1.Expires, *cred2.Expires)
 
 	// Fetch Timeout
@@ -414,7 +414,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred3.AccessKeyID)
 	assert.Equal(t, "sk", cred3.AccessKeySecret)
-	assert.Equal(t, "token", cred3.SessionToken)
+	assert.Equal(t, "token", cred3.SecurityToken)
 	assert.NotNil(t, cred3.Expires)
 	assert.False(t, cred3.Expired())
 
@@ -426,7 +426,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "ak", cred4.AccessKeyID)
 	assert.Equal(t, "sk", cred4.AccessKeySecret)
-	assert.Equal(t, "token", cred4.SessionToken)
+	assert.Equal(t, "token", cred4.SecurityToken)
 	assert.NotNil(t, cred4.Expires)
 	assert.Equal(t, *cred3.Expires, *cred4.Expires)
 }

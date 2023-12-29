@@ -8,7 +8,7 @@ import (
 type Credentials struct {
 	AccessKeyID     string     // Access key ID
 	AccessKeySecret string     // Access Key Secret
-	SessionToken    string     // Session Token
+	SecurityToken   string     // Security Token
 	Expires         *time.Time // The time the credentials will expire at.
 }
 

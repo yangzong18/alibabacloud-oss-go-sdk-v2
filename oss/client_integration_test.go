@@ -133,11 +133,13 @@ func cleanObjects(c *Client, bucketName string, t *testing.T) {
 		for _, object := range lor.Contents {
 			deleteObjects = append(deleteObjects, DeleteObject{Key: object.Key})
 		}
-		_, err = c.DeleteMultipleObjects(context.TODO(), &DeleteMultipleObjectsRequest{
-			Bucket:  Ptr(bucketName),
-			Objects: deleteObjects,
-		})
-		assert.Nil(t, err)
+		if len(deleteObjects) > 0 {
+			_, err = c.DeleteMultipleObjects(context.TODO(), &DeleteMultipleObjectsRequest{
+				Bucket:  Ptr(bucketName),
+				Objects: deleteObjects,
+			})
+			assert.Nil(t, err)
+		}
 
 		if !lor.IsTruncated {
 			break
