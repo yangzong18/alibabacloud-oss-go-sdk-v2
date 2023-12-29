@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -429,4 +430,151 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 	assert.Equal(t, "token", cred4.SecurityToken)
 	assert.NotNil(t, cred4.Expires)
 	assert.Equal(t, *cred3.Expires, *cred4.Expires)
+}
+
+func createFileFromByte(t *testing.T, fileName string, content []byte) {
+	fout, err := os.Create(fileName)
+	assert.Nil(t, err)
+	defer fout.Close()
+	_, err = fout.Write(content)
+	assert.Nil(t, err)
+}
+
+func TestProcessCredentialsProvider(t *testing.T) {
+	//default
+	p := NewProcessCredentialsProvider("")
+	processProvider, _ := p.(*ProcessCredentialsProvider)
+	assert.Equal(t, 15*time.Second, processProvider.timeout)
+	_, err := p.GetCredentials(context.TODO())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "command must not be empty")
+
+	// set timeout
+	p = NewProcessCredentialsProvider("", func(pcpo *ProcessCredentialsProviderOptions) {
+		pcpo.Timeout = 5 * time.Minute
+	})
+	processProvider, _ = p.(*ProcessCredentialsProvider)
+	assert.Equal(t, 5*time.Minute, processProvider.timeout)
+
+	//run cmd
+	localFile := fmt.Sprintf("cred-file-%v-", time.Now().UnixMicro()) + ".tmp"
+	defer func() {
+		os.Remove(localFile)
+	}()
+	var cmd string
+	if runtime.GOOS == "windows" {
+		cmd = fmt.Sprintf("type %s", localFile)
+	} else {
+		cmd = fmt.Sprintf("cat %s", localFile)
+	}
+
+	// all fileds
+	data := `
+	{
+		"AccessKeyId" : "ak",
+		"AccessKeySecret" : "sk",
+		"Expiration" : "2023-12-29T07:45:02Z",
+		"SecurityToken" : "token"
+	}`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider(cmd)
+	cred, err := p.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "ak", cred.AccessKeyID)
+	assert.Equal(t, "sk", cred.AccessKeySecret)
+	assert.Equal(t, "token", cred.SecurityToken)
+	assert.NotNil(t, cred.Expires)
+
+	// only ak, sk
+	data = `
+	{
+		"AccessKeyId" : "ak",
+		"AccessKeySecret" : "sk"
+	}`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider(cmd)
+	cred, err = p.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "ak", cred.AccessKeyID)
+	assert.Equal(t, "sk", cred.AccessKeySecret)
+	assert.Equal(t, "", cred.SecurityToken)
+	assert.Nil(t, cred.Expires)
+
+	// only ak or sk, gets error
+	data = `
+	{
+		"AccessKeyId" : "ak"
+	}`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider(cmd)
+	cred, err = p.GetCredentials(context.TODO())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing AccessKeyId or AccessKeySecret in process output")
+
+	data = `
+	{
+		"AccessKeySecret" : "sk"
+	}`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider(cmd)
+	cred, err = p.GetCredentials(context.TODO())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing AccessKeyId or AccessKeySecret in process output")
+
+	// invalid json
+	data = `
+	{
+		"AccessKeyId" : "ak",
+		"AccessKeySecret" : "sk"
+	`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider(cmd)
+	cred, err = p.GetCredentials(context.TODO())
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "unexpected end of JSON input")
+
+	// invalid command
+	data = `
+	{
+		"AccessKeyId" : "ak",
+		"AccessKeySecret" : "sk"
+	}`
+	createFileFromByte(t, localFile, []byte(data))
+	p = NewProcessCredentialsProvider("invalid cmd")
+	cred, err = p.GetCredentials(context.TODO())
+	assert.Contains(t, err.Error(), "error in credential_process")
+}
+
+func TestMixedCredentialsProvider(t *testing.T) {
+	// ProcessCredentialsProvider + CredentialsFetcherProvider
+	//run cmd
+	localFile := fmt.Sprintf("cred-file-%v-", time.Now().UnixMicro()) + ".tmp"
+	defer func() {
+		os.Remove(localFile)
+	}()
+	var cmd string
+	if runtime.GOOS == "windows" {
+		cmd = fmt.Sprintf("type %s", localFile)
+	} else {
+		cmd = fmt.Sprintf("cat %s", localFile)
+	}
+
+	data := `
+	{
+		"AccessKeyId" : "ak",
+		"AccessKeySecret" : "sk",
+		"Expiration" : "2023-12-29T07:45:02Z",
+		"SecurityToken" : "token"
+	}`
+
+	createFileFromByte(t, localFile, []byte(data))
+	provider := NewCredentialsFetcherProvider(CredentialsFetcherFunc(func(ctx context.Context) (Credentials, error) {
+		return NewProcessCredentialsProvider(cmd).GetCredentials(ctx)
+	}))
+	cred, err := provider.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "ak", cred.AccessKeyID)
+	assert.Equal(t, "sk", cred.AccessKeySecret)
+	assert.Equal(t, "token", cred.SecurityToken)
+	assert.NotNil(t, cred.Expires)
 }
