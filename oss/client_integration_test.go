@@ -38,6 +38,8 @@ var (
 
 	instance_ *Client
 	testOnce_ sync.Once
+
+	kmdIdMap_ = map[string]string{}
 )
 
 var (
@@ -86,8 +88,34 @@ func getClientUseStsToken(region, endpoint string) *Client {
 	return NewClient(cfg)
 }
 
-func getKmsID() string {
-	return ""
+func getKmsID(region string) string {
+	if id, ok := kmdIdMap_[region]; ok {
+		return id
+	}
+
+	client := getClient(region, fmt.Sprintf("oss-%s.aliyuncs.com", region))
+	bucketName := bucketNamePrefix + randLowStr(6)
+
+	if _, err := client.PutBucket(context.TODO(), &PutBucketRequest{Bucket: Ptr(bucketName)}); err != nil {
+		return ""
+	}
+
+	kmdId := ""
+	if _, err := client.PutObject(context.TODO(), &PutObjectRequest{
+		Bucket:               Ptr(bucketName),
+		Key:                  Ptr("kms-id"),
+		ServerSideEncryption: Ptr("KMS")}); err == nil {
+
+		if result, err := client.HeadObject(context.TODO(), &HeadObjectRequest{
+			Bucket: Ptr(bucketName),
+			Key:    Ptr("kms-id")}); err == nil {
+			kmdId = ToString(result.SSEKMSKeyId)
+			kmdIdMap_[region] = kmdId
+		}
+	}
+	client.DeleteObject(context.TODO(), &DeleteObjectRequest{Bucket: Ptr(bucketName), Key: Ptr("kms-id")})
+	client.DeleteBucket(context.TODO(), &DeleteBucketRequest{Bucket: Ptr(bucketName)})
+	return kmdId
 }
 
 func getSignatrueVersion() SignatureVersionType {
