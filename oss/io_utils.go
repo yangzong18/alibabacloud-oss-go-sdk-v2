@@ -595,3 +595,126 @@ func NewMultiBytesReader(b [][]byte) *MultiBytesReader {
 	r.updateRp()
 	return r
 }
+
+type RangeReader struct {
+	in     io.ReadCloser // Input reader
+	closed bool          // whether we have closed the underlying stream
+
+	//Range Getter
+	rangeGet  ReaderRangeGetFn
+	httpRange HTTPRange
+
+	// For reader
+	offset int64
+
+	oriHttpRange HTTPRange
+
+	context context.Context
+
+	// Origin file pattern
+	etag    string
+	modTime *time.Time
+}
+
+// NewRangeReader returns a reader that will read from the Reader returued by getter from the given offset.
+// The etag is used to identify the content of the object. If not set, the first ETag returned value will be used instead.
+func NewRangeReader(ctx context.Context, rangeGet ReaderRangeGetFn, httpRange *HTTPRange, etag string) (*RangeReader, error) {
+	if rangeGet == nil {
+		return nil, errors.New("nil reader supplied")
+	}
+
+	range_ := HTTPRange{}
+	if httpRange != nil {
+		range_ = *httpRange
+	}
+
+	a := &RangeReader{
+		rangeGet:     rangeGet,
+		context:      ctx,
+		httpRange:    range_,
+		oriHttpRange: range_,
+		offset:       range_.Offset,
+		etag:         etag,
+	}
+
+	//fmt.Printf("NewRangeReader, range: %s, etag:%s\n", ToString(a.httpRange.FormatHTTPRange()), a.etag)
+
+	return a, nil
+}
+
+// Read will return the next available data.
+func (r *RangeReader) Read(p []byte) (n int, err error) {
+	defer func() {
+		r.offset += int64(n)
+		r.httpRange.Offset += int64(n)
+	}()
+	n, err = r.read(p)
+	return
+}
+
+func (r *RangeReader) read(p []byte) (int, error) {
+	if r.closed {
+		return 0, fmt.Errorf("RangeReader is closed")
+	}
+
+	// open stream
+	if r.in == nil {
+		output, err := r.rangeGet(r.context, r.httpRange)
+		if err == nil {
+			etag := ToString(output.ETag)
+			if r.etag == "" {
+				r.etag = etag
+				r.modTime = output.LastModified
+			}
+			if etag != r.etag {
+				err = fmt.Errorf("Source file is changed, expect etag:%s ,got offset:%s", r.etag, etag)
+			}
+
+			// Partial Response check
+			var off int64
+			if output.ContentRange == nil {
+				off = 0
+			} else {
+				off, _, _, _ = ParseContentRange(*output.ContentRange)
+			}
+			if off != r.httpRange.Offset {
+				err = fmt.Errorf("Range get fail, expect offset:%v, got offset:%v", r.httpRange.Offset, off)
+			}
+		}
+		if err != nil {
+			return 0, err
+		}
+		body := output.Body
+		if r.httpRange.Count > 0 {
+			body = NewLimitedReadCloser(output.Body, r.httpRange.Count)
+		}
+		r.in = body
+	}
+
+	// read from stream
+	// ignore error when reading from stream
+	n, err := r.in.Read(p)
+	if err != nil && err != io.EOF {
+		r.in.Close()
+		r.in = nil
+		err = nil
+	}
+
+	return n, err
+}
+
+func (r *RangeReader) Offset() int64 {
+	return r.offset
+}
+
+func (r *RangeReader) Close() (err error) {
+	if r.closed {
+		return nil
+	}
+	r.closed = true
+
+	if r.in != nil {
+		err = r.in.Close()
+	}
+	return
+}
