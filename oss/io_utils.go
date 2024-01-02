@@ -6,7 +6,23 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 )
+
+type LimitedReadCloser struct {
+	*io.LimitedReader
+	io.Closer
+}
+
+func NewLimitedReadCloser(rc io.ReadCloser, limit int64) io.ReadCloser {
+	if limit < 0 {
+		return rc
+	}
+	return &LimitedReadCloser{
+		LimitedReader: &io.LimitedReader{R: rc, N: limit},
+		Closer:        rc,
+	}
+}
 
 func ReadSeekNopCloser(r io.Reader) ReadSeekerNopClose {
 	return ReadSeekerNopClose{r}
@@ -152,7 +168,15 @@ const (
 	softStartInitial     = 512 * 1024
 )
 
-type AsyncRangeReaderGet func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error)
+type ReaderRangeGetOutput struct {
+	Body          io.ReadCloser
+	ContentLength int64
+	ContentRange  *string
+	ETag          *string
+	LastModified  *time.Time
+}
+
+type ReaderRangeGetFn func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error)
 
 type AsyncRangeReader struct {
 	in      io.ReadCloser // Input reader
@@ -168,7 +192,7 @@ type AsyncRangeReader struct {
 	mu      sync.Mutex    // lock for Read/WriteTo/Abandon/Close
 
 	//Range Getter
-	rangeGet  AsyncRangeReaderGet
+	rangeGet  ReaderRangeGetFn
 	httpRange HTTPRange
 
 	// For reader
@@ -191,7 +215,7 @@ type AsyncRangeReader struct {
 // When done use Close to release the buffers and close the supplied input.
 // The etag is used to identify the content of the object. If not set, the first ETag returned value will be used instead.
 func NewAsyncRangeReader(ctx context.Context,
-	rangeGet AsyncRangeReaderGet, httpRange *HTTPRange, etag string, buffers int) (*AsyncRangeReader, error) {
+	rangeGet ReaderRangeGetFn, httpRange *HTTPRange, etag string, buffers int) (*AsyncRangeReader, error) {
 
 	if buffers <= 0 {
 		return nil, errors.New("number of buffers too small")
@@ -262,16 +286,25 @@ func (a *AsyncRangeReader) init(buffers int) {
 				}
 
 				if a.in == nil {
-					body, off, etag, err := a.rangeGet(a.context, a.httpRange)
-					if a.etag == "" {
-						a.etag = etag
-					}
+					output, err := a.rangeGet(a.context, a.httpRange)
 					if err == nil {
-						if off != a.httpRange.Offset {
-							err = fmt.Errorf("Range get fail, expect offset:%v, got offset:%v", a.httpRange.Offset, off)
+						etag := ToString(output.ETag)
+						if a.etag == "" {
+							a.etag = etag
 						}
 						if etag != a.etag {
 							err = fmt.Errorf("Source file is changed, expect etag:%s ,got offset:%s", a.etag, etag)
+						}
+
+						// Partial Response check
+						var off int64
+						if output.ContentRange == nil {
+							off = 0
+						} else {
+							off, _, _, _ = ParseContentRange(*output.ContentRange)
+						}
+						if off != a.httpRange.Offset {
+							err = fmt.Errorf("Range get fail, expect offset:%v, got offset:%v", a.httpRange.Offset, off)
 						}
 					}
 					if err != nil {
@@ -280,6 +313,10 @@ func (a *AsyncRangeReader) init(buffers int) {
 						//fmt.Printf("call getFunc fail, err:%v\n", err)
 						a.ready <- b
 						return
+					}
+					body := output.Body
+					if a.httpRange.Count > 0 {
+						body = NewLimitedReadCloser(output.Body, a.httpRange.Count)
 					}
 					a.in = body
 					//fmt.Printf("call getFunc done, range:%s\n", ToString(a.httpRange.FormatHTTPRange()))

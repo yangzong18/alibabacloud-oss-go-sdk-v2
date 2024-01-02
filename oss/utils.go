@@ -270,6 +270,56 @@ func minInt64(a, b int64) int64 {
 	}
 }
 
+// ParseRange parses a ContentRange from a ContentRange: header.
+// It only accepts bytes 22-33/42 and bytes 22-33/* format.
+func ParseContentRange(s string) (from int64, to int64, total int64, err error) {
+	if !strings.HasPrefix(s, "bytes ") {
+		return from, to, total, errors.New("invalid content range")
+	}
+
+	slash := strings.IndexRune(s, '/')
+	if slash < 0 {
+		return from, to, total, errors.New("invalid content range")
+	}
+
+	dash := strings.IndexRune(s, '-')
+	if dash < 0 {
+		return from, to, total, errors.New("invalid content range")
+	}
+
+	if slash < dash {
+		return from, to, total, errors.New("invalid content range")
+	}
+
+	// from
+	ret, err := strconv.ParseInt(s[6:dash], 10, 64)
+	if err != nil {
+		return from, to, total, errors.New("invalid content range")
+	}
+	from = ret
+
+	// to
+	ret, err = strconv.ParseInt(s[dash+1:slash], 10, 64)
+	if err != nil {
+		return from, to, total, errors.New("invalid content range")
+	}
+	to = ret
+
+	// total
+	last := s[slash+1:]
+	if last == "*" {
+		total = -1
+	} else {
+		ret, err = strconv.ParseInt(s[slash+1:], 10, 64)
+		if err != nil {
+			return from, to, total, errors.New("invalid content range")
+		}
+		total = ret
+	}
+
+	return from, to, total, nil
+}
+
 // ParseRange parses a HTTPRange from a Range: header.
 // It only accepts single ranges.
 func ParseRange(s string) (r *HTTPRange, err error) {

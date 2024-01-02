@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -20,8 +21,10 @@ func TestAsyncRangeReader(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
 	buf := io.NopCloser(bytes.NewBufferString(data))
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return buf, 0, "", nil
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: buf,
+		}, nil
 	}
 	ar, err := NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
@@ -49,8 +52,10 @@ func TestAsyncRangeReader(t *testing.T) {
 
 	// Test Close without reading everything
 	buf = io.NopCloser(bytes.NewBuffer(make([]byte, 50000)))
-	getFn = func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return buf, 0, "", nil
+	getFn = func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: buf,
+		}, nil
 	}
 	ar, err = NewAsyncRangeReader(ctx, getFn, nil, "", 4)
 	require.NoError(t, err)
@@ -68,8 +73,11 @@ func TestAsyncRangeReaderErrors(t *testing.T) {
 
 	// invalid buffer number
 	buf := io.NopCloser(bytes.NewBufferString(data))
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return buf, 0, "", nil
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: buf,
+		}, nil
+		//return buf, 0, "", nil
 	}
 	_, err = NewAsyncRangeReader(ctx, getFn, nil, "", 0)
 	require.Error(t, err)
@@ -152,9 +160,14 @@ func TestAsyncRangeReaderSizes(t *testing.T) {
 						bufsize := bufsizes[k]
 						read := readmaker.fn(strings.NewReader(text))
 						buf := bufio.NewReaderSize(read, bufsize)
-						getFn := func(_ context.Context, httpRange HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-							return io.NopCloser(buf), httpRange.Offset, "", nil
+						getFn := func(_ context.Context, httpRange HTTPRange) (output *ReaderRangeGetOutput, err error) {
+							contentRange := fmt.Sprintf("bytes %v-%v/*", httpRange.Offset, httpRange.Offset+int64(bufsize))
+							return &ReaderRangeGetOutput{
+								Body:         io.NopCloser(buf),
+								ContentRange: Ptr(contentRange),
+							}, nil
 						}
+
 						ar, _ := NewAsyncRangeReader(ctx, getFn, nil, "", 1)
 						s := bufreader.fn(ar)
 						// "timeout" expects the Reader to recover, AsyncRangeReader does not.
@@ -198,8 +211,10 @@ func (z *zeroReader) Close() error {
 func TestAsyncRangeReaderClose(t *testing.T) {
 	ctx := context.Background()
 	zr := &zeroReader{}
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return zr, 0, "", nil
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: zr,
+		}, nil
 	}
 	a, err := NewAsyncRangeReader(ctx, getFn, nil, "", 16)
 	require.NoError(t, err)
@@ -238,8 +253,11 @@ func TestAsyncRangeReaderClose(t *testing.T) {
 func TestAsyncRangeReaderEtagCheck(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return io.NopCloser(bytes.NewBufferString(data)), 0, "etag", nil
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: io.NopCloser(bytes.NewBufferString(data)),
+			ETag: Ptr("etag"),
+		}, nil
 	}
 
 	// don't set etag
@@ -274,8 +292,11 @@ func TestAsyncRangeReaderEtagCheck(t *testing.T) {
 func TestAsyncRangeReaderOffsetCheck(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBufferString(data)))), 0, "etag", nil
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{
+			Body: io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBufferString(data)))),
+			ETag: Ptr("etag"),
+		}, nil
 	}
 
 	// don't set etag
@@ -290,12 +311,20 @@ func TestAsyncRangeReaderOffsetCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "Range get fail, expect offset")
 
 	//
-	getFn = func(ctx context.Context, range_ HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+	getFn = func(ctx context.Context, range_ HTTPRange) (output *ReaderRangeGetOutput, err error) {
 		b := []byte(data)
 		if range_.Offset == 0 {
-			return io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBuffer(b[range_.Offset:])))), 0, "etag", nil
+			return &ReaderRangeGetOutput{
+				Body: io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBuffer(b[range_.Offset:])))),
+				ETag: Ptr("etag"),
+			}, nil
 		} else {
-			return io.NopCloser(bytes.NewBuffer(b[range_.Offset:])), range_.Offset, "etag", nil
+			contentRange := fmt.Sprintf("bytes %v-%v/*", range_.Offset, int64(len(data))-range_.Offset-1)
+			return &ReaderRangeGetOutput{
+				Body:         io.NopCloser(bytes.NewBuffer(b[range_.Offset:])),
+				ContentRange: Ptr(contentRange),
+				ETag:         Ptr("etag"),
+			}, nil
 		}
 	}
 
@@ -310,11 +339,72 @@ func TestAsyncRangeReaderOffsetCheck(t *testing.T) {
 	assert.Equal(t, data, string(dst[:10]))
 }
 
+func TestAsyncRangeReaderOffsetAndLimiterRange(t *testing.T) {
+	ctx := context.Background()
+	data := "Testbuffer"
+	getFn := func(ctx context.Context, range_ HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		b := []byte(data)
+		contentRange := fmt.Sprintf("bytes %v-%v/%v", range_.Offset, int64(len(data))-range_.Offset-1, len(data))
+		return &ReaderRangeGetOutput{
+			Body:         io.NopCloser(bytes.NewBuffer(b[range_.Offset:])),
+			ContentRange: Ptr(contentRange),
+			ETag:         Ptr("etag"),
+		}, nil
+	}
+
+	// has range count
+	httpRange := HTTPRange{
+		Offset: 2,
+		Count:  3,
+	}
+
+	ar, err := NewAsyncRangeReader(ctx, getFn, &httpRange, "etag", 4)
+	require.NoError(t, err)
+
+	dst := make([]byte, 100)
+	n, err := ar.Read(dst)
+	assert.Equal(t, 3, n)
+	n, err = ar.Read(dst[n:])
+	assert.Equal(t, 0, n)
+	assert.Equal(t, data[2:5], string(dst[:3]))
+
+	// range count is 0 or < 0
+	httpRange = HTTPRange{
+		Offset: 2,
+		Count:  0,
+	}
+
+	ar, err = NewAsyncRangeReader(ctx, getFn, &httpRange, "etag", 4)
+	require.NoError(t, err)
+
+	dst = make([]byte, 100)
+	n, err = ar.Read(dst)
+	assert.Equal(t, 8, n)
+	n, err = ar.Read(dst[n:])
+	assert.Equal(t, 0, n)
+	assert.Equal(t, data[2:], string(dst[:8]))
+
+	httpRange = HTTPRange{
+		Offset: 3,
+		Count:  -1,
+	}
+
+	ar, err = NewAsyncRangeReader(ctx, getFn, &httpRange, "etag", 4)
+	require.NoError(t, err)
+
+	dst = make([]byte, 100)
+	n, err = ar.Read(dst)
+	assert.Equal(t, 7, n)
+	n, err = ar.Read(dst[n:])
+	assert.Equal(t, 0, n)
+	assert.Equal(t, data[3:], string(dst[:7]))
+}
+
 func TestAsyncRangeReaderGetError(t *testing.T) {
 	ctx := context.Background()
 	data := "Testbuffer"
-	getFn := func(context.Context, HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
-		return nil, 0, "", errors.New("range get fail")
+	getFn := func(context.Context, HTTPRange) (output *ReaderRangeGetOutput, err error) {
+		return &ReaderRangeGetOutput{}, errors.New("range get fail")
 	}
 
 	// don't set etag
@@ -326,12 +416,17 @@ func TestAsyncRangeReaderGetError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "range get fail")
 
-	getFn = func(ctx context.Context, range_ HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+	getFn = func(ctx context.Context, range_ HTTPRange) (output *ReaderRangeGetOutput, err error) {
 		b := []byte(data)
 		if range_.Offset == 0 {
-			return io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBuffer(b[range_.Offset:])))), 0, "etag", nil
+			contentRange := fmt.Sprintf("bytes %v-%v/*", range_.Offset, len(data)-1)
+			return &ReaderRangeGetOutput{
+				Body:         io.NopCloser(iotest.TimeoutReader(iotest.OneByteReader(bytes.NewBuffer(b[range_.Offset:])))),
+				ContentRange: Ptr(contentRange),
+				ETag:         Ptr("etag"),
+			}, nil
 		} else {
-			return nil, 0, "", errors.New("range get fail")
+			return &ReaderRangeGetOutput{}, errors.New("range get fail")
 		}
 	}
 

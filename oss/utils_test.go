@@ -76,3 +76,45 @@ func TestParseOffsetAndSizeFromHeaders(t *testing.T) {
 	assert.Equal(t, int64(0), offset)
 	assert.Equal(t, int64(-1), size)
 }
+
+func TestParseContentRange(t *testing.T) {
+	from, to, total, err := ParseContentRange("")
+	assert.Equal(t, int64(0), from)
+	assert.Equal(t, int64(0), to)
+	assert.Equal(t, int64(0), total)
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid content range", err.Error())
+
+	from, to, total, err = ParseContentRange("invalid")
+	assert.Equal(t, int64(0), from)
+	assert.Equal(t, int64(0), to)
+	assert.Equal(t, int64(0), total)
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid content range", err.Error())
+
+	from, to, total, err = ParseContentRange("otherUnit 22-33/42")
+	assert.Equal(t, int64(0), from)
+	assert.Equal(t, int64(0), to)
+	assert.Equal(t, int64(0), total)
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid content range", err.Error())
+
+	from, to, total, err = ParseContentRange("bytes */42")
+	assert.Equal(t, int64(0), from)
+	assert.Equal(t, int64(0), to)
+	assert.Equal(t, int64(0), total)
+	assert.NotNil(t, err)
+	assert.Equal(t, "invalid content range", err.Error())
+
+	from, to, total, err = ParseContentRange("bytes 22-33/42")
+	assert.Equal(t, int64(22), from)
+	assert.Equal(t, int64(33), to)
+	assert.Equal(t, int64(42), total)
+	assert.Nil(t, err)
+
+	from, to, total, err = ParseContentRange("bytes 22-33/*")
+	assert.Equal(t, int64(22), from)
+	assert.Equal(t, int64(33), to)
+	assert.Equal(t, int64(-1), total)
+	assert.Nil(t, err)
+}

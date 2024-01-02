@@ -435,7 +435,7 @@ func (f *ReadOnlyFile) prefetch(offset int64, needAtLeast int) (err error) {
 		cnt := (size + (AsyncReadeBufferSize - 1)) / AsyncReadeBufferSize
 		//fmt.Printf("f.sizeInBytes:%v, off:%v, size:%v, cnt:%v\n", f.sizeInBytes, off, size, cnt)
 		if size != 0 {
-			getFn := func(ctx context.Context, httpRange HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+			getFn := func(ctx context.Context, httpRange HTTPRange) (output *ReaderRangeGetOutput, err error) {
 				request := &GetObjectRequest{
 					Bucket:    Ptr(f.bucket),
 					Key:       Ptr(f.key),
@@ -449,11 +449,16 @@ func (f *ReadOnlyFile) prefetch(offset int64, needAtLeast int) (err error) {
 				var result *GetObjectResult
 				result, err = f.client.GetObject(f.context, request)
 				if err != nil {
-					return nil, 0, "", err
+					return nil, err
 				}
+
+				return &ReaderRangeGetOutput{
+					Body:          result.Body,
+					ETag:          result.ETag,
+					ContentLength: result.ContentLength,
+					ContentRange:  result.ContentRange,
+				}, nil
 				//fmt.Printf("result.Headers:%#v\n", result.Headers)
-				offset, _ = parseOffsetAndSizeFromHeaders(result.Headers)
-				return result.Body, offset, result.Headers.Get(HTTPHeaderETag), nil
 			}
 			ar, err := NewAsyncRangeReader(f.context, getFn, &HTTPRange{off, size}, f.etag, int(cnt))
 			if err != nil {
