@@ -171,31 +171,44 @@ func (m *UploadError) Unwrap() error {
 	return m.Err
 }
 
-func (u *Uploader) Upload(ctx context.Context, request *UploadRequest, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
-	delegate, err := u.newDelegate(request, "", optFns...)
+func (u *Uploader) UploadFrom(ctx context.Context, request *UploadRequest, body io.Reader, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
+	// Uploader wrapper
+	delegate, err := u.newDelegate(ctx, request, optFns...)
 	if err != nil {
 		return nil, err
 	}
 
-	delegate.client = u.client
-	delegate.context = ctx
-	delegate.body = request.Body
+	delegate.body = body
+	if err = delegate.applySource(); err != nil {
+		return nil, err
+	}
 
 	return delegate.upload()
 }
 
 func (u *Uploader) UploadFile(ctx context.Context, request *UploadRequest, filePath string, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
-	delegate, err := u.newDelegate(request, filePath, optFns...)
+	// Uploader wrapper
+	delegate, err := u.newDelegate(ctx, request, optFns...)
 	if err != nil {
 		return nil, err
 	}
 
-	delegate.client = u.client
-	delegate.context = ctx
-	f, _ := os.Open(filePath)
-	delegate.body = f
-	if f != nil {
-		defer f.Close()
+	// Source
+	if err = delegate.checkSource(filePath); err != nil {
+		return nil, err
+	}
+
+	var file *os.File
+	if file, err = os.Open(filePath); err != nil {
+		return nil, err
+	}
+	defer func() {
+		defer file.Close()
+	}()
+	delegate.body = file
+
+	if err = delegate.applySource(); err != nil {
+		return nil, err
 	}
 
 	result, err := delegate.upload()
@@ -203,74 +216,6 @@ func (u *Uploader) UploadFile(ctx context.Context, request *UploadRequest, fileP
 	//TODO check CRC
 
 	return result, err
-}
-
-func (u *Uploader) newDelegate(request *UploadRequest, filePath string, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
-	var stat os.FileInfo
-	if request == nil {
-		return nil, NewErrParamNull("request")
-	}
-
-	if request.Bucket == nil {
-		return nil, NewErrParamNull("request.Bucket")
-	}
-
-	if request.Key == nil {
-		return nil, NewErrParamNull("request.Key")
-	}
-
-	if filePath != "" {
-		fd, err := os.Open(filePath)
-		if err != nil {
-			return nil, err
-		}
-		defer fd.Close()
-		if stat, err = fd.Stat(); err != nil {
-			return nil, err
-		}
-	}
-
-	d := uploaderDelegate{
-		options:  u.options,
-		request:  request,
-		filePath: filePath,
-	}
-
-	for _, opt := range optFns {
-		opt(&d.options)
-	}
-
-	if d.options.ParallelNum == 0 {
-		d.options.ParallelNum = DefaultUploadParallel
-	}
-	if d.options.PartSize == 0 {
-		d.options.PartSize = DefaultUploadPartSize
-	}
-
-	//Total Size
-	totalSize := int64(-1)
-	if filePath != "" {
-		totalSize = stat.Size()
-	} else {
-		if request.Body == nil {
-			totalSize = 0
-		} else {
-			totalSize = getReaderLen(request.Body)
-		}
-	}
-
-	//Part Size
-	partSize := d.options.PartSize
-	if totalSize > 0 {
-		for totalSize/partSize >= int64(MaxUploadParts) {
-			partSize += d.options.PartSize
-		}
-	}
-
-	d.totalSize = totalSize
-	d.options.PartSize = partSize
-
-	return &d, nil
 }
 
 type uploaderDelegate struct {
@@ -287,6 +232,75 @@ type uploaderDelegate struct {
 	body io.Reader
 
 	partPool byteSlicePool
+}
+
+func (u *Uploader) newDelegate(ctx context.Context, request *UploadRequest, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
+	if request == nil {
+		return nil, NewErrParamNull("request")
+	}
+
+	if request.Bucket == nil {
+		return nil, NewErrParamNull("request.Bucket")
+	}
+
+	if request.Key == nil {
+		return nil, NewErrParamNull("request.Key")
+	}
+
+	d := uploaderDelegate{
+		options: u.options,
+		client:  u.client,
+		context: ctx,
+		request: request,
+	}
+
+	for _, opt := range optFns {
+		opt(&d.options)
+	}
+
+	if d.options.ParallelNum <= 0 {
+		d.options.ParallelNum = DefaultUploadParallel
+	}
+	if d.options.PartSize <= 0 {
+		d.options.PartSize = DefaultUploadPartSize
+	}
+
+	return &d, nil
+}
+
+func (u *uploaderDelegate) checkSource(filePath string) error {
+	if filePath == "" {
+		return NewErrParamRequired("filePath")
+	}
+
+	if !FileExists(filePath) {
+		return fmt.Errorf("File not exists, %v", filePath)
+	}
+
+	u.filePath = filePath
+
+	return nil
+}
+
+func (u *uploaderDelegate) applySource() error {
+	if u.body == nil {
+		return NewErrParamNull("uploader's body is null")
+	}
+
+	totalSize := getReaderLen(u.body)
+
+	//Part Size
+	partSize := u.options.PartSize
+	if totalSize > 0 {
+		for totalSize/partSize >= int64(MaxUploadParts) {
+			partSize += u.options.PartSize
+		}
+	}
+
+	u.totalSize = totalSize
+	u.options.PartSize = partSize
+
+	return nil
 }
 
 func (u *uploaderDelegate) upload() (*UploadResult, error) {
