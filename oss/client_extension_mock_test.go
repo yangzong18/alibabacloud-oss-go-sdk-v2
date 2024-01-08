@@ -1721,19 +1721,19 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	c := &Client{}
 	d := c.NewDownloader()
 
-	_, err := d.newDownloaderDelegate(context.TODO(), nil)
+	_, err := d.newDelegate(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "null field")
 
-	_, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{})
+	_, err = d.newDelegate(context.TODO(), &DownloadRequest{})
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Bucket")
 
-	_, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")})
+	_, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")})
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Key")
 
-	delegate, err := d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")})
+	delegate, err := d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")})
 	assert.Nil(t, err)
 	assert.NotNil(t, delegate)
 	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
@@ -1742,7 +1742,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.False(t, delegate.options.EnableCheckpoint)
 	assert.Empty(t, delegate.options.CheckpointDir)
 
-	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = 5
 			do.PartSize = 1
@@ -1752,7 +1752,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.Equal(t, 5, delegate.options.ParallelNum)
 	assert.Equal(t, int64(1), delegate.options.PartSize)
 
-	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = 0
 			do.PartSize = 0
@@ -1762,7 +1762,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
 	assert.Equal(t, DefaultDownloadPartSize, delegate.options.PartSize)
 
-	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = -1
 			do.PartSize = -1

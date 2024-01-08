@@ -642,7 +642,7 @@ func (m *DownloadError) Unwrap() error {
 
 func (d *Downloader) DownloadFile(ctx context.Context, request *DownloadRequest, filePath string, optFns ...func(*DownloaderOptions)) (result *DownloadResult, err error) {
 	// Downloader wrapper
-	delegate, err := d.newDownloaderDelegate(ctx, request, optFns...)
+	delegate, err := d.newDelegate(ctx, request, optFns...)
 	if err != nil {
 		return nil, err
 	}
@@ -743,7 +743,7 @@ func (c *downloaderChunk) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (d *Downloader) newDownloaderDelegate(ctx context.Context, request *DownloadRequest, optFns ...func(*DownloaderOptions)) (*downloaderDelegate, error) {
+func (d *Downloader) newDelegate(ctx context.Context, request *DownloadRequest, optFns ...func(*DownloaderOptions)) (*downloaderDelegate, error) {
 	if request == nil {
 		return nil, NewErrParamNull("request")
 	}
