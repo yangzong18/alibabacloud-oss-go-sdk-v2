@@ -118,3 +118,39 @@ func TestParseContentRange(t *testing.T) {
 	assert.Equal(t, int64(-1), total)
 	assert.Nil(t, err)
 }
+
+type copyRequestStub struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	// The name of the object.
+	Key *string `input:"path,key,required"`
+
+	Acl ObjectACLType `input:"header,x-oss-object-acl"`
+
+	RequestCommon
+}
+
+func TestCopyRequest(t *testing.T) {
+	requestStub := &copyRequestStub{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+		Acl:    "acl-abc",
+		RequestCommon: RequestCommon{
+			Headers: map[string]string{
+				"header-1": "hvalue-1",
+			},
+			Parameters: map[string]string{
+				"query-1": "qvalue-1",
+			},
+		},
+	}
+	request := &PutObjectRequest{}
+	copyRequest(request, requestStub)
+
+	assert.Equal(t, "bucket", ToString(request.Bucket))
+	assert.Equal(t, "key", ToString(request.Key))
+	assert.Equal(t, "acl-abc", ToString((*string)(&request.Acl)))
+	assert.Equal(t, "hvalue-1", request.Headers["header-1"])
+	assert.Equal(t, "qvalue-1", request.Parameters["query-1"])
+}

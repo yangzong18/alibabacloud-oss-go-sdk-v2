@@ -5,12 +5,15 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -1242,4 +1245,1350 @@ func TestUploadParallelUploadPartFail(t *testing.T) {
 	assert.NotNil(t, tracker.saveDate[1])
 	assert.Nil(t, tracker.saveDate[2])
 	assert.Nil(t, tracker.saveDate[5])
+}
+
+type downloaderMockTracker struct {
+	lastModified string
+	data         []byte
+
+	maxRangeCount int64
+	getPartCnt    int32
+
+	etagChangeOffset int64
+	failPartNum      int32
+
+	partSize     int32
+	gotMinOffset int64
+
+	rStart int64
+}
+
+func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		length := len(tracker.data)
+		data := tracker.data
+		errData := []byte(
+			`<?xml version="1.0" encoding="UTF-8"?>
+			<Error>
+				<Code>InvalidAccessKeyId</Code>
+				<Message>The OSS Access Key Id you provided does not exist in our records.</Message>
+				<RequestId>65467C42E001B4333337****</RequestId>
+				<SignatureProvided>ak</SignatureProvided>
+				<EC>0002-00000040</EC>
+			</Error>`)
+
+		switch r.Method {
+		case "HEAD":
+			tracker.gotMinOffset = int64(length)
+			// header
+			w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
+			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(length))
+			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+			w.Header().Set(HTTPHeaderContentType, "text/plain")
+
+			//status code
+			w.WriteHeader(200)
+
+			//body
+			w.Write(nil)
+		case "GET":
+			// header
+			var httpRange *HTTPRange
+			if r.Header.Get("Range") != "" {
+				httpRange, _ = ParseRange(r.Header.Get("Range"))
+			}
+
+			offset := int64(0)
+			statusCode := 200
+			sendLen := int64(length)
+			if httpRange != nil {
+				offset = httpRange.Offset
+				sendLen = int64(length) - httpRange.Offset
+				if httpRange.Count > 0 {
+					sendLen = minInt64(httpRange.Count, sendLen)
+					tracker.maxRangeCount = maxInt64(httpRange.Count, tracker.maxRangeCount)
+				}
+				cr := httpContentRange{
+					Offset: httpRange.Offset,
+					Count:  sendLen,
+					Total:  int64(length),
+				}
+				w.Header().Set("Content-Range", ToString(cr.FormatHTTPContentRange()))
+				statusCode = 206
+			}
+
+			tracker.gotMinOffset = minInt64(tracker.gotMinOffset, offset)
+
+			if tracker.failPartNum > 0 && (int64(tracker.partSize*tracker.failPartNum)+tracker.rStart) == offset {
+				w.Header().Set(HTTPHeaderContentType, "application/xml")
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(errData)))
+				w.WriteHeader(403)
+				w.Write(errData)
+			} else {
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(sendLen))
+				w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
+				if tracker.etagChangeOffset > 0 && offset > 0 && offset > tracker.etagChangeOffset {
+					w.Header().Set(HTTPHeaderETag, "2ba9dede5f27731c9771645a3986****")
+				} else {
+					w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+				}
+				w.Header().Set(HTTPHeaderContentType, "text/plain")
+
+				//status code
+				w.WriteHeader(statusCode)
+
+				//body
+				sendData := data[int(offset):int(offset+sendLen)]
+				//fmt.Printf("sendData offset%d, len:%d, total:%d\n", offset, len(sendData), length)
+				w.Write(sendData)
+			}
+		}
+	}))
+	return server
+}
+
+func TestMockDownloaderSingleRead(t *testing.T) {
+	length := 3*1024*1024 + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 1
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 1, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+	io.Copy(hash, rfile)
+	assert.Equal(t, datasum, hash.Sum64())
+}
+
+func TestMockDownloaderLoopSingleRead(t *testing.T) {
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, DefaultDownloadPartSize, d.options.PartSize)
+	assert.Equal(t, DefaultDownloadParallel, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	for i := 1; i <= 20; i++ {
+		if FileExists(localFile) {
+			assert.Nil(t, os.Remove(localFile))
+		}
+		tracker.maxRangeCount = 0
+		result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+			func(do *DownloaderOptions) {
+				do.ParallelNum = 1
+				do.PartSize = int64(i)
+			})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(length), result.Written)
+		hash := NewCRC64(0)
+		rfile, err := os.Open(localFile)
+		assert.Nil(t, err)
+		io.Copy(hash, rfile)
+		rfile.Close()
+		os.Remove(localFile)
+		assert.Equal(t, datasum, hash.Sum64())
+		assert.Equal(t, int64(i), tracker.maxRangeCount)
+	}
+}
+
+func TestMockDownloaderLoopSingleReadWithRange(t *testing.T) {
+	length := 63
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, DefaultDownloadPartSize, d.options.PartSize)
+	assert.Equal(t, DefaultDownloadParallel, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	for rs := 0; rs < 7; rs++ {
+		for rcount := 1; rcount < length; rcount++ {
+			for i := 1; i <= 3; i++ {
+				//fmt.Printf("rs:%v, rcount:%v, i:%v\n", rs, rcount, i)
+				if FileExists(localFile) {
+					assert.Nil(t, os.Remove(localFile))
+				}
+				tracker.maxRangeCount = 0
+				httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
+				result, err := d.DownloadFile(context.TODO(),
+					&DownloadRequest{
+						Bucket: Ptr("bucket"),
+						Key:    Ptr("key"),
+						Range:  httpRange.FormatHTTPRange()},
+					localFile,
+					func(do *DownloaderOptions) {
+						do.ParallelNum = 1
+						do.PartSize = int64(i)
+					})
+				assert.Nil(t, err)
+				expectLen := minInt64(int64(length-rs), int64(rcount))
+				assert.Equal(t, expectLen, result.Written)
+				hash := NewCRC64(0)
+				rfile, err := os.Open(localFile)
+				assert.Nil(t, err)
+				io.Copy(hash, rfile)
+				rfile.Close()
+				//ldata, err := os.ReadFile(localFile)
+				//assert.Nil(t, err)
+				os.Remove(localFile)
+				hdata := NewCRC64(0)
+				pat := data[rs:int(minInt64(int64(rs+rcount), int64(length)))]
+				hdata.Write(pat)
+				//assert.EqualValues(t, ldata, pat)
+				assert.Equal(t, hdata.Sum64(), hash.Sum64())
+				assert.Equal(t, minInt64(int64(i), expectLen), tracker.maxRangeCount)
+			}
+		}
+	}
+}
+
+func TestMockDownloaderParalleRead(t *testing.T) {
+	length := 3*1024*1024 + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 3, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+
+	io.Copy(hash, rfile)
+	assert.Equal(t, datasum, hash.Sum64())
+}
+
+func TestMockDownloaderLoopParalleRead(t *testing.T) {
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, DefaultDownloadPartSize, d.options.PartSize)
+	assert.Equal(t, DefaultDownloadParallel, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	for i := 1; i <= 20; i++ {
+		if FileExists(localFile) {
+			assert.Nil(t, os.Remove(localFile))
+		}
+		tracker.maxRangeCount = 0
+		result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+			func(do *DownloaderOptions) {
+				do.ParallelNum = 4
+				do.PartSize = int64(i)
+			})
+		assert.Nil(t, err)
+		assert.Equal(t, int64(length), result.Written)
+		hash := NewCRC64(0)
+		rfile, err := os.Open(localFile)
+		assert.Nil(t, err)
+		io.Copy(hash, rfile)
+		assert.Nil(t, rfile.Close())
+		assert.Nil(t, os.Remove(localFile))
+		assert.Equal(t, datasum, hash.Sum64())
+		assert.Equal(t, int64(i), tracker.maxRangeCount)
+	}
+}
+
+func TestMockDownloaderLoopParalleReadWithRange(t *testing.T) {
+	length := 63
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, DefaultDownloadPartSize, d.options.PartSize)
+	assert.Equal(t, DefaultDownloadParallel, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	for rs := 0; rs < 7; rs++ {
+		for rcount := 1; rcount < length; rcount++ {
+			for i := 1; i <= 3; i++ {
+				//fmt.Printf("rs:%v, rcount:%v, i:%v\n", rs, rcount, i)
+				if FileExists(localFile) {
+					assert.Nil(t, os.Remove(localFile))
+				}
+				tracker.maxRangeCount = 0
+				httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
+				result, err := d.DownloadFile(context.TODO(),
+					&DownloadRequest{
+						Bucket: Ptr("bucket"),
+						Key:    Ptr("key"),
+						Range:  httpRange.FormatHTTPRange()},
+					localFile,
+					func(do *DownloaderOptions) {
+						do.ParallelNum = 4
+						do.PartSize = int64(i)
+					})
+				assert.Nil(t, err)
+				expectLen := minInt64(int64(length-rs), int64(rcount))
+				assert.Equal(t, expectLen, result.Written)
+				hash := NewCRC64(0)
+				rfile, err := os.Open(localFile)
+				assert.Nil(t, err)
+				io.Copy(hash, rfile)
+				rfile.Close()
+				//ldata, err := os.ReadFile(localFile)
+				//assert.Nil(t, err)
+				os.Remove(localFile)
+				hdata := NewCRC64(0)
+				pat := data[rs:int(minInt64(int64(rs+rcount), int64(length)))]
+				hdata.Write(pat)
+				//assert.EqualValues(t, ldata, pat)
+				assert.Equal(t, hdata.Sum64(), hash.Sum64())
+				assert.Equal(t, minInt64(int64(i), expectLen), tracker.maxRangeCount)
+			}
+		}
+	}
+}
+
+func TestDownloaderConstruct(t *testing.T) {
+	c := &Client{}
+	d := c.NewDownloader()
+	assert.Equal(t, DefaultDownloadParallel, d.options.ParallelNum)
+	assert.Equal(t, DefaultDownloadPartSize, d.options.PartSize)
+	assert.True(t, d.options.UseTempFile)
+	assert.False(t, d.options.EnableCheckpoint)
+	assert.Equal(t, "", d.options.CheckpointDir)
+
+	d = c.NewDownloader(func(do *DownloaderOptions) {
+		do.CheckpointDir = "dir"
+		do.EnableCheckpoint = true
+		do.ParallelNum = 1
+		do.PartSize = 2
+		do.UseTempFile = false
+	})
+	assert.Equal(t, 1, d.options.ParallelNum)
+	assert.Equal(t, int64(2), d.options.PartSize)
+	assert.False(t, d.options.UseTempFile)
+	assert.True(t, d.options.EnableCheckpoint)
+	assert.Equal(t, "dir", d.options.CheckpointDir)
+}
+
+func TestDownloaderDelegateConstruct(t *testing.T) {
+	c := &Client{}
+	d := c.NewDownloader()
+
+	_, err := d.newDownloaderDelegate(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field")
+
+	_, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.Bucket")
+
+	_, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.Key")
+
+	delegate, err := d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")})
+	assert.Nil(t, err)
+	assert.NotNil(t, delegate)
+	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
+	assert.Equal(t, DefaultDownloadPartSize, delegate.options.PartSize)
+	assert.True(t, delegate.options.UseTempFile)
+	assert.False(t, delegate.options.EnableCheckpoint)
+	assert.Empty(t, delegate.options.CheckpointDir)
+
+	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+		func(do *DownloaderOptions) {
+			do.ParallelNum = 5
+			do.PartSize = 1
+		})
+	assert.Nil(t, err)
+	assert.NotNil(t, delegate)
+	assert.Equal(t, 5, delegate.options.ParallelNum)
+	assert.Equal(t, int64(1), delegate.options.PartSize)
+
+	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+		func(do *DownloaderOptions) {
+			do.ParallelNum = 0
+			do.PartSize = 0
+		})
+	assert.Nil(t, err)
+	assert.NotNil(t, delegate)
+	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
+	assert.Equal(t, DefaultDownloadPartSize, delegate.options.PartSize)
+
+	delegate, err = d.newDownloaderDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+		func(do *DownloaderOptions) {
+			do.ParallelNum = -1
+			do.PartSize = -1
+			do.CheckpointDir = "dir"
+			do.EnableCheckpoint = true
+			do.UseTempFile = false
+		})
+	assert.Nil(t, err)
+	assert.NotNil(t, delegate)
+	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
+	assert.Equal(t, DefaultDownloadPartSize, delegate.options.PartSize)
+	assert.False(t, delegate.options.UseTempFile)
+	assert.True(t, delegate.options.EnableCheckpoint)
+	assert.Equal(t, "dir", delegate.options.CheckpointDir)
+}
+
+func TestDownloaderDownloadFileArgument(t *testing.T) {
+	c := &Client{}
+	d := c.NewDownloader()
+
+	_, err := d.DownloadFile(context.TODO(), nil, "file")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field")
+
+	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{}, "file")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.Bucket")
+
+	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")}, "file")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.Key")
+
+	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "operation error HeadObject")
+}
+
+func TestDownloaderDownloadFileWithoutTempFile(t *testing.T) {
+	length := 3*int(DefaultDownloadPartSize) + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 1
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 1, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.UseTempFile = false
+			do.PartSize = 1024
+			do.ParallelNum = 2
+		})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	io.Copy(hash, rfile)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+	assert.Equal(t, datasum, hash.Sum64())
+	assert.Equal(t, int64(1024), tracker.maxRangeCount)
+}
+
+func TestDownloaderDownloadFileInvalidPartSizeAndParallelNum(t *testing.T) {
+	length := int(DefaultDownloadPartSize*2) + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 1
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 1, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = 0
+			do.ParallelNum = 0
+		})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	io.Copy(hash, rfile)
+	rfile.Close()
+	assert.Equal(t, datasum, hash.Sum64())
+	assert.Equal(t, DefaultDownloadPartSize, tracker.maxRangeCount)
+}
+
+func TestDownloaderDownloadFileFileSizeLessPartSize(t *testing.T) {
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 1
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 1, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = 0
+			do.ParallelNum = 0
+		})
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	io.Copy(hash, rfile)
+	rfile.Close()
+	assert.Equal(t, datasum, hash.Sum64())
+	assert.Equal(t, int64(length), tracker.maxRangeCount)
+}
+
+func TestDownloaderDownloadFileFileChange(t *testing.T) {
+	partSize := 128
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+
+	tracker := &downloaderMockTracker{
+		lastModified:     gmtTime,
+		data:             data,
+		etagChangeOffset: 700,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+
+	localFile := randStr(8) + "-no-surfix"
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+		})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Source file is changed")
+	assert.False(t, FileExists(localFile))
+	assert.False(t, FileExists(localFile+TempFileSuffix))
+}
+
+func TestDownloaderDownloadFileEnableCheckpointNormal(t *testing.T) {
+	partSize := 128
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+
+	localFile := randStr(8) + "-no-surfix"
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+			do.CheckpointDir = "."
+			do.EnableCheckpoint = true
+		})
+	assert.Nil(t, err)
+}
+
+func TestDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
+	partSize := 128
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+		failPartNum:  6,
+		partSize:     int32(partSize),
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+
+	localFile := "check-point-to-check-no-surfix"
+	localFileTmep := "check-point-to-check-no-surfix" + TempFileSuffix
+	absPath, _ := filepath.Abs(localFileTmep)
+	hashmd5 := md5.New()
+	hashmd5.Reset()
+	hashmd5.Write([]byte(absPath))
+	destHash := hex.EncodeToString(hashmd5.Sum(nil))
+	cpFileName := "ddaf063c8f69766ecc8e4a93b6402e3e-" + destHash + ".cp"
+	defer func() {
+		os.Remove(localFile)
+	}()
+	os.Remove(localFile)
+	os.Remove(localFileTmep)
+	os.Remove(cpFileName)
+	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+			do.CheckpointDir = "."
+			do.EnableCheckpoint = true
+		})
+
+	assert.NotNil(t, err)
+	assert.True(t, FileExists(localFileTmep))
+	assert.True(t, FileExists(cpFileName))
+
+	//load CheckPointFile
+	content, err := os.ReadFile(cpFileName)
+	assert.Nil(t, err)
+	dcp := downloadCheckpoint{}
+	err = json.Unmarshal(content, &dcp.Info)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "fba9dede5f27731c9771645a3986****", dcp.Info.Data.ObjectMeta.ETag)
+	assert.Equal(t, gmtTime, dcp.Info.Data.ObjectMeta.LastModified)
+	assert.Equal(t, int64(length), dcp.Info.Data.ObjectMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", dcp.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "", dcp.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, "", dcp.Info.Data.ObjectInfo.Range)
+
+	abslocalFileTmep, _ := filepath.Abs(localFileTmep)
+	assert.Equal(t, abslocalFileTmep, dcp.Info.Data.FilePath)
+	assert.Equal(t, int64(partSize), dcp.Info.Data.PartSize)
+
+	assert.Equal(t, int64(tracker.failPartNum*tracker.partSize), dcp.Info.Data.DownloadInfo.Offset)
+	assert.Equal(t, uint64(0), dcp.Info.Data.DownloadInfo.CRC64)
+
+	// resume from checkpoint
+	tracker.failPartNum = 0
+	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+			do.CheckpointDir = "."
+			do.EnableCheckpoint = true
+		})
+
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), result.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	io.Copy(hash, rfile)
+	rfile.Close()
+	assert.Equal(t, datasum, hash.Sum64())
+	assert.Equal(t, dcp.Info.Data.DownloadInfo.Offset, tracker.gotMinOffset)
+}
+
+func TestDownloaderDownloadFileEnableCheckpointWithRange(t *testing.T) {
+	partSize := 128
+	length := 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	rs := 5
+	rcount := 832
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+		failPartNum:  6,
+		partSize:     int32(partSize),
+		rStart:       int64(rs),
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader()
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+
+	localFile := "check-point-to-check-no-surfix"
+	localFileTmep := "check-point-to-check-no-surfix" + TempFileSuffix
+	absPath, _ := filepath.Abs(localFileTmep)
+	hashmd5 := md5.New()
+	hashmd5.Reset()
+	hashmd5.Write([]byte(absPath))
+	destHash := hex.EncodeToString(hashmd5.Sum(nil))
+	cpFileName := "0fbbf3bb7c80debbecb37dca52a646eb-" + destHash + ".cp"
+	defer func() {
+		os.Remove(localFile)
+	}()
+	os.Remove(localFile)
+	os.Remove(localFileTmep)
+	os.Remove(cpFileName)
+	httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
+	_, err := d.DownloadFile(context.TODO(),
+		&DownloadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key"),
+			Range:  httpRange.FormatHTTPRange()},
+		localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+			do.CheckpointDir = "."
+			do.EnableCheckpoint = true
+		})
+
+	assert.NotNil(t, err)
+	assert.True(t, FileExists(localFileTmep))
+	assert.True(t, FileExists(cpFileName))
+
+	//load CheckPointFile
+	content, err := os.ReadFile(cpFileName)
+	assert.Nil(t, err)
+	dcp := downloadCheckpoint{}
+	err = json.Unmarshal(content, &dcp.Info)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "fba9dede5f27731c9771645a3986****", dcp.Info.Data.ObjectMeta.ETag)
+	assert.Equal(t, gmtTime, dcp.Info.Data.ObjectMeta.LastModified)
+	assert.Equal(t, int64(length), dcp.Info.Data.ObjectMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", dcp.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "", dcp.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, ToString(httpRange.FormatHTTPRange()), dcp.Info.Data.ObjectInfo.Range)
+
+	abslocalFileTmep, _ := filepath.Abs(localFileTmep)
+	assert.Equal(t, abslocalFileTmep, dcp.Info.Data.FilePath)
+	assert.Equal(t, int64(partSize), dcp.Info.Data.PartSize)
+
+	assert.Equal(t, int64(tracker.failPartNum*tracker.partSize)+int64(rs), dcp.Info.Data.DownloadInfo.Offset)
+	assert.Equal(t, uint64(0), dcp.Info.Data.DownloadInfo.CRC64)
+
+	// resume from checkpoint
+	tracker.failPartNum = 0
+	result, err := d.DownloadFile(context.TODO(),
+		&DownloadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key"),
+			Range:  httpRange.FormatHTTPRange()},
+		localFile,
+		func(do *DownloaderOptions) {
+			do.PartSize = int64(partSize)
+			do.ParallelNum = 3
+			do.CheckpointDir = "."
+			do.EnableCheckpoint = true
+		})
+
+	assert.Nil(t, err)
+	expectLen := minInt64(int64(length-rs), int64(rcount))
+	assert.Equal(t, expectLen, result.Written)
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+	io.Copy(hash, rfile)
+	rfile.Close()
+	os.Remove(localFile)
+	hdata := NewCRC64(0)
+	pat := data[rs:int(minInt64(int64(rs+rcount), int64(length)))]
+	hdata.Write(pat)
+	assert.Equal(t, hdata.Sum64(), hash.Sum64())
+	assert.Equal(t, dcp.Info.Data.DownloadInfo.Offset, tracker.gotMinOffset)
+}
+
+func TestMockDownloaderDownloadWithError(t *testing.T) {
+	length := 3*1024*1024 + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	tracker := &downloaderMockTracker{
+		lastModified: gmtTime,
+		data:         data,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 1
+		do.PartSize = 1 * 1024 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(1*1024*1024), d.options.PartSize)
+	assert.Equal(t, 1, d.options.ParallelNum)
+
+	// filePath is invalid
+	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid field, filePath")
+
+	localFile := "./no-exist-folder/file-no-surfix"
+	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+
+	// Range is invalid
+	localFile = randStr(8) + "-no-surfix"
+	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+		Range:  Ptr("invalid range")},
+		localFile)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid field, request.Range")
+}
+
+func TestDownloadCheckpoint(t *testing.T) {
+	request := &DownloadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := randStr(8) + "-no-surfix"
+	cpDir := "."
+	header := http.Header{
+		"Etag":           {"\"D41D8CD98F00B204E9800998ECF8****\""},
+		"Content-Length": {"344606"},
+		"Last-Modified":  {"Fri, 24 Feb 2012 06:07:48 GMT"},
+	}
+	partSize := DefaultDownloadPartSize
+
+	cp := newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+	assert.NotNil(t, cp)
+	assert.Equal(t, "\"D41D8CD98F00B204E9800998ECF8****\"", cp.Info.Data.ObjectMeta.ETag)
+	assert.Equal(t, "Fri, 24 Feb 2012 06:07:48 GMT", cp.Info.Data.ObjectMeta.LastModified)
+	assert.Equal(t, int64(344606), cp.Info.Data.ObjectMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", cp.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "", cp.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, "", cp.Info.Data.ObjectInfo.Range)
+
+	assert.Equal(t, CheckpointMagic, cp.Info.Magic)
+	assert.Equal(t, "", cp.Info.MD5)
+
+	assert.Equal(t, destFilePath, cp.Info.Data.FilePath)
+	assert.Equal(t, partSize, cp.Info.Data.PartSize)
+
+	//has version id
+	request = &DownloadRequest{
+		Bucket:    Ptr("bucket"),
+		Key:       Ptr("key"),
+		VersionId: Ptr("id"),
+	}
+	cp_vid := newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+	assert.NotNil(t, cp_vid)
+	assert.Equal(t, "oss://bucket/key", cp_vid.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "id", cp_vid.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, "", cp_vid.Info.Data.ObjectInfo.Range)
+
+	//has range
+	request = &DownloadRequest{
+		Bucket:    Ptr("bucket"),
+		Key:       Ptr("key"),
+		VersionId: Ptr("id"),
+		Range:     Ptr("bytes=1-10"),
+	}
+	cp_range := newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+	assert.NotNil(t, cp_range)
+	assert.Equal(t, "oss://bucket/key", cp_range.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "id", cp_range.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, "bytes=1-10", cp_range.Info.Data.ObjectInfo.Range)
+
+	assert.NotEqual(t, cp.CpFilePath, cp_vid.CpFilePath)
+	assert.NotEqual(t, cp.CpFilePath, cp_range.CpFilePath)
+	assert.NotEqual(t, cp_vid.CpFilePath, cp_range.CpFilePath)
+
+	// with other destFilePath
+	destFilePath1 := destFilePath + "-123"
+	cp_range_dest := newDownloadCheckpoint(request, destFilePath1, cpDir, header, partSize)
+	assert.NotNil(t, cp_range_dest)
+	assert.NotEqual(t, cp_range.CpFilePath, cp_range_dest.CpFilePath)
+	assert.Equal(t, destFilePath1, cp_range_dest.Info.Data.FilePath)
+
+	//check dump
+	cp.dump()
+	assert.True(t, FileExists(cp.CpFilePath))
+	dcp := downloadCheckpoint{}
+	content, err := os.ReadFile(cp.CpFilePath)
+	assert.Nil(t, err)
+	err = json.Unmarshal(content, &dcp.Info)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "\"D41D8CD98F00B204E9800998ECF8****\"", dcp.Info.Data.ObjectMeta.ETag)
+	assert.Equal(t, "Fri, 24 Feb 2012 06:07:48 GMT", dcp.Info.Data.ObjectMeta.LastModified)
+	assert.Equal(t, int64(344606), dcp.Info.Data.ObjectMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", dcp.Info.Data.ObjectInfo.Name)
+	assert.Equal(t, "", dcp.Info.Data.ObjectInfo.VersionId)
+	assert.Equal(t, "", dcp.Info.Data.ObjectInfo.Range)
+
+	assert.Equal(t, CheckpointMagic, dcp.Info.Magic)
+	assert.Equal(t, 32, len(dcp.Info.MD5))
+
+	assert.Equal(t, destFilePath, dcp.Info.Data.FilePath)
+	assert.Equal(t, partSize, dcp.Info.Data.PartSize)
+
+	//check load
+	err = cp.load()
+	assert.Nil(t, err)
+	assert.True(t, cp.Loaded)
+
+	//check valid
+	assert.True(t, cp.valid())
+
+	//check complete
+	assert.True(t, FileExists(cp.CpFilePath))
+	err = cp.remove()
+	assert.Nil(t, err)
+	assert.True(t, !FileExists(cp.CpFilePath))
+
+	//load not match
+	cp = newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+	assert.False(t, cp.Loaded)
+	notMatch := `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"2f132b5bf65640868a47cb52c57492c8","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(notMatch), FilePermMode)
+	assert.Nil(t, err)
+	assert.True(t, FileExists(cp.CpFilePath))
+	err = cp.load()
+	assert.Nil(t, err)
+	assert.False(t, cp.Loaded)
+	assert.False(t, FileExists(cp.CpFilePath))
+}
+
+func TestDownloadCheckpointInvalidCpPath(t *testing.T) {
+	request := &DownloadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := randStr(8) + "-no-surfix"
+	cpDir := "./invliad-dir/"
+	header := http.Header{
+		"Etag":           {"\"D41D8CD98F00B204E9800998ECF8****\""},
+		"Content-Length": {"344606"},
+		"Last-Modified":  {"Fri, 24 Feb 2012 06:07:48 GMT"},
+	}
+	partSize := DefaultDownloadPartSize
+
+	cp := newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+	assert.NotNil(t, cp)
+	assert.Equal(t, destFilePath, cp.Info.Data.FilePath)
+	assert.Equal(t, "invliad-dir", cp.CpDirPath)
+	assert.Contains(t, cp.CpFilePath, "invliad-dir")
+
+	//dump fail
+	err := cp.dump()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+
+	//load fail
+	err = cp.load()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Invaid checkpoint dir")
+}
+
+func TestDownloadCheckpointValid(t *testing.T) {
+	request := &DownloadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := "gthnjXGQ-no-surfix"
+	cpDir := "."
+	header := http.Header{
+		"Etag":           {"\"D41D8CD98F00B204E9800998ECF8****\""},
+		"Content-Length": {"344606"},
+		"Last-Modified":  {"Fri, 24 Feb 2012 06:07:48 GMT"},
+	}
+	partSize := DefaultDownloadPartSize
+	cp := newDownloadCheckpoint(request, destFilePath, cpDir, header, partSize)
+
+	os.Remove(destFilePath)
+	assert.Equal(t, int64(0), cp.Info.Data.DownloadInfo.Offset)
+	cpdata := `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"3f132b5bf65640868a47cb52c57492c8","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err := os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+
+	assert.True(t, cp.valid())
+	assert.Equal(t, int64(5242880), cp.Info.Data.DownloadInfo.Offset)
+
+	// md5 fail
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"4f132b5bf65640868a47cb52c57492c8","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// Magic fail
+	cpdata = `{"Magic":"82611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"3f132b5bf65640868a47cb52c57492c8","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// invalid cp format
+	cpdata = `"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"3f132b5bf65640868a47cb52c57492c8","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// ObjectInfo not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"cc79917c1a6cf33dc7328db5eaec13ce","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"123","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// ObjectMeta not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"ec2a5aa662eab0e40f6b2fada05374ae","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":3446061,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// FilePath not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"a60d2de5bea76d94990b7db8bb00a930","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix-1","PartSize":5242880,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// PartSize not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"1ea14d099d250953eb4dac39758c4148","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":52428800,"DownloadInfo":{"Offset":5242880,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// Offset invalid
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"4bf7d238bc61d53fa37f2682c0dc5aaa","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":-1,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// Offset %
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"177798af2463db846520c825693bee16","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":5242880,"DownloadInfo":{"Offset":1,"CRC64":0}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// check sum equal
+	cp.Info.Data.PartSize = 6
+	data := "hello world!"
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"37ab56d53e402a21285972ecbbfdaaf9","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":6,"DownloadInfo":{"Offset":12,"CRC64":9548687815775124833}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	err = os.WriteFile(cp.Info.Data.FilePath, []byte(data), FilePermMode)
+	assert.Nil(t, err)
+	cp.VerifyData = true
+	assert.True(t, cp.valid())
+	assert.Equal(t, int64(12), cp.Info.Data.DownloadInfo.Offset)
+	assert.Equal(t, uint64(9548687815775124833), cp.Info.Data.DownloadInfo.CRC64)
+
+	// check sum not equal
+	cp.Info.Data.DownloadInfo.Offset = 0
+	cp.Info.Data.DownloadInfo.CRC64 = 0
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"cba892ede9f6fcab277293e95a6abd4f","Data":{"ObjectInfo":{"Name":"oss://bucket/key","VersionId":"","Range":""},"ObjectMeta":{"Size":344606,"LastModified":"Fri, 24 Feb 2012 06:07:48 GMT","ETag":"\"D41D8CD98F00B204E9800998ECF8****\""},"FilePath":"gthnjXGQ-no-surfix","PartSize":6,"DownloadInfo":{"Offset":12,"CRC64":9548687815775124834}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	err = os.WriteFile(cp.Info.Data.FilePath, []byte(data), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+	assert.Equal(t, int64(0), cp.Info.Data.DownloadInfo.Offset)
+
+	os.Remove(destFilePath)
+	os.Remove(cp.CpFilePath)
+}
+
+func TestDownloadedChunksSort(t *testing.T) {
+	chunks := downloadedChunks{}
+	chunks = append(chunks, downloadedChunk{start: 0, size: 10})
+	chunks = append(chunks, downloadedChunk{start: 10, size: 5})
+	chunks = append(chunks, downloadedChunk{start: 15, size: 30})
+	chunks = append(chunks, downloadedChunk{start: 45, size: 1})
+	sort.Sort(chunks)
+
+	assert.Equal(t, 4, len(chunks))
+	assert.Equal(t, int64(0), chunks[0].start)
+	assert.Equal(t, int64(10), chunks[1].start)
+	assert.Equal(t, int64(15), chunks[2].start)
+	assert.Equal(t, int64(45), chunks[3].start)
+
+	chunks = downloadedChunks{}
+	chunks = append(chunks, downloadedChunk{start: 10, size: 5})
+	chunks = append(chunks, downloadedChunk{start: 0, size: 10})
+	chunks = append(chunks, downloadedChunk{start: 45, size: 1})
+	chunks = append(chunks, downloadedChunk{start: 15, size: 30})
+
+	assert.Equal(t, 4, len(chunks))
+	assert.Equal(t, int64(10), chunks[0].start)
+	assert.Equal(t, int64(0), chunks[1].start)
+	assert.Equal(t, int64(45), chunks[2].start)
+	assert.Equal(t, int64(15), chunks[3].start)
+
+	sort.Sort(chunks)
+
+	assert.Equal(t, int64(0), chunks[0].start)
+	assert.Equal(t, int64(10), chunks[1].start)
+	assert.Equal(t, int64(15), chunks[2].start)
+	assert.Equal(t, int64(45), chunks[3].start)
 }

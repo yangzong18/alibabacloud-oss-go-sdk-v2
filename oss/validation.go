@@ -37,6 +37,13 @@ func isValidObjectName(objectName *string) bool {
 	return true
 }
 
+func isValidRange(r *string) bool {
+	if _, err := ParseRange(*r); err != nil {
+		return false
+	}
+	return true
+}
+
 var supportedMethod = map[string]struct{}{
 	"GET":    {},
 	"PUT":    {},

@@ -612,8 +612,9 @@ type RangeReader struct {
 	context context.Context
 
 	// Origin file pattern
-	etag    string
-	modTime *time.Time
+	etag      string
+	modTime   *time.Time
+	totalSize int64
 }
 
 // NewRangeReader returns a reader that will read from the Reader returued by getter from the given offset.
@@ -674,8 +675,9 @@ func (r *RangeReader) read(p []byte) (int, error) {
 			var off int64
 			if output.ContentRange == nil {
 				off = 0
+				r.totalSize = output.ContentLength
 			} else {
-				off, _, _, _ = ParseContentRange(*output.ContentRange)
+				off, _, r.totalSize, _ = ParseContentRange(*output.ContentRange)
 			}
 			if off != r.httpRange.Offset {
 				err = fmt.Errorf("Range get fail, expect offset:%v, got offset:%v", r.httpRange.Offset, off)

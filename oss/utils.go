@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -270,6 +271,14 @@ func minInt64(a, b int64) int64 {
 	}
 }
 
+func maxInt64(a, b int64) int64 {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
+}
+
 // ParseRange parses a ContentRange from a ContentRange: header.
 // It only accepts bytes 22-33/42 and bytes 22-33/* format.
 func ParseContentRange(s string) (from int64, to int64, total int64, err error) {
@@ -351,4 +360,28 @@ func ParseRange(s string) (r *HTTPRange, err error) {
 		o.Count = e - o.Offset + 1
 	}
 	return &o, nil
+}
+
+// FileExists returns whether the given file exists or not
+func FileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
+// DirExists returns whether the given directory exists or not
+func DirExists(dir string) bool {
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
+}
+
+// EmptyFile changes the size of the named file to zero.
+func EmptyFile(filename string) bool {
+	err := os.Truncate(filename, 0)
+	return err == nil
 }
