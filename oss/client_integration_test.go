@@ -715,6 +715,7 @@ func TestGetBucketStat(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+	time.Sleep(2 * time.Second)
 	_, err = client.GetBucketStat(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError

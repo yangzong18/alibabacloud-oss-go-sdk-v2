@@ -292,9 +292,9 @@ func (s *SignerV4) authHeader(ctx context.Context, signingCtx *SigningContext) e
 
 	request.Header.Set(authorizationHeader, buf.String())
 
-	fmt.Printf("canonicalRequest:\n%s\n", canonicalRequest)
+	//fmt.Printf("canonicalRequest:\n%s\n", canonicalRequest)
 
-	fmt.Printf("stringToSign:\n%s\n", stringToSign)
+	//fmt.Printf("stringToSign:\n%s\n", stringToSign)
 
 	return nil
 }

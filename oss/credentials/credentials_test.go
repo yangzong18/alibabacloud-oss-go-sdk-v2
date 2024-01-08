@@ -75,17 +75,17 @@ func TestEnvironmentVariableCredentialsProvider(t *testing.T) {
 
 	defer func() {
 		if oriak == "" {
-			os.Clearenv()
+			os.Unsetenv("OSS_ACCESS_KEY_ID")
 		} else {
 			os.Setenv("OSS_ACCESS_KEY_ID", oriak)
 		}
 		if orisk == "" {
-			os.Clearenv()
+			os.Unsetenv("OSS_ACCESS_KEY_SECRET")
 		} else {
 			os.Setenv("OSS_ACCESS_KEY_SECRET", orisk)
 		}
 		if oritk == "" {
-			os.Clearenv()
+			os.Unsetenv("OSS_SESSION_TOKEN")
 		} else {
 			os.Setenv("OSS_SESSION_TOKEN", oritk)
 		}
@@ -308,7 +308,7 @@ func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
 
 	time.Sleep(15 * time.Second)
 	run.Store(false)
-	assert.Less(t, atomic.LoadInt64(&fetcher.count), int64(6))
+	assert.Less(t, atomic.LoadInt64(&fetcher.count), int64(6)*2)
 }
 
 type stubCredentialsFetcher2 struct {

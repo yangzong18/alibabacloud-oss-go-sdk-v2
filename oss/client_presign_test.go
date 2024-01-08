@@ -195,7 +195,7 @@ func TestPresignWithHeader(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "GET", result.Method)
 	assert.NotEmpty(t, result.Expiration)
-	fmt.Printf("result.SignedHeaders:%#v\n", result.SignedHeaders)
+	//fmt.Printf("result.SignedHeaders:%#v\n", result.SignedHeaders)
 	assert.Len(t, result.SignedHeaders, 1)
 	assert.Equal(t, "application/octet-stream", result.SignedHeaders["Content-Type"])
 	assert.Contains(t, result.URL, fmt.Sprintf("x-oss-date=%v", expiration.Add(-1*time.Hour).UTC().Format("20060102T150405Z")))
