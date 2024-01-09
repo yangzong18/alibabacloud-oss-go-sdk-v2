@@ -74,6 +74,9 @@ type PutObjectRequest struct {
 	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
+	// Object data.
+	Body io.Reader `input:"body,nop"`
+
 	RequestCommon
 }
 
@@ -533,6 +536,9 @@ type AppendObjectRequest struct {
 
 	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
+
+	// Object data.
+	Body io.Reader `input:"body,nop"`
 
 	RequestCommon
 }
@@ -1256,6 +1262,9 @@ type UploadPartRequest struct {
 
 	// Specify the speed limit value. The speed limit value ranges from  245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
+
+	// Object data.
+	Body io.Reader `input:"body,nop"`
 
 	RequestCommon
 }

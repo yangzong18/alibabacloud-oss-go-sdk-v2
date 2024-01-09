@@ -163,7 +163,7 @@ func main() {
 	fmt.Printf("File-Like seq read done, src file crc64:%v, dest file crc64:%v\n", (stat.Sys().(http.Header)).Get(oss.HeaderOssCRC64), crc64)
 
 	//使用Async Reader 接口
-	getFn := func(ctx context.Context, httpRange oss.HTTPRange) (r io.ReadCloser, offset int64, etag string, err error) {
+	getFn := func(ctx context.Context, httpRange oss.HTTPRange) (*oss.ReaderRangeGetOutput, error) {
 		request := &oss.GetObjectRequest{
 			Bucket: oss.Ptr(BucketName),
 			Key:    oss.Ptr(Key),
@@ -175,10 +175,15 @@ func main() {
 		}
 		result, err := client.GetObject(ctx, request)
 		if err != nil {
-			return nil, 0, "", err
+			return nil, err
 		}
-		offset, _ = oss.ParseOffsetAndSizeFromHeaders(result.Headers)
-		return result.Body, offset, result.Headers.Get("ETag"), nil
+
+		return &oss.ReaderRangeGetOutput{
+			Body:          result.Body,
+			ETag:          result.ETag,
+			ContentLength: result.ContentLength,
+			ContentRange:  result.ContentRange,
+		}, nil
 	}
 
 	//part 1

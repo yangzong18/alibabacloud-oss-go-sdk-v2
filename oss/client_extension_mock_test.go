@@ -625,9 +625,6 @@ func TestUpload_newDelegate(t *testing.T) {
 		&UploadRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
-			RequestCommon: RequestCommon{
-				Body: bytes.NewReader([]byte{}),
-			},
 		})
 
 	assert.Nil(t, err)
@@ -1475,6 +1472,7 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	assert.FileExists(t, cpFile)
 
 	//retry
+	time.Sleep(2 * time.Second)
 	retryTime := time.Now()
 	tracker.uploadPartErr[3] = false
 	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
@@ -1533,6 +1531,7 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	assert.FileExists(t, cpFile)
 
 	//retry
+	time.Sleep(2 * time.Second)
 	retryTime = time.Now()
 	tracker.uploadPartErr[0] = false
 	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
@@ -1589,6 +1588,7 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	assert.FileExists(t, cpFile)
 
 	//retry
+	time.Sleep(2 * time.Second)
 	retryTime = time.Now()
 	tracker.uploadPartErr[3] = false
 	tracker.ListPartsErr = true
@@ -2123,7 +2123,7 @@ func TestMockDownloaderLoopParalleReadWithRange(t *testing.T) {
 						Range:  httpRange.FormatHTTPRange()},
 					localFile,
 					func(do *DownloaderOptions) {
-						do.ParallelNum = 4
+						do.ParallelNum = 3
 						do.PartSize = int64(i)
 					})
 				assert.Nil(t, err)

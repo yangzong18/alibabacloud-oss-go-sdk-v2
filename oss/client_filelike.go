@@ -562,9 +562,7 @@ func (f *AppendOnlyFile) write(b []byte) (n int, err error) {
 		Bucket:   &f.bucket,
 		Key:      &f.key,
 		Position: Ptr(f.offset),
-		RequestCommon: RequestCommon{
-			Body: bytes.NewReader(b),
-		},
+		Body:     bytes.NewReader(b),
 	}
 
 	var result *AppendObjectResult
@@ -608,9 +606,7 @@ func (f *AppendOnlyFile) writeFrom(r io.Reader) (n int64, err error) {
 		Bucket:   &f.bucket,
 		Key:      &f.key,
 		Position: Ptr(f.offset),
-		RequestCommon: RequestCommon{
-			Body: r,
-		},
+		Body:     r,
 	}
 
 	var roffset int64

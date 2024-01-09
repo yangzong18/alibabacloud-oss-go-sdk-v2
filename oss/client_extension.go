@@ -546,14 +546,15 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 			}
 
 			if getErrFn() == nil {
-				upResult, err := u.client.UploadPart(u.context, &UploadPartRequest{
-					Bucket:     u.request.Bucket,
-					Key:        u.request.Key,
-					UploadId:   Ptr(uploadId),
-					PartNumber: data.partNum,
-					RequestCommon: RequestCommon{
-						Body: data.body,
-					}}, u.options.ClientOptions...)
+				upResult, err := u.client.UploadPart(
+					u.context,
+					&UploadPartRequest{
+						Bucket:     u.request.Bucket,
+						Key:        u.request.Key,
+						UploadId:   Ptr(uploadId),
+						PartNumber: data.partNum,
+						Body:       data.body},
+					u.options.ClientOptions...)
 
 				//fmt.Printf("UploadPart result: %#v, %#v\n", upResult, err)
 

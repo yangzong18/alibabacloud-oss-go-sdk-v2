@@ -850,9 +850,7 @@ func TestPutObject(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	result, err := client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -864,11 +862,9 @@ func TestPutObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 
 	request = &PutObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:       Ptr(bucketName),
+		Key:          Ptr(objectName),
+		Body:         strings.NewReader(content),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 	result, err = client.PutObject(context.TODO(), request)
@@ -882,11 +878,9 @@ func TestPutObject(t *testing.T) {
 
 	var serr *ServiceError
 	request = &PutObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		Body:     strings.NewReader(content),
 		Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
 	}
 	result, err = client.PutObject(context.TODO(), request)
@@ -902,9 +896,7 @@ func TestPutObject(t *testing.T) {
 	request = &PutObjectRequest{
 		Bucket: Ptr(bucketNameNotExist),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	result, err = client.PutObject(context.TODO(), request)
 	assert.NotNil(t, err)
@@ -934,9 +926,7 @@ func TestGetObject(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1001,9 +991,7 @@ func TestCopyObject(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1139,20 +1127,16 @@ func TestAppendObject(t *testing.T) {
 	request := &AppendObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.AppendObject(context.TODO(), request)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		Body:     strings.NewReader(content),
 		Position: Ptr(int64(0)),
 	}
 	result, err = client.AppendObject(context.TODO(), request)
@@ -1164,11 +1148,9 @@ func TestAppendObject(t *testing.T) {
 
 	nextPosition := result.NextPosition
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:       Ptr(bucketName),
+		Key:          Ptr(objectName),
+		Body:         strings.NewReader(content),
 		Position:     Ptr(nextPosition),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
@@ -1181,11 +1163,9 @@ func TestAppendObject(t *testing.T) {
 
 	nextPosition = result.NextPosition
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:                   Ptr(bucketName),
+		Key:                      Ptr(objectName),
+		Body:                     strings.NewReader(content),
 		Position:                 Ptr(nextPosition),
 		ServerSideDataEncryption: Ptr("SM4"),
 		ServerSideEncryption:     Ptr("KMS"),
@@ -1199,11 +1179,9 @@ func TestAppendObject(t *testing.T) {
 
 	objectName2 := objectName + "-kms-sm4"
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName2),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:                   Ptr(bucketName),
+		Key:                      Ptr(objectName2),
+		Body:                     strings.NewReader(content),
 		Position:                 Ptr(int64(0)),
 		ServerSideDataEncryption: Ptr("SM4"),
 		ServerSideEncryption:     Ptr("KMS"),
@@ -1219,11 +1197,9 @@ func TestAppendObject(t *testing.T) {
 
 	nextPosition = result.NextPosition
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName2),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:                   Ptr(bucketName),
+		Key:                      Ptr(objectName2),
+		Body:                     strings.NewReader(content),
 		Position:                 Ptr(nextPosition),
 		ServerSideDataEncryption: Ptr("SM4"),
 		ServerSideEncryption:     Ptr("KMS"),
@@ -1240,11 +1216,9 @@ func TestAppendObject(t *testing.T) {
 
 	var serr *ServiceError
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		Body:     strings.NewReader(content),
 		Position: Ptr(int64(0)),
 	}
 	_, err = client.AppendObject(context.TODO(), request)
@@ -1256,11 +1230,9 @@ func TestAppendObject(t *testing.T) {
 
 	bucketNameNotExist := bucketName + "-not-exist"
 	request = &AppendObjectRequest{
-		Bucket: Ptr(bucketNameNotExist),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:   Ptr(bucketNameNotExist),
+		Key:      Ptr(objectName),
+		Body:     strings.NewReader(content),
 		Position: Ptr(int64(0)),
 	}
 	_, err = client.AppendObject(context.TODO(), request)
@@ -1291,9 +1263,7 @@ func TestDeleteObject(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1374,9 +1344,7 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1400,9 +1368,7 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	request = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1455,9 +1421,7 @@ func TestHeadObject(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1509,9 +1473,7 @@ func TestGetObjectMeta(t *testing.T) {
 	request := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Body:   strings.NewReader(content),
 	}
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
@@ -1560,11 +1522,9 @@ func TestRestoreObject(t *testing.T) {
 	objectName := objectNamePrefix + randLowStr(6)
 	content := randLowStr(10)
 	request := &PutObjectRequest{
-		Bucket: Ptr(bucketName),
-		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content),
-		},
+		Bucket:       Ptr(bucketName),
+		Key:          Ptr(objectName),
+		Body:         strings.NewReader(content),
 		StorageClass: StorageClassColdArchive,
 	}
 	_, err = client.PutObject(context.TODO(), request)
@@ -1774,13 +1734,11 @@ func TestUploadPart(t *testing.T) {
 	initResult, err := client.InitiateMultipartUpload(context.TODO(), initRequest)
 	assert.Nil(t, err)
 	partRequest := &UploadPartRequest{
-		Bucket:     Ptr(bucketName),
-		Key:        Ptr(objectName),
-		PartNumber: int32(1),
-		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader("upload part 1"),
-		},
+		Bucket:       Ptr(bucketName),
+		Key:          Ptr(objectName),
+		PartNumber:   int32(1),
+		UploadId:     Ptr(*initResult.UploadId),
+		Body:         strings.NewReader("upload part 1"),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
@@ -1831,9 +1789,7 @@ func TestUploadPartCopy(t *testing.T) {
 	objRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectSrcName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), objRequest)
 	assert.Nil(t, err)
@@ -1953,9 +1909,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part1)),
-		},
+		Body:       strings.NewReader(string(part1)),
 	}
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
@@ -1970,9 +1924,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(2),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part2)),
-		},
+		Body:       strings.NewReader(string(part2)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -1986,9 +1938,7 @@ func TestCompleteMultipartUpload(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(3),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part3)),
-		},
+		Body:       strings.NewReader(string(part3)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -2185,9 +2135,7 @@ func TestListMultipartUploads(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part1)),
-		},
+		Body:       strings.NewReader(string(part1)),
 	}
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
@@ -2202,9 +2150,7 @@ func TestListMultipartUploads(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(2),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part2)),
-		},
+		Body:       strings.NewReader(string(part2)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -2218,9 +2164,7 @@ func TestListMultipartUploads(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(3),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part3)),
-		},
+		Body:       strings.NewReader(string(part3)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -2233,9 +2177,7 @@ func TestListMultipartUploads(t *testing.T) {
 	putObj := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(randLowStr(1000)),
-		},
+		Body:   strings.NewReader(randLowStr(1000)),
 	}
 
 	_, err = client.PutObject(context.TODO(), putObj)
@@ -2328,9 +2270,7 @@ func TestListParts(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(1),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part1)),
-		},
+		Body:       strings.NewReader(string(part1)),
 	}
 	var parts []UploadPart
 	partResult, err := client.UploadPart(context.TODO(), partRequest)
@@ -2346,9 +2286,7 @@ func TestListParts(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(2),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part2)),
-		},
+		Body:       strings.NewReader(string(part2)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -2363,9 +2301,7 @@ func TestListParts(t *testing.T) {
 		Key:        Ptr(objectName),
 		PartNumber: int32(3),
 		UploadId:   Ptr(*initResult.UploadId),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(part3)),
-		},
+		Body:       strings.NewReader(string(part3)),
 	}
 	partResult, err = client.UploadPart(context.TODO(), partRequest)
 	assert.Nil(t, err)
@@ -2583,9 +2519,7 @@ func TestListObjectVersions(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content1),
-		},
+		Body:   strings.NewReader(content1),
 	}
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2597,9 +2531,7 @@ func TestListObjectVersions(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(content2),
-		},
+		Body:   strings.NewReader(content2),
 	}
 	putObjResult, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2670,9 +2602,7 @@ func TestPutSymlink(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2745,9 +2675,7 @@ func TestGetSymlink(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2828,9 +2756,7 @@ func TestPutObjectTagging(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2871,9 +2797,7 @@ func TestPutObjectTagging(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -2949,9 +2873,7 @@ func TestGetObjectTagging(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3010,9 +2932,7 @@ func TestGetObjectTagging(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3064,9 +2984,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3113,9 +3031,7 @@ func TestDeleteObjectTagging(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	putObjResult, err := client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3166,9 +3082,7 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameCsv),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3208,9 +3122,7 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameJson),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(body)),
-		},
+		Body:   strings.NewReader(string(body)),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3265,9 +3177,7 @@ func TestSelectObject(t *testing.T) {
 	putObjRequest := &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameCsv),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:   strings.NewReader(body),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -3316,9 +3226,7 @@ func TestSelectObject(t *testing.T) {
 	putObjRequest = &PutObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectNameJson),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(string(body)),
-		},
+		Body:   strings.NewReader(string(body)),
 	}
 	_, err = client.PutObject(context.TODO(), putObjRequest)
 	assert.Nil(t, err)
@@ -4008,9 +3916,7 @@ func TestPaginator(t *testing.T) {
 			Key:        Ptr(objectName),
 			UploadId:   Ptr(uploadId),
 			PartNumber: int32(k + 1),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader(content),
-			},
+			Body:       strings.NewReader(content),
 		})
 		assert.Nil(t, err)
 	}

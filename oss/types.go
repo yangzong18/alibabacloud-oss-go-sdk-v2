@@ -42,7 +42,7 @@ func (m OperationMetadata) Has(key any) bool {
 type RequestCommon struct {
 	Headers    map[string]string
 	Parameters map[string]string
-	Body       io.Reader
+	Payload    io.Reader
 }
 
 type RequestCommonInterface interface {
@@ -50,7 +50,7 @@ type RequestCommonInterface interface {
 }
 
 func (r *RequestCommon) GetCommonFileds() (map[string]string, map[string]string, io.Reader) {
-	return r.Headers, r.Parameters, r.Body
+	return r.Headers, r.Parameters, r.Payload
 }
 
 type ResultCommon struct {

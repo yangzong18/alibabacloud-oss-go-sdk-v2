@@ -131,9 +131,7 @@ func TestMarshalInput_PutObject(t *testing.T) {
 			"email": "demo@aliyun.com",
 		},
 		Tagging: Ptr("TagA=B&TagC=D"),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:    strings.NewReader(body),
 	}
 
 	input = &OperationInput{
@@ -179,11 +177,9 @@ func TestMarshalInput_PutObject(t *testing.T) {
 	callbackVal := base64.StdEncoding.EncodeToString(callbackBuffer.Bytes())
 	callbackVar := base64.StdEncoding.EncodeToString([]byte(`{"x:a":"a", "x:b":"b"}`))
 	request = &PutObjectRequest{
-		Bucket: Ptr("oss-bucket"),
-		Key:    Ptr("oss-key"),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Bucket:      Ptr("oss-bucket"),
+		Key:         Ptr("oss-key"),
+		Body:        strings.NewReader(body),
 		Callback:    Ptr(callbackVal),
 		CallbackVar: Ptr(callbackVar),
 	}
@@ -206,11 +202,9 @@ func TestMarshalInput_PutObject(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &PutObjectRequest{
-		Bucket: Ptr("oss-bucket"),
-		Key:    Ptr("oss-key"),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Bucket:       Ptr("oss-bucket"),
+		Key:          Ptr("oss-key"),
+		Body:         strings.NewReader(body),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 
@@ -1083,9 +1077,7 @@ func TestMarshalInput_AppendObject(t *testing.T) {
 			"email": "demo@aliyun.com",
 		},
 		Tagging: Ptr("TagA=B&TagC=D"),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Body:    strings.NewReader(body),
 	}
 
 	input = &OperationInput{
@@ -1121,12 +1113,10 @@ func TestMarshalInput_AppendObject(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 
 	request = &AppendObjectRequest{
-		Bucket:   Ptr("oss-bucket"),
-		Key:      Ptr("oss-key"),
-		Position: Ptr(int64(0)),
-		RequestCommon: RequestCommon{
-			Body: strings.NewReader(body),
-		},
+		Bucket:       Ptr("oss-bucket"),
+		Key:          Ptr("oss-key"),
+		Position:     Ptr(int64(0)),
+		Body:         strings.NewReader(body),
 		TrafficLimit: int64(100 * 1024 * 8),
 	}
 

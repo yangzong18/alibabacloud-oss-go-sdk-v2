@@ -566,6 +566,7 @@ const (
 	fTypeUsermeta
 	fTypeXml
 	fTypeTime
+	fTypeReader
 )
 
 func parseFiledFlags(tokens []string) int {
@@ -580,6 +581,8 @@ func parseFiledFlags(tokens []string) int {
 			flags |= fTypeXml
 		case "usermeta":
 			flags |= fTypeUsermeta
+		case "reader":
+			flags |= fTypeReader
 		}
 	}
 	return flags
@@ -704,6 +707,12 @@ func (c *Client) marshalInput(request any, input *OperationInput, handlers ...fu
 						}
 					}
 					input.Body = bytes.NewReader(b.Bytes())
+				} else {
+					if r, ok := v.Interface().(io.Reader); ok {
+						input.Body = r
+					} else {
+						return NewErrParamTypeNotSupport(t.Field(k).Name)
+					}
 				}
 			}
 		}

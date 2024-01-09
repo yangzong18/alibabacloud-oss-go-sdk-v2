@@ -159,3 +159,10 @@ func NewErrParamNull(field string) InvalidParamError {
 		reason: fmt.Sprintf("null field"),
 	}
 }
+
+func NewErrParamTypeNotSupport(field string) InvalidParamError {
+	return &invalidParamError{
+		field:  field,
+		reason: fmt.Sprintf("type not support"),
+	}
+}

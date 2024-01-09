@@ -206,7 +206,7 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	request.Parameters = map[string]string{
 		"p": "",
 	}
-	request.Body = bytes.NewReader([]byte("hello"))
+	request.Payload = bytes.NewReader([]byte("hello"))
 	input = &OperationInput{
 		Method: "GET",
 	}
@@ -269,7 +269,7 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	request.Parameters = map[string]string{
 		"str-field": "value3",
 	}
-	request.Body = bytes.NewReader([]byte("hello"))
+	request.Payload = bytes.NewReader([]byte("hello"))
 	err = c.marshalInput(request, input)
 	assert.Nil(t, err)
 	assert.NotNil(t, input.Headers)
@@ -305,7 +305,7 @@ func TestMarshalInput_CommonFields(t *testing.T) {
 	request.Parameters = map[string]string{
 		"str-field1": "value3",
 	}
-	request.Body = bytes.NewReader([]byte("hello"))
+	request.Payload = bytes.NewReader([]byte("hello"))
 	err = c.marshalInput(request, input)
 	assert.Nil(t, err)
 	assert.NotNil(t, input.Headers)

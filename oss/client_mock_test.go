@@ -2657,9 +2657,7 @@ var testMockPutObjectSuccessCases = []struct {
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:   strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -2695,9 +2693,7 @@ var testMockPutObjectSuccessCases = []struct {
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:   strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -2733,9 +2729,7 @@ var testMockPutObjectSuccessCases = []struct {
 			Bucket:   Ptr("bucket"),
 			Key:      Ptr("object"),
 			Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"www.aliyuncs.com", "callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:     strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -2772,9 +2766,7 @@ var testMockPutObjectSuccessCases = []struct {
 			Bucket:       Ptr("bucket"),
 			Key:          Ptr("object"),
 			TrafficLimit: int64(100 * 1024 * 8),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:         strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -2837,9 +2829,7 @@ var testMockPutObjectErrorCases = []struct {
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:   strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Nil(t, o)
@@ -2875,9 +2865,7 @@ var testMockPutObjectErrorCases = []struct {
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:   strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Nil(t, o)
@@ -2914,9 +2902,7 @@ var testMockPutObjectErrorCases = []struct {
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Body:   strings.NewReader("hi oss"),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
 			assert.Nil(t, o)
@@ -2955,11 +2941,9 @@ var testMockPutObjectErrorCases = []struct {
 			assert.Equal(t, "/bucket/object", r.URL.String())
 		},
 		&PutObjectRequest{
-			Bucket: Ptr("bucket"),
-			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Body:     strings.NewReader("hi oss"),
 			Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
 		},
 		func(t *testing.T, o *PutObjectResult, err error) {
@@ -3203,9 +3187,6 @@ var testMockGetObjectErrorCases = []struct {
 		&GetObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
 		},
 		func(t *testing.T, o *GetObjectResult, err error) {
 			assert.Nil(t, o)
@@ -3242,9 +3223,6 @@ var testMockGetObjectErrorCases = []struct {
 		&GetObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
 		},
 		func(t *testing.T, o *GetObjectResult, err error) {
 			assert.Nil(t, o)
@@ -3282,9 +3260,6 @@ var testMockGetObjectErrorCases = []struct {
 		&GetObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
 		},
 		func(t *testing.T, o *GetObjectResult, err error) {
 			assert.Nil(t, o)
@@ -3652,9 +3627,7 @@ var testMockAppendObjectSuccessCases = []struct {
 			Bucket:   Ptr("bucket"),
 			Key:      Ptr("object"),
 			Position: Ptr(int64(0)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object"),
-			},
+			Body:     strings.NewReader("hi oss,append object"),
 		},
 		func(t *testing.T, o *AppendObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3688,9 +3661,7 @@ var testMockAppendObjectSuccessCases = []struct {
 			Bucket:   Ptr("bucket"),
 			Key:      Ptr("object"),
 			Position: Ptr(int64(100)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object,this is a demo"),
-			},
+			Body:     strings.NewReader("hi oss,append object,this is a demo"),
 		},
 		func(t *testing.T, o *AppendObjectResult, err error) {
 			assert.Equal(t, 200, o.StatusCode)
@@ -3727,12 +3698,10 @@ var testMockAppendObjectSuccessCases = []struct {
 			assert.Equal(t, "/bucket/object?append&position=100", strUrl)
 		},
 		&AppendObjectRequest{
-			Bucket:   Ptr("bucket"),
-			Key:      Ptr("object"),
-			Position: Ptr(int64(100)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object,this is a demo"),
-			},
+			Bucket:                   Ptr("bucket"),
+			Key:                      Ptr("object"),
+			Position:                 Ptr(int64(100)),
+			Body:                     strings.NewReader("hi oss,append object,this is a demo"),
 			ServerSideEncryption:     Ptr("KMS"),
 			ServerSideDataEncryption: Ptr("SM4"),
 			SSEKMSKeyId:              Ptr("12f8711f-90df-4e0d-903d-ab972b0f****"),
@@ -3776,12 +3745,10 @@ var testMockAppendObjectSuccessCases = []struct {
 			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
 		},
 		&AppendObjectRequest{
-			Bucket:   Ptr("bucket"),
-			Key:      Ptr("object"),
-			Position: Ptr(int64(100)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object,this is a demo"),
-			},
+			Bucket:                   Ptr("bucket"),
+			Key:                      Ptr("object"),
+			Position:                 Ptr(int64(100)),
+			Body:                     strings.NewReader("hi oss,append object,this is a demo"),
 			ServerSideEncryption:     Ptr("KMS"),
 			ServerSideDataEncryption: Ptr("SM4"),
 			SSEKMSKeyId:              Ptr("12f8711f-90df-4e0d-903d-ab972b0f****"),
@@ -3857,9 +3824,7 @@ var testMockAppendObjectErrorCases = []struct {
 			Bucket:   Ptr("bucket"),
 			Key:      Ptr("object"),
 			Position: Ptr(int64(100)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object"),
-			},
+			Body:     strings.NewReader("hi oss,append object"),
 		},
 		func(t *testing.T, o *AppendObjectResult, err error) {
 			assert.Nil(t, o)
@@ -3901,9 +3866,7 @@ var testMockAppendObjectErrorCases = []struct {
 			Bucket:   Ptr("bucket"),
 			Key:      Ptr("object"),
 			Position: Ptr(int64(0)),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss,append object,this is a demo"),
-			},
+			Body:     strings.NewReader("hi oss,append object,this is a demo"),
 		},
 		func(t *testing.T, o *AppendObjectResult, err error) {
 			assert.Nil(t, o)
@@ -5872,9 +5835,6 @@ var testMockInitiateMultipartUploadErrorCases = []struct {
 		&InitiateMultipartUploadRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
 		},
 		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
 			assert.Nil(t, o)
@@ -5912,9 +5872,6 @@ var testMockInitiateMultipartUploadErrorCases = []struct {
 		&InitiateMultipartUploadRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("object"),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("hi oss"),
-			},
 		},
 		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
 			assert.Nil(t, o)
@@ -5981,9 +5938,7 @@ var testMockUploadPartSuccessCases = []struct {
 			Key:        Ptr("object"),
 			UploadId:   Ptr("0004B9895DBBB6EC9"),
 			PartNumber: int32(1),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 1"),
-			},
+			Body:       strings.NewReader("upload part 1"),
 			ContentMD5: Ptr("bce8f3d48247c5d555bb5697bf277b35"),
 		},
 		func(t *testing.T, o *UploadPartResult, err error) {
@@ -6019,9 +5974,7 @@ var testMockUploadPartSuccessCases = []struct {
 			Key:        Ptr("object"),
 			UploadId:   Ptr("0004B9895DBBB6EC9"),
 			PartNumber: int32(2),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 2"),
-			},
+			Body:       strings.NewReader("upload part 2"),
 			ContentMD5: Ptr("f811b746eb3e256f97cb3a190d528353"),
 		},
 		func(t *testing.T, o *UploadPartResult, err error) {
@@ -6054,13 +6007,11 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
 		},
 		&UploadPartRequest{
-			Bucket:     Ptr("bucket"),
-			Key:        Ptr("object"),
-			UploadId:   Ptr("0004B9895DBBB6EC9"),
-			PartNumber: int32(2),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 2"),
-			},
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(2),
+			Body:         strings.NewReader("upload part 2"),
 			ContentMD5:   Ptr("f811b746eb3e256f97cb3a190d528353"),
 			TrafficLimit: int64(100 * 1024 * 8),
 		},
@@ -6131,9 +6082,7 @@ var testMockUploadPartErrorCases = []struct {
 			Key:        Ptr("object"),
 			UploadId:   Ptr("0004B9895DBBB6EC9"),
 			PartNumber: int32(1),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 1"),
-			},
+			Body:       strings.NewReader("upload part 1"),
 		},
 		func(t *testing.T, o *UploadPartResult, err error) {
 			assert.Nil(t, o)
@@ -6175,9 +6124,7 @@ var testMockUploadPartErrorCases = []struct {
 			Key:        Ptr("object"),
 			UploadId:   Ptr("0004B9895DBBB6EC9"),
 			PartNumber: int32(1),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 1"),
-			},
+			Body:       strings.NewReader("upload part 1"),
 		},
 		func(t *testing.T, o *UploadPartResult, err error) {
 			assert.Nil(t, o)
@@ -6220,9 +6167,7 @@ var testMockUploadPartErrorCases = []struct {
 			Key:        Ptr("object"),
 			UploadId:   Ptr("0004B9895DBBB6EC9"),
 			PartNumber: int32(1),
-			RequestCommon: RequestCommon{
-				Body: strings.NewReader("upload part 1"),
-			},
+			Body:       strings.NewReader("upload part 1"),
 		},
 		func(t *testing.T, o *UploadPartResult, err error) {
 			assert.Nil(t, o)
