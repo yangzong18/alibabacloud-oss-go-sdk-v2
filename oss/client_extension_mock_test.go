@@ -37,6 +37,7 @@ type uploaderMockTracker struct {
 	CompleteMPErr bool
 	AbortMPErr    bool
 	putObjectErr  bool
+	ListPartsErr  bool
 }
 
 func testSetupUploaderMockServer(t *testing.T, tracker *uploaderMockTracker) *httptest.Server {
@@ -205,6 +206,41 @@ func testSetupUploaderMockServer(t *testing.T, tracker *uploaderMockTracker) *ht
 				w.Write(nil)
 			} else {
 				assert.Fail(t, "not support")
+			}
+		case "GET":
+			if query.Get("uploadId") == "uploadId-1234" {
+				// ListParts
+				if tracker.ListPartsErr {
+					w.Header().Set(HTTPHeaderContentType, "application/xml")
+					w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(errData)))
+					w.WriteHeader(403)
+					w.Write(errData)
+					return
+				}
+
+				var buf strings.Builder
+				buf.WriteString("<ListPartsResult>")
+				buf.WriteString("  <Bucket>bucket</Bucket>")
+				buf.WriteString("  <Key>key</Key>")
+				buf.WriteString("  <UploadId>uploadId-1234</UploadId>")
+				buf.WriteString("  <IsTruncated>false</IsTruncated>")
+				for i, d := range tracker.saveDate {
+					if d != nil {
+						buf.WriteString("  <Part>")
+						buf.WriteString(fmt.Sprintf("    <PartNumber>%v</PartNumber>", i+1))
+						buf.WriteString("    <LastModified>2012-02-23T07:01:34.000Z</LastModified>")
+						buf.WriteString("    <ETag>etag</ETag>")
+						buf.WriteString(fmt.Sprintf("    <Size>%v</Size>", len(d)))
+						buf.WriteString("  </Part>")
+					}
+				}
+				buf.WriteString("</ListPartsResult>")
+
+				data := buf.String()
+				w.Header().Set(HTTPHeaderContentType, "application/xml")
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(data)))
+				w.WriteHeader(200)
+				w.Write([]byte(data))
 			}
 		}
 	}))
@@ -481,6 +517,16 @@ func TestUploadArgmentCheck(t *testing.T) {
 	}, "#@!Ainvalud-path")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "File not exists,")
+
+	// nil body
+	_, err = u.UploadFrom(
+		context.TODO(),
+		&UploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key")},
+		nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "the body is null")
 }
 
 type noSeeker struct {
@@ -910,8 +956,7 @@ func TestUploadParallelFromFile(t *testing.T) {
 	assert.Equal(t, "", tracker.contentType)
 }
 
-// TODO
-func testUploadWithNullBody(t *testing.T) {
+func TestUploadWithEmptyBody(t *testing.T) {
 	partSize := int64(100 * 1024)
 	length := 5*100*1024 + 123
 	partsNum := length/int(partSize) + 1
@@ -952,7 +997,7 @@ func testUploadWithNullBody(t *testing.T) {
 		&UploadRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
-		nil)
+		bytes.NewReader(nil))
 	assert.Nil(t, err)
 	assert.NotNil(t, result)
 
@@ -1255,6 +1300,405 @@ func TestUploadParallelUploadPartFail(t *testing.T) {
 	assert.NotNil(t, tracker.saveDate[1])
 	assert.Nil(t, tracker.saveDate[2])
 	assert.Nil(t, tracker.saveDate[5])
+}
+
+func TestUploaderUploadFileEnableCheckpointNotUseCp(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	tracker := &uploaderMockTracker{
+		partNum:       partsNum,
+		saveDate:      make([][]byte, partsNum),
+		checkTime:     make([]time.Time, partsNum),
+		timeout:       make([]time.Duration, partsNum),
+		uploadPartErr: make([]bool, partsNum),
+	}
+
+	data := []byte(randStr(length))
+	hash := NewCRC64(0)
+	hash.Write(data)
+	dataCrc64ecma := fmt.Sprint(hash.Sum64())
+
+	localFile := randStr(8) + "-no-surfix"
+	createFileFromByte(t, localFile, data)
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	server := testSetupUploaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	u := client.NewUploader(
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 4
+			uo.PartSize = partSize
+			uo.CheckpointDir = "."
+			uo.EnableCheckpoint = true
+		},
+	)
+	assert.Equal(t, 4, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+
+	tracker.timeout[0] = 1 * time.Second
+	tracker.timeout[2] = 500 * time.Millisecond
+
+	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "uploadId-1234", *result.UploadId)
+	assert.Equal(t, dataCrc64ecma, *result.HashCRC64)
+
+	mr := NewMultiBytesReader(tracker.saveDate)
+	all, err := io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall := NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma := fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	index := 3
+	ctime := tracker.checkTime[index]
+	for i, t := range tracker.checkTime {
+		if t.After(ctime) {
+			index = i
+			ctime = t
+		}
+	}
+	assert.Equal(t, 0, index)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
+	assert.Equal(t, "", tracker.contentType)
+}
+
+func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	tracker := &uploaderMockTracker{
+		partNum:       partsNum,
+		saveDate:      make([][]byte, partsNum),
+		checkTime:     make([]time.Time, partsNum),
+		timeout:       make([]time.Duration, partsNum),
+		uploadPartErr: make([]bool, partsNum),
+	}
+
+	data := []byte(randStr(length))
+	hash := NewCRC64(0)
+	hash.Write(data)
+	dataCrc64ecma := fmt.Sprint(hash.Sum64())
+
+	localFile := "upload-file-with-cp-no-surfix"
+	absPath, _ := filepath.Abs(localFile)
+	hashmd5 := md5.New()
+	hashmd5.Write([]byte(absPath))
+	srcHash := hex.EncodeToString(hashmd5.Sum(nil))
+	cpFile := srcHash + "-d36fc07f5d963b319b1b48e20a9b8ae9.ucp"
+
+	createFileFromByte(t, localFile, data)
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	server := testSetupUploaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	u := client.NewUploader(
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 5
+			uo.PartSize = partSize
+			uo.CheckpointDir = "."
+			uo.EnableCheckpoint = true
+		},
+	)
+	assert.Equal(t, 5, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+
+	// Case 1, fail in part number 4
+	tracker.saveDate = make([][]byte, partsNum)
+	tracker.checkTime = make([]time.Time, partsNum)
+	tracker.timeout = make([]time.Duration, partsNum)
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.timeout[0] = 1 * time.Second
+	tracker.timeout[2] = 500 * time.Millisecond
+	tracker.uploadPartErr[3] = true
+	os.Remove(cpFile)
+
+	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.Nil(t, result)
+	var uerr *UploadError
+	errors.As(err, &uerr)
+	assert.NotNil(t, uerr)
+	assert.Equal(t, "uploadId-1234", uerr.UploadId)
+	assert.Equal(t, "oss://bucket/key", uerr.Path)
+
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "InvalidAccessKeyId", serr.Code)
+
+	assert.NotNil(t, tracker.saveDate[0])
+	assert.NotNil(t, tracker.saveDate[1])
+	assert.NotNil(t, tracker.saveDate[2])
+	assert.Nil(t, tracker.saveDate[3])
+	assert.NotNil(t, tracker.saveDate[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	retryTime := time.Now()
+	tracker.uploadPartErr[3] = false
+	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
+
+	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkTime[0].Before(retryTime))
+	assert.True(t, tracker.checkTime[1].Before(retryTime))
+	assert.True(t, tracker.checkTime[2].Before(retryTime))
+	assert.True(t, tracker.checkTime[3].After(retryTime))
+	assert.True(t, tracker.checkTime[4].After(retryTime))
+	assert.True(t, tracker.checkTime[5].After(retryTime))
+
+	mr := NewMultiBytesReader(tracker.saveDate)
+	all, err := io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall := NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma := fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(3), atomic.LoadInt32(&tracker.uploadPartCnt))
+	assert.Equal(t, "", tracker.contentType)
+	assert.NoFileExists(t, cpFile)
+
+	// Case 2, fail in part number 1
+	tracker.saveDate = make([][]byte, partsNum)
+	tracker.checkTime = make([]time.Time, partsNum)
+	tracker.timeout = make([]time.Duration, partsNum)
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.timeout[0] = 1 * time.Second
+	tracker.timeout[2] = 500 * time.Millisecond
+	tracker.uploadPartErr[0] = true
+	os.Remove(cpFile)
+
+	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.Nil(t, tracker.saveDate[0])
+	assert.NotNil(t, tracker.saveDate[1])
+	assert.NotNil(t, tracker.saveDate[2])
+	assert.NotNil(t, tracker.saveDate[3])
+	assert.NotNil(t, tracker.saveDate[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	retryTime = time.Now()
+	tracker.uploadPartErr[0] = false
+	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
+
+	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkTime[0].After(retryTime))
+	assert.True(t, tracker.checkTime[1].After(retryTime))
+	assert.True(t, tracker.checkTime[2].After(retryTime))
+	assert.True(t, tracker.checkTime[3].After(retryTime))
+	assert.True(t, tracker.checkTime[4].After(retryTime))
+	assert.True(t, tracker.checkTime[5].After(retryTime))
+
+	mr = NewMultiBytesReader(tracker.saveDate)
+	all, err = io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall = NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma = fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(6), atomic.LoadInt32(&tracker.uploadPartCnt))
+	assert.Equal(t, "", tracker.contentType)
+	assert.NoFileExists(t, cpFile)
+
+	// Case 3, list Parts Fail
+	tracker.saveDate = make([][]byte, partsNum)
+	tracker.checkTime = make([]time.Time, partsNum)
+	tracker.timeout = make([]time.Duration, partsNum)
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.uploadPartErr[3] = true
+	os.Remove(cpFile)
+
+	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.NotNil(t, tracker.saveDate[0])
+	assert.NotNil(t, tracker.saveDate[1])
+	assert.NotNil(t, tracker.saveDate[2])
+	assert.Nil(t, tracker.saveDate[3])
+	assert.NotNil(t, tracker.saveDate[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	retryTime = time.Now()
+	tracker.uploadPartErr[3] = false
+	tracker.ListPartsErr = true
+	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
+
+	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkTime[0].After(retryTime))
+	assert.True(t, tracker.checkTime[1].After(retryTime))
+	assert.True(t, tracker.checkTime[2].After(retryTime))
+	assert.True(t, tracker.checkTime[3].After(retryTime))
+	assert.True(t, tracker.checkTime[4].After(retryTime))
+	assert.True(t, tracker.checkTime[5].After(retryTime))
+
+	mr = NewMultiBytesReader(tracker.saveDate)
+	all, err = io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall = NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma = fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(6), atomic.LoadInt32(&tracker.uploadPartCnt))
+	assert.Equal(t, "", tracker.contentType)
+	assert.NoFileExists(t, cpFile)
+}
+
+func TestUploadParallelFromStreamWithoutSeeker(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	tracker := &uploaderMockTracker{
+		partNum:       partsNum,
+		saveDate:      make([][]byte, partsNum),
+		checkTime:     make([]time.Time, partsNum),
+		timeout:       make([]time.Duration, partsNum),
+		uploadPartErr: make([]bool, partsNum),
+	}
+
+	data := []byte(randStr(length))
+	hash := NewCRC64(0)
+	hash.Write(data)
+	dataCrc64ecma := fmt.Sprint(hash.Sum64())
+
+	localFile := randStr(8) + "-no-surfix"
+	createFileFromByte(t, localFile, data)
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	server := testSetupUploaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	u := client.NewUploader(
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 4
+			uo.PartSize = partSize
+		},
+	)
+	assert.Equal(t, 4, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+
+	tracker.timeout[0] = 1 * time.Second
+	tracker.timeout[2] = 500 * time.Millisecond
+
+	file, err := os.Open(localFile)
+	assert.Nil(t, err)
+	defer file.Close()
+
+	result, err := u.UploadFrom(context.TODO(), &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, io.LimitReader(file, int64(length)))
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "uploadId-1234", *result.UploadId)
+	assert.Equal(t, dataCrc64ecma, *result.HashCRC64)
+
+	mr := NewMultiBytesReader(tracker.saveDate)
+	all, err := io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall := NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma := fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
+	assert.Equal(t, "", tracker.contentType)
 }
 
 type downloaderMockTracker struct {
@@ -2093,7 +2537,7 @@ func TestDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
 	hashmd5.Reset()
 	hashmd5.Write([]byte(absPath))
 	destHash := hex.EncodeToString(hashmd5.Sum(nil))
-	cpFileName := "ddaf063c8f69766ecc8e4a93b6402e3e-" + destHash + ".cp"
+	cpFileName := "ddaf063c8f69766ecc8e4a93b6402e3e-" + destHash + ".dcp"
 	defer func() {
 		os.Remove(localFile)
 	}()
@@ -2191,7 +2635,7 @@ func TestDownloaderDownloadFileEnableCheckpointWithRange(t *testing.T) {
 	hashmd5.Reset()
 	hashmd5.Write([]byte(absPath))
 	destHash := hex.EncodeToString(hashmd5.Sum(nil))
-	cpFileName := "0fbbf3bb7c80debbecb37dca52a646eb-" + destHash + ".cp"
+	cpFileName := "0fbbf3bb7c80debbecb37dca52a646eb-" + destHash + ".dcp"
 	defer func() {
 		os.Remove(localFile)
 	}()
@@ -2601,4 +3045,192 @@ func TestDownloadedChunksSort(t *testing.T) {
 	assert.Equal(t, int64(10), chunks[1].start)
 	assert.Equal(t, int64(15), chunks[2].start)
 	assert.Equal(t, int64(45), chunks[3].start)
+}
+
+func TestUploadCheckpoint(t *testing.T) {
+	request := &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := randStr(8) + "-no-surfix"
+	cpDir := "."
+	partSize := DefaultDownloadPartSize
+
+	info := &fileInfo{
+		modTime: time.Now(),
+		size:    int64(100),
+	}
+
+	cp := newUploadCheckpoint(request, destFilePath, cpDir, info, partSize)
+	assert.NotNil(t, cp)
+	assert.Equal(t, info.ModTime().String(), cp.Info.Data.FileMeta.LastModified)
+	assert.Equal(t, info.Size(), cp.Info.Data.FileMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", cp.Info.Data.ObjectInfo.Name)
+
+	assert.Equal(t, CheckpointMagic, cp.Info.Magic)
+	assert.Equal(t, "", cp.Info.MD5)
+
+	assert.Equal(t, destFilePath, cp.Info.Data.FilePath)
+	assert.Equal(t, partSize, cp.Info.Data.PartSize)
+
+	//check dump
+	cp.Info.Data.UploadInfo.UploadId = "upload-id"
+	cp.dump()
+	assert.True(t, FileExists(cp.CpFilePath))
+	ucp := uploadCheckpoint{}
+	content, err := os.ReadFile(cp.CpFilePath)
+	assert.Nil(t, err)
+	err = json.Unmarshal(content, &ucp.Info)
+	assert.Nil(t, err)
+
+	assert.Equal(t, info.ModTime().String(), ucp.Info.Data.FileMeta.LastModified)
+	assert.Equal(t, info.Size(), ucp.Info.Data.FileMeta.Size)
+
+	assert.Equal(t, "oss://bucket/key", ucp.Info.Data.ObjectInfo.Name)
+
+	assert.Equal(t, CheckpointMagic, ucp.Info.Magic)
+	assert.Equal(t, cp.Info.MD5, ucp.Info.MD5)
+	assert.NotEmpty(t, ucp.Info.MD5)
+
+	assert.Equal(t, destFilePath, ucp.Info.Data.FilePath)
+	assert.Equal(t, partSize, ucp.Info.Data.PartSize)
+	assert.Equal(t, "upload-id", ucp.Info.Data.UploadInfo.UploadId)
+
+	//check load
+	err = cp.load()
+	assert.Nil(t, err)
+	assert.True(t, cp.Loaded)
+
+	//check valid
+	assert.True(t, cp.valid())
+
+	//check complete
+	assert.True(t, FileExists(cp.CpFilePath))
+	err = cp.remove()
+	assert.Nil(t, err)
+	assert.True(t, !FileExists(cp.CpFilePath))
+
+	//load not match
+	cp = newUploadCheckpoint(request, destFilePath, cpDir, info, partSize)
+	assert.False(t, cp.Loaded)
+	notMatch := `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"5ff2e8fbddc007157488c1087105f6d2","Data":{"FilePath":"vhetHfkY-no-surfix","FileMeta":{"Size":100,"LastModified":"2024-01-08 16:46:27.7178907 +0800 CST m=+0.014509001"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":""}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(notMatch), FilePermMode)
+	assert.Nil(t, err)
+	assert.True(t, FileExists(cp.CpFilePath))
+	err = cp.load()
+	assert.Nil(t, err)
+	assert.False(t, cp.Loaded)
+	assert.False(t, FileExists(cp.CpFilePath))
+}
+
+func TestUploadCheckpointInvalidCpPath(t *testing.T) {
+	request := &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := randStr(8) + "-no-surfix"
+	cpDir := "./invliad-dir/"
+	partSize := DefaultDownloadPartSize
+
+	info := &fileInfo{
+		modTime: time.Now(),
+		size:    int64(100),
+	}
+
+	cp := newUploadCheckpoint(request, destFilePath, cpDir, info, partSize)
+	assert.NotNil(t, cp)
+	assert.Equal(t, destFilePath, cp.Info.Data.FilePath)
+	assert.Equal(t, "invliad-dir", cp.CpDirPath)
+	assert.Contains(t, cp.CpFilePath, "invliad-dir")
+
+	//dump fail
+	err := cp.dump()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+
+	//load fail
+	err = cp.load()
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Invaid checkpoint dir")
+}
+
+func TestUploadCheckpointValid(t *testing.T) {
+	request := &UploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+	destFilePath := "athnjXGQ-no-surfix"
+	cpDir := "."
+
+	modTime, err := http.ParseTime("Fri, 24 Feb 2012 06:07:48 GMT")
+	assert.Nil(t, err)
+
+	info := &fileInfo{
+		modTime: modTime,
+		size:    int64(100),
+	}
+	partSize := DefaultDownloadPartSize
+
+	cp := newUploadCheckpoint(request, destFilePath, cpDir, info, partSize)
+
+	os.Remove(destFilePath)
+	assert.Equal(t, "", cp.Info.Data.UploadInfo.UploadId)
+	cpdata := `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"0c15f37bb935bec463cb3b6c362f4a21","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+
+	assert.True(t, cp.valid())
+	assert.Equal(t, "upload-id", cp.Info.Data.UploadInfo.UploadId)
+
+	// md5 fail
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"1c15f37bb935bec463cb3b6c362f4a21","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// Magic fail
+	cpdata = `{"Magic":"82611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"0c15f37bb935bec463cb3b6c362f4a21","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// invalid cp format
+	cpdata = `"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"0c15f37bb935bec463cb3b6c362f4a21","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// FilePath not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"f0920664695ea3aa8303d9de885303bd","Data":{"FilePath":"1athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// FileMeta not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"79b8681208845ed7b432cb1e53790aa4","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":101,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// ObjectInfo not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"3943551baf1c421f3c1eceaa890ec451","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key1"},"PartSize":5242880,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// PartSize not equal
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"5546cfe23f4bdde0c24c214b3dc83777","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242881,"UploadInfo":{"UploadId":"upload-id"}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	// uploadId invalid
+	cpdata = `{"Magic":"92611BED-89E2-46B6-89E5-72F273D4B0A3","MD5":"fa7a68973cf4b51e86386db0d3d84fb1","Data":{"FilePath":"athnjXGQ-no-surfix","FileMeta":{"Size":100,"LastModified":"2012-02-24 06:07:48 +0000 UTC"},"ObjectInfo":{"Name":"oss://bucket/key"},"PartSize":5242880,"UploadInfo":{"UploadId":""}}}`
+	err = os.WriteFile(cp.CpFilePath, []byte(cpdata), FilePermMode)
+	assert.Nil(t, err)
+	assert.False(t, cp.valid())
+
+	os.Remove(destFilePath)
+	os.Remove(cp.CpFilePath)
 }

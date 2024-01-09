@@ -46,6 +46,10 @@ type UploaderOptions struct {
 
 	LeavePartsOnError bool
 
+	EnableCheckpoint bool
+
+	CheckpointDir string
+
 	ClientOptions []func(*Options)
 }
 
@@ -199,23 +203,26 @@ func (u *Uploader) UploadFile(ctx context.Context, request *UploadRequest, fileP
 	}
 
 	var file *os.File
-	if file, err = os.Open(filePath); err != nil {
+	if file, err = delegate.openReader(); err != nil {
 		return nil, err
 	}
-	defer func() {
-		defer file.Close()
-	}()
 	delegate.body = file
 
 	if err = delegate.applySource(); err != nil {
 		return nil, err
 	}
 
+	if err = delegate.checkCheckpoint(); err != nil {
+		return nil, err
+	}
+
+	if err = delegate.adjustSource(); err != nil {
+		return nil, err
+	}
+
 	result, err := delegate.upload()
 
-	//TODO check CRC
-
-	return result, err
+	return result, delegate.closeReader(file, err)
 }
 
 type uploaderDelegate struct {
@@ -224,14 +231,21 @@ type uploaderDelegate struct {
 	context context.Context
 	request *UploadRequest
 
+	body      io.Reader
 	readerPos int64
 	totalSize int64
 
+	// Source's Info, from file or reader
 	filePath string
+	fileInfo os.FileInfo
 
-	body io.Reader
+	// for resume upload
+	uploadId   string
+	partNumber int32
 
 	partPool byteSlicePool
+
+	checkpoint *uploadCheckpoint
 }
 
 func (u *Uploader) newDelegate(ctx context.Context, request *UploadRequest, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
@@ -277,14 +291,20 @@ func (u *uploaderDelegate) checkSource(filePath string) error {
 		return fmt.Errorf("File not exists, %v", filePath)
 	}
 
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return err
+	}
+
 	u.filePath = filePath
+	u.fileInfo = info
 
 	return nil
 }
 
 func (u *uploaderDelegate) applySource() error {
 	if u.body == nil {
-		return NewErrParamNull("uploader's body is null")
+		return NewErrParamNull("the body is null")
 	}
 
 	totalSize := getReaderLen(u.body)
@@ -301,6 +321,96 @@ func (u *uploaderDelegate) applySource() error {
 	u.options.PartSize = partSize
 
 	return nil
+}
+
+func (u *uploaderDelegate) adjustSource() error {
+	// resume from upload id
+	if u.uploadId != "" {
+		// if the body supports seek
+		r, ok := u.body.(io.Seeker)
+		// not support
+		if !ok {
+			u.uploadId = ""
+			return nil
+		}
+
+		// if upload id is valid
+		paginator := u.client.NewListPartsPaginator(&ListPartsRequest{
+			Bucket:   u.request.Bucket,
+			Key:      u.request.Key,
+			UploadId: Ptr(u.uploadId),
+		})
+
+		// find consecutive sequence from min part number
+		var (
+			checkPartNumber int32 = 1
+		)
+	outerLoop:
+		for paginator.HasNext() {
+			page, err := paginator.NextPage(u.context, u.options.ClientOptions...)
+			if err != nil {
+				u.uploadId = ""
+				return nil
+			}
+			for _, p := range page.Parts {
+				if p.PartNumber != checkPartNumber ||
+					p.Size != u.options.PartSize {
+					break outerLoop
+				}
+				checkPartNumber++
+			}
+		}
+
+		partNumber := checkPartNumber - 1
+		newOffset := int64(partNumber) * u.options.PartSize
+		if _, err := r.Seek(newOffset, io.SeekStart); err != nil {
+			u.uploadId = ""
+			return nil
+		}
+		u.partNumber = partNumber
+		u.readerPos = newOffset
+	}
+	return nil
+}
+
+func (d *uploaderDelegate) checkCheckpoint() error {
+	if d.options.EnableCheckpoint {
+		d.checkpoint = newUploadCheckpoint(d.request, d.filePath, d.options.CheckpointDir, d.fileInfo, d.options.PartSize)
+		if err := d.checkpoint.load(); err != nil {
+			return err
+		}
+
+		if d.checkpoint.Loaded {
+			d.uploadId = d.checkpoint.Info.Data.UploadInfo.UploadId
+		}
+		d.options.LeavePartsOnError = true
+	}
+	return nil
+}
+
+func (d *uploaderDelegate) openReader() (*os.File, error) {
+	file, err := os.Open(d.filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	d.body = file
+	return file, nil
+}
+
+func (d *uploaderDelegate) closeReader(file *os.File, err error) error {
+	if file != nil {
+		file.Close()
+	}
+
+	if d.checkpoint != nil && err == nil {
+		d.checkpoint.remove()
+	}
+
+	d.body = nil
+	d.checkpoint = nil
+
+	return err
 }
 
 func (u *uploaderDelegate) upload() (*UploadResult, error) {
@@ -401,18 +511,17 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 	)
 
 	// Init the multipart
-	initRequest := &InitiateMultipartUploadRequest{}
-	copyRequest(initRequest, u.request)
-	if initRequest.ContentType == nil {
-		initRequest.ContentType = u.getContentType()
-	}
-
-	initResult, err := u.client.InitiateMultipartUpload(u.context, initRequest, u.options.ClientOptions...)
+	uploadId, startPartNum, err := u.getUploadId()
 	if err != nil {
 		return nil, u.wrapErr("", err)
 	}
+	//fmt.Printf("getUploadId result: %v, %#v\n", uploadId, err)
 
-	//fmt.Printf("InitiateMultipartUpload result: %#v, %#v\n", initResult, err)
+	// Update Checkpoint
+	if u.checkpoint != nil {
+		u.checkpoint.Info.Data.UploadInfo.UploadId = uploadId
+		u.checkpoint.dump()
+	}
 
 	saveErrFn := func(e error) {
 		errValue.Store(e)
@@ -440,7 +549,7 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 				upResult, err := u.client.UploadPart(u.context, &UploadPartRequest{
 					Bucket:     u.request.Bucket,
 					Key:        u.request.Key,
-					UploadId:   initResult.UploadId,
+					UploadId:   Ptr(uploadId),
 					PartNumber: data.partNum,
 					RequestCommon: RequestCommon{
 						Body: data.body,
@@ -468,7 +577,7 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 
 	// Read and queue the parts
 	var (
-		qnum int32 = 0
+		qnum int32 = startPartNum
 		qerr error = nil
 	)
 	for getErrFn() == nil && qerr == nil {
@@ -501,24 +610,50 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 		sort.Sort(parts)
 		cmRequest := &CompleteMultipartUploadRequest{}
 		copyRequest(cmRequest, u.request)
-		cmRequest.UploadId = initResult.UploadId
+		cmRequest.UploadId = Ptr(uploadId)
 		cmRequest.CompleteMultipartUpload = &CompleteMultipartUpload{Parts: parts}
 		cmResult, err = u.client.CompleteMultipartUpload(u.context, cmRequest, u.options.ClientOptions...)
 	}
 	//fmt.Printf("CompleteMultipartUpload cmResult: %#v, %#v\n", cmResult, err)
 
 	if err != nil {
-		//TODO Abort
-		return nil, u.wrapErr(*initResult.UploadId, err)
+		//Abort
+		if !u.options.LeavePartsOnError {
+			abortRequest := &AbortMultipartUploadRequest{}
+			copyRequest(abortRequest, u.request)
+			abortRequest.UploadId = Ptr(uploadId)
+			_, _ = u.client.AbortMultipartUpload(u.context, abortRequest, u.options.ClientOptions...)
+		}
+		return nil, u.wrapErr(uploadId, err)
 	}
 
 	return &UploadResult{
-		UploadId:     initResult.UploadId,
+		UploadId:     Ptr(uploadId),
 		ETag:         cmResult.ETag,
 		VersionId:    cmResult.VersionId,
 		HashCRC64:    cmResult.HashCRC64,
 		ResultCommon: cmResult.ResultCommon,
 	}, nil
+}
+
+func (u *uploaderDelegate) getUploadId() (uploadId string, startNum int32, err error) {
+	if u.uploadId != "" {
+		return u.uploadId, u.partNumber, nil
+	}
+
+	// if not exist or fail, create a new upload id
+	request := &InitiateMultipartUploadRequest{}
+	copyRequest(request, u.request)
+	if request.ContentType == nil {
+		request.ContentType = u.getContentType()
+	}
+
+	result, err := u.client.InitiateMultipartUpload(u.context, request, u.options.ClientOptions...)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return *result.UploadId, 0, nil
 }
 
 func (u *uploaderDelegate) getContentType() *string {
@@ -1081,8 +1216,7 @@ func (d *downloaderDelegate) downloadChunk(chunk downloaderChunk) (downloadedChu
 	}, err
 }
 
-// ----- Concurrent download with chcekpoint  -----
-
+// ----- download chcekpoint  -----
 type downloadCheckpoint struct {
 	CpDirPath  string // checkpoint dir full path
 	CpFilePath string // checkpoint file full path
@@ -1144,7 +1278,7 @@ func newDownloadCheckpoint(request *DownloadRequest, filePath string, baseDir st
 		dir = filepath.Dir(baseDir)
 	}
 
-	cpFilePath := filepath.Join(dir, fmt.Sprintf("%v-%v.cp", srcHash, destHash))
+	cpFilePath := filepath.Join(dir, fmt.Sprintf("%v-%v.dcp", srcHash, destHash))
 
 	cp := &downloadCheckpoint{
 		CpFilePath: cpFilePath,
@@ -1282,5 +1416,156 @@ func (cp *downloadCheckpoint) dump() error {
 }
 
 func (cp *downloadCheckpoint) remove() error {
+	return os.Remove(cp.CpFilePath)
+}
+
+// ----- upload chcekpoint  -----
+type uploadCheckpoint struct {
+	CpDirPath  string // checkpoint dir full path
+	CpFilePath string // checkpoint file full path
+	Loaded     bool   // If Info.Data.UploadInfo is loaded from checkpoint
+
+	Info struct { //checkpoint data
+		Magic string // Magic
+		MD5   string // The Data's MD5
+		Data  struct {
+			// source
+			FilePath string // Local file
+
+			FileMeta struct {
+				Size         int64
+				LastModified string
+			}
+
+			// destination
+			ObjectInfo struct {
+				Name string // oss://bucket/key
+			}
+
+			// upload info
+			PartSize int64
+
+			UploadInfo struct {
+				UploadId string
+			}
+		}
+	}
+}
+
+func newUploadCheckpoint(request *UploadRequest, filePath string, baseDir string, fileInfo os.FileInfo, partSize int64) *uploadCheckpoint {
+	name := fmt.Sprintf("%v/%v", ToString(request.Bucket), ToString(request.Key))
+	hashmd5 := md5.New()
+	hashmd5.Write([]byte("oss://" + escapePath(name, false)))
+	destHash := hex.EncodeToString(hashmd5.Sum(nil))
+
+	absPath, _ := filepath.Abs(filePath)
+	hashmd5.Reset()
+	hashmd5.Write([]byte(absPath))
+	srcHash := hex.EncodeToString(hashmd5.Sum(nil))
+
+	var dir string
+	if baseDir == "" {
+		dir = os.TempDir()
+	} else {
+		dir = filepath.Dir(baseDir)
+	}
+
+	cpFilePath := filepath.Join(dir, fmt.Sprintf("%v-%v.ucp", srcHash, destHash))
+
+	cp := &uploadCheckpoint{
+		CpFilePath: cpFilePath,
+		CpDirPath:  dir,
+	}
+
+	cp.Info.Magic = CheckpointMagic
+	cp.Info.Data.FilePath = filePath
+	cp.Info.Data.FileMeta.Size = fileInfo.Size()
+	cp.Info.Data.FileMeta.LastModified = fileInfo.ModTime().String()
+	cp.Info.Data.ObjectInfo.Name = "oss://" + name
+	cp.Info.Data.PartSize = partSize
+
+	return cp
+}
+
+// load checkpoint from local file
+func (cp *uploadCheckpoint) load() error {
+	if !DirExists(cp.CpDirPath) {
+		return fmt.Errorf("Invaid checkpoint dir, %v", cp.CpDirPath)
+	}
+
+	if !FileExists(cp.CpFilePath) {
+		return nil
+	}
+
+	if !cp.valid() {
+		cp.remove()
+		return nil
+	}
+
+	cp.Loaded = true
+
+	return nil
+}
+
+func (cp *uploadCheckpoint) valid() bool {
+	// Compare the CP's Magic and the MD5
+	contents, err := os.ReadFile(cp.CpFilePath)
+	if err != nil {
+		return false
+	}
+
+	dcp := uploadCheckpoint{}
+
+	if err = json.Unmarshal(contents, &dcp.Info); err != nil {
+		return false
+	}
+
+	js, _ := json.Marshal(dcp.Info.Data)
+	sum := md5.Sum(js)
+	md5sum := hex.EncodeToString(sum[:])
+
+	if CheckpointMagic != dcp.Info.Magic ||
+		md5sum != dcp.Info.MD5 {
+		return false
+	}
+
+	// compare
+	if !reflect.DeepEqual(cp.Info.Data.ObjectInfo, dcp.Info.Data.ObjectInfo) ||
+		!reflect.DeepEqual(cp.Info.Data.FileMeta, dcp.Info.Data.FileMeta) ||
+		cp.Info.Data.FilePath != dcp.Info.Data.FilePath ||
+		cp.Info.Data.PartSize != dcp.Info.Data.PartSize {
+		return false
+	}
+
+	// download info
+	if len(dcp.Info.Data.UploadInfo.UploadId) == 0 {
+		return false
+	}
+
+	// update
+	cp.Info.Data.UploadInfo = dcp.Info.Data.UploadInfo
+
+	return true
+}
+
+// dump dumps to file
+func (cp *uploadCheckpoint) dump() error {
+	// Calculate MD5
+	js, _ := json.Marshal(cp.Info.Data)
+	sum := md5.Sum(js)
+	md5sum := hex.EncodeToString(sum[:])
+	cp.Info.MD5 = md5sum
+
+	// Serialize
+	js, err := json.Marshal(cp.Info)
+	if err != nil {
+		return err
+	}
+
+	// Dump
+	return os.WriteFile(cp.CpFilePath, js, FilePermMode)
+}
+
+func (cp *uploadCheckpoint) remove() error {
 	return os.Remove(cp.CpFilePath)
 }

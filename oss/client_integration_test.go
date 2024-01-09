@@ -2499,6 +2499,7 @@ func TestGetBucketVersioning(t *testing.T) {
 	}
 	_, err = client.PutBucketVersioning(context.TODO(), versionRequest)
 	assert.Nil(t, err)
+	time.Sleep(2 * time.Second)
 
 	request = &GetBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
@@ -2517,6 +2518,7 @@ func TestGetBucketVersioning(t *testing.T) {
 	}
 	_, err = client.PutBucketVersioning(context.TODO(), versionRequest)
 	assert.Nil(t, err)
+	time.Sleep(2 * time.Second)
 
 	request = &GetBucketVersioningRequest{
 		Bucket: Ptr(bucketName),
