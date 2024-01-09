@@ -950,7 +950,8 @@ func TestUploadParallelFromFile(t *testing.T) {
 	assert.Equal(t, 0, index)
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 }
 
 func TestUploadWithEmptyBody(t *testing.T) {
@@ -1009,7 +1010,8 @@ func TestUploadWithEmptyBody(t *testing.T) {
 	assert.Equal(t, 0, len(all))
 	assert.Equal(t, int32(1), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 }
 
 func TestUploadSinglePartFail(t *testing.T) {
@@ -1380,7 +1382,8 @@ func TestUploaderUploadFileEnableCheckpointNotUseCp(t *testing.T) {
 	assert.Equal(t, 0, index)
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 }
 
 func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
@@ -1503,7 +1506,9 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(3), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
+
 	assert.NoFileExists(t, cpFile)
 
 	// Case 2, fail in part number 1
@@ -1562,7 +1567,8 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(6), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 	assert.NoFileExists(t, cpFile)
 
 	// Case 3, list Parts Fail
@@ -1620,7 +1626,8 @@ func TestUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(6), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 	assert.NoFileExists(t, cpFile)
 }
 
@@ -1698,7 +1705,8 @@ func TestUploadParallelFromStreamWithoutSeeker(t *testing.T) {
 
 	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
 	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
-	assert.Equal(t, "", tracker.contentType)
+	//FeatureAutoDetectMimeType is enabled default
+	assert.Equal(t, "application/octet-stream", tracker.contentType)
 }
 
 type downloaderMockTracker struct {

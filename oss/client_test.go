@@ -812,6 +812,8 @@ func TestHasFeature(t *testing.T) {
 	c = NewClient(cfg)
 	assert.False(t, c.hasFeature(0))
 	assert.True(t, c.hasFeature(FeatureCorrectClockSkew))
+	assert.True(t, c.hasFeature(FeatureAutoDetectMimeType))
+
 }
 
 func TestFeatureCorrectClockSkew(t *testing.T) {

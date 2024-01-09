@@ -2955,6 +2955,76 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, *o.HashCRC64, "870718044876840****")
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type": "application/xml",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Body:   strings.NewReader("hi oss"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type": "application/xml",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object.txt", r.URL.String())
+			assert.Equal(t, "text/plain", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object.txt"),
+			Body:   strings.NewReader("hi oss"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type": "application/xml",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object.txt", r.URL.String())
+			assert.Equal(t, "my-content-type", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket:      Ptr("bucket"),
+			Key:         Ptr("object.txt"),
+			Body:        strings.NewReader("hi oss"),
+			ContentType: Ptr("my-content-type"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+		},
+	},
 }
 
 func TestMockPutObject_Success(t *testing.T) {
@@ -2969,6 +3039,73 @@ func TestMockPutObject_Success(t *testing.T) {
 			WithEndpoint(server.URL)
 
 		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.PutObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockPutObjectDisableDetectMimeTypeCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":         "application/xml",
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "316181249502703****",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Body:   strings.NewReader("hi oss"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
+			assert.Equal(t, *o.HashCRC64, "316181249502703****")
+			assert.Nil(t, o.VersionId)
+		},
+	},
+}
+
+func TestMockPutObject_DisableDetectMimeType(t *testing.T) {
+	for _, c := range testMockPutObjectDisableDetectMimeTypeCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureAutoDetectMimeType
+			})
 		assert.NotNil(t, c)
 
 		output, err := client.PutObject(context.TODO(), c.Request)
@@ -3846,6 +3983,7 @@ var testMockAppendObjectSuccessCases = []struct {
 			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?append&position=0", strUrl)
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
 		},
 		&AppendObjectRequest{
 			Bucket:   Ptr("bucket"),
@@ -4005,6 +4143,73 @@ func TestMockAppendObject_Success(t *testing.T) {
 			WithEndpoint(server.URL)
 
 		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.AppendObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAppendObjectDisableDetectMimeTypeCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AppendObjectRequest
+	CheckOutputFn  func(t *testing.T, o *AppendObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":               "application/xml",
+			"x-oss-request-id":           "534B371674E88A4D8906****",
+			"Date":                       "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-next-append-position": "1717",
+			"x-oss-hash-crc64ecma":       "1474161709526656****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=0", strUrl)
+			assert.Equal(t, "", r.Header.Get(HTTPHeaderContentType))
+		},
+		&AppendObjectRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Position: Ptr(int64(0)),
+			Body:     strings.NewReader("hi oss,append object"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.NextPosition, int64(1717))
+			assert.Equal(t, *o.HashCRC64, "1474161709526656****")
+			assert.Nil(t, o.VersionId)
+		},
+	},
+}
+
+func TestMockAppendObject_DisableDetectMimeType(t *testing.T) {
+	for _, c := range testMockAppendObjectDisableDetectMimeTypeCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureAutoDetectMimeType
+			})
 		assert.NotNil(t, c)
 
 		output, err := client.AppendObject(context.TODO(), c.Request)
@@ -5918,6 +6123,7 @@ var testMockInitiateMultipartUploadSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
 		},
 		&InitiateMultipartUploadRequest{
 			Bucket: Ptr("bucket"),
@@ -5951,7 +6157,7 @@ var testMockInitiateMultipartUploadSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
-			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+			assert.Equal(t, "/bucket/object.txt?encoding-type=url&uploads", strUrl)
 			assert.Equal(t, r.Header.Get("Cache-Control"), "no-cache")
 			assert.Equal(t, r.Header.Get("Content-Disposition"), "attachment")
 			assert.Equal(t, r.Header.Get("x-oss-meta-name"), "walker")
@@ -5965,10 +6171,11 @@ var testMockInitiateMultipartUploadSuccessCases = []struct {
 			assert.Equal(t, r.Header.Get("Content-MD5"), "1B2M2Y8AsgTpgAmY7PhCfg==")
 			assert.Equal(t, r.Header.Get("Expires"), "2022-10-12T00:00:00.000Z")
 			assert.Equal(t, r.Header.Get("x-oss-tagging"), "TagA=B&TagC=D")
+			assert.Equal(t, "text/plain", r.Header.Get(HTTPHeaderContentType))
 		},
 		&InitiateMultipartUploadRequest{
 			Bucket:                   Ptr("bucket"),
-			Key:                      Ptr("object"),
+			Key:                      Ptr("object.txt"),
 			CacheControl:             Ptr("no-cache"),
 			ContentDisposition:       Ptr("attachment"),
 			ContentEncoding:          Ptr("utf-8"),
@@ -6009,6 +6216,73 @@ func TestMockInitiateMultipartUpload_Success(t *testing.T) {
 			WithEndpoint(server.URL)
 
 		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.InitiateMultipartUpload(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockInitiateMultipartUploadDisableDetectMimeTypeCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *InitiateMultipartUploadRequest
+	CheckOutputFn  func(t *testing.T, o *InitiateMultipartUploadResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/xml",
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<InitiateMultipartUploadResult>
+    <Bucket>oss-example</Bucket>
+    <Key>multipart.data</Key>
+    <UploadId>0004B9894A22E5B1888A1E29F823****</UploadId>
+</InitiateMultipartUploadResult>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+			assert.Equal(t, "", r.Header.Get(HTTPHeaderContentType))
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+
+			assert.Equal(t, *o.Bucket, "oss-example")
+			assert.Equal(t, *o.Key, "multipart.data")
+			assert.Equal(t, *o.UploadId, "0004B9894A22E5B1888A1E29F823****")
+		},
+	},
+}
+
+func TestMockInitiateMultipartUpload_DisableDetectMimeType(t *testing.T) {
+	for _, c := range testMockInitiateMultipartUploadDisableDetectMimeTypeCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureAutoDetectMimeType
+			})
 		assert.NotNil(t, c)
 
 		output, err := client.InitiateMultipartUpload(context.TODO(), c.Request)
@@ -10798,7 +11072,7 @@ var testMockSelectObjectErrorCases = []struct {
 		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Error>
   <Code>NoSuchKey</Code>
-  <Message>The specified key does not exist.</Message>
+  <Message>The specified key does not exist.</Message
   <RequestId>65699DB6E6F906F45A83****</RequestId>
   <HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
   <Key>object</Key>

@@ -184,7 +184,9 @@ const (
 
 	FeatureEnableMD5
 
-	FeatureFlagsDefault = FeatureCorrectClockSkew
+	FeatureAutoDetectMimeType
+
+	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType
 )
 
 type SignatureVersionType int

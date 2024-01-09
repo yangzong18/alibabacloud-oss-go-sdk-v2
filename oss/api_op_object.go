@@ -111,9 +111,15 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 		Bucket: request.Bucket,
 		Key:    request.Key,
 	}
-	if err = c.marshalInput(request, input); err != nil {
+
+	var marshalFns []func(any, *OperationInput) error
+	if c.hasFeature(FeatureAutoDetectMimeType) {
+		marshalFns = append(marshalFns, updateContentType)
+	}
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
+
 	if request.Callback != nil {
 		optFns = append(optFns, callbackResponseHandler)
 	}
@@ -506,6 +512,9 @@ type AppendObjectRequest struct {
 	// The expiration time of the cache in UTC.
 	Expires *string `input:"header,Expires"`
 
+	// A standard MIME type describing the format of the contents.
+	ContentType *string `input:"header,Content-Type"`
+
 	// Specifies whether the object that is uploaded by calling the PutObject operation
 	// overwrites an existing object that has the same name. Valid values: true and false
 	ForbidOverwrite *string `input:"header,x-oss-forbid-overwrite"`
@@ -585,7 +594,11 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 		Bucket:     request.Bucket,
 		Key:        request.Key,
 	}
-	if err = c.marshalInput(request, input); err != nil {
+	var marshalFns []func(any, *OperationInput) error
+	if c.hasFeature(FeatureAutoDetectMimeType) {
+		marshalFns = append(marshalFns, updateContentType)
+	}
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
 
@@ -1226,7 +1239,13 @@ func (c *Client) InitiateMultipartUpload(ctx context.Context, request *InitiateM
 			"encoding-type": "url",
 		},
 	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	marshalFns := []func(any, *OperationInput) error{
+		updateContentMd5,
+	}
+	if c.hasFeature(FeatureAutoDetectMimeType) {
+		marshalFns = append(marshalFns, updateContentType)
+	}
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)

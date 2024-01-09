@@ -995,6 +995,21 @@ func updateContentMd5(_ any, input *OperationInput) error {
 	return err
 }
 
+func updateContentType(_ any, input *OperationInput) error {
+	if input.Headers == nil {
+		input.Headers = map[string]string{}
+	}
+
+	if _, ok := input.Headers[HTTPHeaderContentType]; !ok {
+		value := TypeByExtension(ToString(input.Key))
+		if value == "" {
+			value = contentTypeDefault
+		}
+		input.Headers[HTTPHeaderContentType] = value
+	}
+	return nil
+}
+
 func encodeSourceObject(request any) string {
 	var bucket, key, versionId string
 	switch req := request.(type) {

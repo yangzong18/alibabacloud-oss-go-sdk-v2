@@ -4920,3 +4920,207 @@ func TestUnmarshalOutput_DeleteObjectTagging(t *testing.T) {
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 }
+
+func TestMarshalInput_PutObject_ContentType(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var err error
+	var input *OperationInput
+
+	//PutObjectRequest
+	var putRequest *PutObjectRequest
+	putRequest = &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+
+	// No auto detect content-type
+	input = &OperationInput{
+		OpName: "PutObject",
+		Method: "PUT",
+		Bucket: putRequest.Bucket,
+		Key:    putRequest.Key,
+	}
+	err = c.marshalInput(putRequest, input)
+	assert.Nil(t, err)
+	assert.Empty(t, input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, not match
+	input = &OperationInput{
+		OpName: "PutObject",
+		Method: "PUT",
+		Bucket: putRequest.Bucket,
+		Key:    putRequest.Key,
+	}
+	err = c.marshalInput(putRequest, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "application/octet-stream", input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, match
+	putRequest = &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key.txt"),
+	}
+	input = &OperationInput{
+		OpName: "PutObject",
+		Method: "PUT",
+		Bucket: putRequest.Bucket,
+		Key:    putRequest.Key,
+	}
+	err = c.marshalInput(putRequest, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "text/plain", input.Headers[HTTPHeaderContentType])
+
+	//auto detect content-type + set by user
+	putRequest = &PutObjectRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key.txt"),
+		ContentType: Ptr("set-by-user"),
+	}
+	input = &OperationInput{
+		OpName: "PutObject",
+		Method: "PUT",
+		Bucket: putRequest.Bucket,
+		Key:    putRequest.Key,
+	}
+	err = c.marshalInput(putRequest, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "set-by-user", input.Headers[HTTPHeaderContentType])
+}
+
+func TestMarshalInput_AppanedObject_ContentType(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var err error
+	var input *OperationInput
+	var request *AppendObjectRequest
+
+	//AppendObjectRequest
+	request = &AppendObjectRequest{
+		Bucket:   Ptr("bucket"),
+		Key:      Ptr("key"),
+		Position: Ptr(int64(0)),
+	}
+
+	// No auto detect content-type
+	input = &OperationInput{
+		OpName: "AppendObject",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+	assert.Empty(t, input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, not match
+	input = &OperationInput{
+		OpName: "AppendObject",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "application/octet-stream", input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, match
+	request = &AppendObjectRequest{
+		Bucket:   Ptr("bucket"),
+		Key:      Ptr("key.txt"),
+		Position: Ptr(int64(0)),
+	}
+	input = &OperationInput{
+		OpName: "AppendObject",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "text/plain", input.Headers[HTTPHeaderContentType])
+
+	//auto detect content-type + set by user
+	request = &AppendObjectRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key.txt"),
+		ContentType: Ptr("set-by-user"),
+		Position:    Ptr(int64(0)),
+	}
+	input = &OperationInput{
+		OpName: "AppendObject",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "set-by-user", input.Headers[HTTPHeaderContentType])
+}
+
+func TestMarshalInput_InitiateMultipartUploadRequest_ContentType(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var err error
+	var input *OperationInput
+	var request *InitiateMultipartUploadRequest
+
+	//InitiateMultipartUploadRequest
+	request = &InitiateMultipartUploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}
+
+	// No auto detect content-type
+	input = &OperationInput{
+		OpName: "InitiateMultipartUpload",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+	assert.Empty(t, input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, not match
+	input = &OperationInput{
+		OpName: "InitiateMultipartUpload",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "application/octet-stream", input.Headers[HTTPHeaderContentType])
+
+	// auto detect content-type, match
+	request = &InitiateMultipartUploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key.txt"),
+	}
+	input = &OperationInput{
+		OpName: "InitiateMultipartUpload",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "text/plain", input.Headers[HTTPHeaderContentType])
+
+	//auto detect content-type + set by user
+	request = &InitiateMultipartUploadRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key.txt"),
+		ContentType: Ptr("set-by-user"),
+	}
+	input = &OperationInput{
+		OpName: "InitiateMultipartUpload",
+		Method: "PUT",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+	}
+	err = c.marshalInput(request, input, updateContentType)
+	assert.Nil(t, err)
+	assert.Equal(t, "set-by-user", input.Headers[HTTPHeaderContentType])
+}
