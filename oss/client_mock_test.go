@@ -715,6 +715,24 @@ var testMockListBucketsErrorCases = []struct {
 			assert.Equal(t, "65467C42E001B4333337****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/", r.URL.String())
+		},
+		&ListBucketsRequest{},
+		func(t *testing.T, o *ListBucketsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute ListBuckets fail")
+		},
+	},
 }
 
 func TestMockListBuckets_Error(t *testing.T) {
@@ -1185,6 +1203,32 @@ var testMockListObjectsErrorCases = []struct {
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=URL&marker&max-keys=3&prefix", strUrl)
+		},
+		&ListObjectsRequest{
+			Bucket:       Ptr("bucket"),
+			Delimiter:    Ptr("/"),
+			Marker:       Ptr(""),
+			MaxKeys:      int32(3),
+			Prefix:       Ptr(""),
+			EncodingType: Ptr("URL"),
+		},
+		func(t *testing.T, o *ListObjectsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute ListObjects fail")
+		},
+	},
 }
 
 func TestMockListObjects_Error(t *testing.T) {
@@ -1504,6 +1548,33 @@ var testMockListObjectsV2ErrorCases = []struct {
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?delimiter=%2F&encoding-type=url&fetch-owner=true&list-type=2&max-keys=3&prefix=a%2F&start-after=b", strUrl)
+		},
+		&ListObjectsRequestV2{
+			Bucket:       Ptr("bucket"),
+			Delimiter:    Ptr("/"),
+			StartAfter:   Ptr("b"),
+			MaxKeys:      int32(3),
+			Prefix:       Ptr("a/"),
+			EncodingType: Ptr("url"),
+			FetchOwner:   true,
+		},
+		func(t *testing.T, o *ListObjectsResultV2, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute ListObjectsV2 fail")
+		},
+	},
 }
 
 func TestMockListObjectsV2_Error(t *testing.T) {
@@ -1771,6 +1842,27 @@ var testMockGetBucketInfoErrorCases = []struct {
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?bucketInfo", strUrl)
+		},
+		&GetBucketInfoRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *GetBucketInfoResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute GetBucketInfo fail")
+		},
+	},
 }
 
 func TestMockGetBucketInfo_Error(t *testing.T) {
@@ -1948,6 +2040,27 @@ var testMockGetBucketLocationErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?location", strUrl)
+		},
+		&GetBucketLocationRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *GetBucketLocationResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute GetBucketLocation fail")
 		},
 	},
 }
@@ -2134,6 +2247,27 @@ var testMockGetBucketStatErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?stat", strUrl)
+		},
+		&GetBucketStatRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *GetBucketStatResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute GetBucketStat fail")
 		},
 	},
 }
@@ -2338,6 +2472,29 @@ var testMockPutBucketAclErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?acl", strUrl)
+			assert.Equal(t, string(BucketACLPrivate), r.Header.Get("X-Oss-Acl"))
+		},
+		&PutBucketAclRequest{
+			Bucket: Ptr("bucket"),
+			Acl:    BucketACLPrivate,
+		},
+		func(t *testing.T, o *PutBucketAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute PutBucketAcl fail")
 		},
 	},
 }
@@ -2606,6 +2763,26 @@ var testMockGetBucketAclErrorCases = []struct {
 			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
 			assert.Equal(t, "0015-00000101", serr.EC)
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket?acl", r.URL.String())
+		},
+		&GetBucketAclRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *GetBucketAclResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute GetBucketAcl fail")
 		},
 	},
 }
@@ -2957,6 +3134,29 @@ var testMockPutObjectErrorCases = []struct {
 			assert.Equal(t, "Error status : 301.", serr.Message)
 			assert.Equal(t, "0007-00000203", serr.EC)
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "/bucket/object", r.URL.String())
+		},
+		&PutObjectRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Body:     strings.NewReader("hi oss"),
+			Callback: Ptr(base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"http://www.aliyun.com","callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}"}`))),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute PutObject fail")
 		},
 	},
 }
@@ -3574,6 +3774,30 @@ var testMockCopyObjectErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "/bucket/copy-object", r.Header.Get("x-oss-copy-source"))
+		},
+		&CopyObjectRequest{
+			Bucket:    Ptr("bucket"),
+			Key:       Ptr("object"),
+			SourceKey: Ptr("copy-object"),
+		},
+		func(t *testing.T, o *CopyObjectResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute CopyObject fail")
 		},
 	},
 }
@@ -4337,6 +4561,32 @@ var testMockDeleteMultipleObjectsErrorCases = []struct {
 			assert.Equal(t, "The XML you provided was not well-formed or did not validate against our published schema.", serr.Message)
 			assert.Equal(t, "0016-00000608", serr.EC)
 			assert.Equal(t, "6555AC764311A73931E0****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
+			data, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, string(data), "<Delete><Quiet>false</Quiet><Object><Key>key1.txt</Key></Object><Object><Key>key2.txt</Key></Object></Delete>")
+		},
+		&DeleteMultipleObjectsRequest{
+			Bucket:  Ptr("bucket"),
+			Objects: []DeleteObject{{Key: Ptr("key1.txt")}, {Key: Ptr("key2.txt")}},
+		},
+		func(t *testing.T, o *DeleteMultipleObjectsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute DeleteMultipleObjects fail")
 		},
 	},
 }
@@ -5886,6 +6136,28 @@ var testMockInitiateMultipartUploadErrorCases = []struct {
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploads", strUrl)
+		},
+		&InitiateMultipartUploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+		},
+		func(t *testing.T, o *InitiateMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute InitiateMultipartUpload fail")
+		},
+	},
 }
 
 func TestMockInitiateMultipartUpload_Error(t *testing.T) {
@@ -6483,6 +6755,33 @@ var testMockUploadPartCopyErrorCases = []struct {
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&UploadPartCopyRequest{
+			Bucket:       Ptr("bucket"),
+			Key:          Ptr("object"),
+			UploadId:     Ptr("0004B9895DBBB6EC9"),
+			PartNumber:   int32(1),
+			SourceKey:    Ptr("oss-src-object"),
+			SourceBucket: Ptr("oss-src-bucket"),
+		},
+		func(t *testing.T, o *UploadPartCopyResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute UploadPartCopy fail")
+		},
+	},
 }
 
 func TestMockUploadPartCopy_Error(t *testing.T) {
@@ -6790,6 +7089,30 @@ var testMockCompleteMultipartUploadErrorCases = []struct {
 			assert.Equal(t, "The specified bucket does not exist.", serr.Message)
 			assert.Equal(t, "0015-00000101", serr.EC)
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
+		},
+		&CompleteMultipartUploadRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B9895DBBB6EC9"),
+		},
+		func(t *testing.T, o *CompleteMultipartUploadResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute CompleteMultipartUpload fail")
 		},
 	},
 }
@@ -7546,6 +7869,30 @@ var testMockListPartsErrorCases = []struct {
 			assert.Equal(t, "5C3D9175B6FC201293AD****", serr.RequestID)
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B999EF5A239BB9138C6227D6%2A%2A%2A%2A", strUrl)
+		},
+		&ListPartsRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			UploadId: Ptr("0004B999EF5A239BB9138C6227D6****"),
+		},
+		func(t *testing.T, o *ListPartsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute ListParts fail")
+		},
+	},
 }
 
 func TestMockListParts_Error(t *testing.T) {
@@ -7695,6 +8042,32 @@ var testMockPutBucketVersioningErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			assert.Equal(t, "/bucket?versioning", r.URL.String())
+			body, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(body), "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
+		},
+		&PutBucketVersioningRequest{
+			Bucket: Ptr("bucket"),
+			VersioningConfiguration: &VersioningConfiguration{
+				Status: VersionEnabled,
+			},
+		},
+		func(t *testing.T, o *PutBucketVersioningResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute PutBucketVersioning fail")
 		},
 	},
 }
@@ -7898,6 +8271,27 @@ var testMockGetBucketVersioningErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			assert.Equal(t, "/bucket?versioning", r.URL.String())
+		},
+		&GetBucketVersioningRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *GetBucketVersioningResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute GetBucketVersioning fail")
 		},
 	},
 }
@@ -8260,6 +8654,28 @@ var testMockListObjectVersionsErrorCases = []struct {
 			assert.Equal(t, "UserDisable", serr.Message)
 			assert.Equal(t, "0003-00000801", serr.EC)
 			assert.Equal(t, "5C3D8D2A0ACA54D87B43****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket?encoding-type=url&versions", strUrl)
+		},
+		&ListObjectVersionsRequest{
+			Bucket: Ptr("bucket"),
+		},
+		func(t *testing.T, o *ListObjectVersionsResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute ListObjectVersions fail")
 		},
 	},
 }
@@ -9587,6 +10003,38 @@ var testMockCreateSelectObjectMetaErrorCases = []struct {
 			assert.Equal(t, "NoSuchKey", serr.Code)
 			assert.Equal(t, "The specified key does not exist.", serr.Message)
 			assert.Equal(t, "65699DB6E6F906F45A83****", serr.RequestID)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"Content-Type":     "application/text",
+			"x-oss-request-id": "5C3D8D2A0ACA54D87B43****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`StrField1>StrField1</StrField1><StrField2>StrField2<`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fmeta", strUrl)
+			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, "<JsonMetaRequest><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization></JsonMetaRequest>", string(data))
+		},
+		&CreateSelectObjectMetaRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			MetaRequest: &JsonMetaRequest{
+				InputSerialization: &InputSerialization{
+					JSON: &InputSerializationJSON{
+						JSONType: Ptr("LINES"),
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *CreateSelectObjectMetaResult, err error) {
+			assert.Nil(t, o)
+			assert.NotNil(t, err)
+			assert.Contains(t, err.Error(), "execute CreateSelectObjectMeta fail")
 		},
 	},
 }

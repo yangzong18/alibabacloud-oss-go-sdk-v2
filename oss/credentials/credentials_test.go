@@ -16,6 +16,24 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
+type AtomicBool struct {
+	value atomic.Value
+}
+
+func NewAtomicBool(initialValue bool) *AtomicBool {
+	b := &AtomicBool{}
+	b.value.Store(initialValue)
+	return b
+}
+
+func (b *AtomicBool) Load() bool {
+	return b.value.Load().(bool)
+}
+
+func (b *AtomicBool) Store(newValue bool) {
+	b.value.Store(newValue)
+}
+
 func TestCredentials(t *testing.T) {
 	cred := &Credentials{}
 	assert.NotNil(t, cred)
@@ -285,7 +303,7 @@ func TestCredentialsFetcherProvider_MultiJobs(t *testing.T) {
 	assert.True(t, ok)
 	assert.NotNil(t, fetcherProvider)
 
-	var run atomic.Bool
+	var run = NewAtomicBool(false)
 	run.Store(true)
 	testFn := func() {
 		count := int64(0)
@@ -315,7 +333,7 @@ type stubCredentialsFetcher2 struct {
 	delay        time.Duration
 	token        string
 	returnErr    bool
-	returnTimout atomic.Bool
+	returnTimout AtomicBool
 }
 
 func (s *stubCredentialsFetcher2) Fetch(ctx context.Context) (Credentials, error) {
@@ -325,7 +343,6 @@ func (s *stubCredentialsFetcher2) Fetch(ctx context.Context) (Credentials, error
 		new := now.Add(s.delay)
 		expires = &new
 	}
-
 	if s.returnTimout.Load() {
 		time.Sleep(10 * time.Second)
 		return Credentials{}, fmt.Errorf("returnTimout")
@@ -347,7 +364,7 @@ func TestCredentialsFetcherProvider_Error(t *testing.T) {
 		delay:     10 * time.Second,
 		returnErr: true,
 	}
-
+	fetcher.returnTimout.Store(false)
 	provider := NewCredentialsFetcherProvider(
 		fetcher,
 		func(o *CredentialsFetcherOptions) {

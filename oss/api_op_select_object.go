@@ -245,15 +245,6 @@ type JSONSelectInput struct {
 	SplitRange              *string
 }
 
-func (jsonInput JSONSelectInput) JsonIsEmpty() bool {
-	if jsonInput.JSONType != nil {
-		if *jsonInput.JSONType != "" {
-			return false
-		}
-	}
-	return true
-}
-
 // SelectObject Executes SQL statements to perform operations on an object and obtains the execution results.
 func (c *Client) SelectObject(ctx context.Context, request *SelectObjectRequest, optFns ...func(*Options)) (*SelectObjectResult, error) {
 	var err error

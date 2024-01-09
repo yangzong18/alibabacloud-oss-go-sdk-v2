@@ -382,10 +382,29 @@ func after(t *testing.T) {
 	//fmt.Println("teardown  test case")
 }
 
+func TestInvokeOperation(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	BucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	input := &OperationInput{
+		OpName: "PutBucket",
+		Bucket: Ptr(BucketName),
+		Method: "PUT",
+	}
+	client := getDefaultClient()
+	_, err := client.InvokeOperation(context.TODO(), input)
+	assert.Nil(t, err)
+
+	_, err = client.InvokeOperation(context.TODO(), nil)
+	assert.NotNil(t, err)
+}
+
 func TestListBuckets(t *testing.T) {
 	after := before(t)
 	defer after(t)
 	bucketPrefix := bucketNamePrefix + randLowStr(6)
+	client := getDefaultClient()
 	//TODO
 	var bucketName string
 	count := 10
@@ -394,8 +413,6 @@ func TestListBuckets(t *testing.T) {
 		putRequest := &PutBucketRequest{
 			Bucket: Ptr(bucketName),
 		}
-
-		client := getDefaultClient()
 		_, err := client.PutBucket(context.TODO(), putRequest)
 		assert.NoError(t, err)
 		assert.Nil(t, err)
@@ -405,10 +422,12 @@ func TestListBuckets(t *testing.T) {
 		Prefix: Ptr(bucketPrefix),
 	}
 
-	client := getDefaultClient()
 	result, err := client.ListBuckets(context.TODO(), listRequest)
 	assert.Nil(t, err)
 	assert.Equal(t, len(result.Buckets), count)
+
+	_, err = client.ListBuckets(context.TODO(), nil)
+	assert.Nil(t, err)
 }
 
 func TestPutBucket(t *testing.T) {
@@ -432,6 +451,10 @@ func TestPutBucket(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+
+	_, err = client.PutBucket(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	bucketName = bucketNamePrefix + randLowStr(6)
 	putRequest = &PutBucketRequest{
@@ -474,6 +497,11 @@ func TestDeleteBucket(t *testing.T) {
 	assert.Equal(t, result.Status, "204 No Content")
 	assert.Equal(t, result.StatusCode, 204)
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id") != "", true)
+
+	_, err = client.DeleteBucket(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	result, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -514,6 +542,9 @@ func TestListObjects(t *testing.T) {
 	request = &ListObjectsRequest{
 		Bucket: Ptr(bucketNotExist),
 	}
+	_, err = client.ListObjects(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	_, err = client.ListObjects(context.TODO(), request)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -560,6 +591,10 @@ func TestListObjectsV2(t *testing.T) {
 	request = &ListObjectsRequestV2{
 		Bucket: Ptr(bucketNotExist),
 	}
+	_, err = client.ListObjectsV2(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	_, err = client.ListObjectsV2(context.TODO(), request)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -620,6 +655,9 @@ func TestGetBucketInfo(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+	_, err = client.GetBucketInfo(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	_, err = client.GetBucketInfo(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -664,6 +702,10 @@ func TestGetBucketLocation(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+
+	_, err = client.GetBucketLocation(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	_, err = client.GetBucketLocation(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -716,6 +758,10 @@ func TestGetBucketStat(t *testing.T) {
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
 	time.Sleep(2 * time.Second)
+	_, err = client.GetBucketStat(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	_, err = client.GetBucketStat(context.TODO(), getRequest)
 	assert.NotNil(t, err)
 	var serr *ServiceError
@@ -780,6 +826,11 @@ func TestPutBucketAcl(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+
+	_, err = client.PutBucketAcl(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	request = &PutBucketAclRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -817,6 +868,10 @@ func TestGetBucketAcl(t *testing.T) {
 	}
 	_, err = client.DeleteBucket(context.TODO(), delRequest)
 	assert.Nil(t, err)
+
+	result, err = client.GetBucketAcl(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &GetBucketAclRequest{
 		Bucket: Ptr(bucketName),
@@ -891,7 +946,9 @@ func TestPutObject(t *testing.T) {
 	assert.Equal(t, "Error status : 301.", serr.Message)
 	assert.Equal(t, "0007-00000203", serr.EC)
 	assert.NotEmpty(t, serr.RequestID)
-
+	result, err = client.PutObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	request = &PutObjectRequest{
 		Bucket: Ptr(bucketNameNotExist),
@@ -956,7 +1013,9 @@ func TestGetObject(t *testing.T) {
 	assert.NotEmpty(t, *result.ContentMD5)
 	assert.Nil(t, result.VersionId)
 	assert.Equal(t, result.ContentLength, int64(len(content)))
-
+	_, err = client.GetObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	getRequest = &GetObjectRequest{
 		Bucket: Ptr(bucketNameNotExist),
@@ -1037,6 +1096,9 @@ func TestCopyObject(t *testing.T) {
 	assert.NotEmpty(t, *result.HashCRC64)
 	assert.Nil(t, result.VersionId)
 
+	_, err = client.CopyObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	copyRequest = &CopyObjectRequest{
 		Bucket:    Ptr(bucketNameNotExist),
@@ -1214,6 +1276,9 @@ func TestAppendObject(t *testing.T) {
 	assert.Equal(t, result.NextPosition, int64(len(content)*2))
 	assert.NotEmpty(t, result.HashCRC64)
 
+	_, err = client.AppendObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	var serr *ServiceError
 	request = &AppendObjectRequest{
 		Bucket:   Ptr(bucketName),
@@ -1309,6 +1374,10 @@ func TestDeleteObject(t *testing.T) {
 	assert.Nil(t, result.VersionId)
 	assert.False(t, result.DeleteMarker)
 
+	_, err = client.DeleteObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	delRequest = &DeleteObjectRequest{
@@ -1387,6 +1456,9 @@ func TestDeleteMultipleObjects(t *testing.T) {
 	assert.Len(t, result.DeletedObjects, 1)
 	assert.Equal(t, *result.DeletedObjects[0].Key, objectNameSpecial)
 
+	_, err = client.DeleteMultipleObjects(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	delRequest = &DeleteMultipleObjectsRequest{
@@ -1437,7 +1509,9 @@ func TestHeadObject(t *testing.T) {
 	assert.NotEmpty(t, *result.ObjectType)
 	assert.NotEmpty(t, *result.StorageClass)
 	assert.NotEmpty(t, *result.ETag)
-
+	_, err = client.HeadObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	headRequest = &HeadObjectRequest{
@@ -1489,6 +1563,9 @@ func TestGetObjectMeta(t *testing.T) {
 	assert.NotEmpty(t, *result.LastModified)
 	assert.NotEmpty(t, *result.HashCRC64)
 
+	_, err = client.GetObjectMeta(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "not-exist"
 	headRequest = &GetObjectMetaRequest{
@@ -1539,6 +1616,10 @@ func TestRestoreObject(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 202)
 	assert.Equal(t, result.Status, "202 Accepted")
 	assert.NotEmpty(t, result.Headers.Get("x-oss-request-id"))
+
+	_, err = client.RestoreObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	restoreRequest = &RestoreObjectRequest{
@@ -1602,6 +1683,9 @@ func TestPutObjectAcl(t *testing.T) {
 	}
 	_, err = client.HeadObject(context.TODO(), infoRequest)
 	assert.Nil(t, err)
+	_, err = client.PutObjectAcl(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "-not-exist"
@@ -1651,6 +1735,10 @@ func TestGetObjectAcl(t *testing.T) {
 	assert.NotEmpty(t, *result.Owner.ID)
 	assert.NotEmpty(t, *result.Owner.DisplayName)
 
+	_, err = client.GetObjectAcl(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	objectNameNotExist := objectName + "-not-exist"
 	request = &GetObjectAclRequest{
 		Bucket: Ptr(bucketName),
@@ -1698,6 +1786,10 @@ func TestInitiateMultipartUpload(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
+
+	_, err = client.InitiateMultipartUpload(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketNamePrefix + randLowStr(6) + "-not-exist"
@@ -1757,19 +1849,27 @@ func TestUploadPart(t *testing.T) {
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
 
+	_, err = client.UploadPart(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	var serr *ServiceError
-	abortRequest = &AbortMultipartUploadRequest{
-		Bucket:   Ptr(bucketName),
-		Key:      Ptr(objectName),
-		UploadId: Ptr(*initResult.UploadId),
+	partRequest = &UploadPartRequest{
+		Bucket:       Ptr(bucketName),
+		Key:          Ptr(objectName),
+		PartNumber:   int32(2),
+		UploadId:     Ptr(*initResult.UploadId),
+		Body:         strings.NewReader("upload part 2"),
+		TrafficLimit: int64(100 * 1024 * 8),
 	}
-	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
+
+	_, err = client.UploadPart(context.TODO(), partRequest)
 	assert.NotNil(t, err)
 	errors.As(err, &serr)
 	assert.Equal(t, int(404), serr.StatusCode)
 	assert.Equal(t, "NoSuchUpload", serr.Code)
 	assert.Equal(t, "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.", serr.Message)
-	assert.Equal(t, "0042-00000002", serr.EC)
+	assert.Equal(t, "0042-00000104", serr.EC)
 	assert.NotEmpty(t, serr.RequestID)
 }
 
@@ -1857,6 +1957,10 @@ func TestUploadPartCopy(t *testing.T) {
 	}
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
+
+	_, err = client.UploadPartCopy(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	copyRequest = &UploadPartCopyRequest{
@@ -2041,6 +2145,10 @@ func TestCompleteMultipartUpload(t *testing.T) {
 	assert.Equal(t, "0042-00000216", serr.EC)
 	assert.NotEmpty(t, serr.RequestID)
 
+	_, err = client.CompleteMultipartUpload(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	request = &CompleteMultipartUploadRequest{
 		Bucket:      Ptr(bucketName),
 		Key:         Ptr(objectDestName),
@@ -2085,6 +2193,10 @@ func TestAbortMultipartUpload(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 204)
 	assert.NotEmpty(t, result.Headers.Get(HeaderOssRequestID))
+
+	_, err = client.AbortMultipartUpload(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	abortRequest = &AbortMultipartUploadRequest{
@@ -2219,6 +2331,10 @@ func TestListMultipartUploads(t *testing.T) {
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
 
+	_, err = client.ListMultipartUploads(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	bucketNameNotExist := bucketName + "-not-exist"
 	listRequest = &ListMultipartUploadsRequest{
 		Bucket: Ptr(bucketNameNotExist),
@@ -2333,6 +2449,10 @@ func TestListParts(t *testing.T) {
 	_, err = client.AbortMultipartUpload(context.TODO(), abortRequest)
 	assert.Nil(t, err)
 
+	_, err = client.ListParts(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	bucketNameNotExist := bucketName + "-not-exist"
 	listRequest = &ListPartsRequest{
 		Bucket:   Ptr(bucketNameNotExist),
@@ -2385,6 +2505,10 @@ func TestPutBucketVersioning(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
+
+	_, err = client.PutBucketVersioning(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2464,6 +2588,10 @@ func TestGetBucketVersioning(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Equal(t, *result.VersionStatus, "Suspended")
+
+	_, err = client.GetBucketVersioning(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2568,6 +2696,10 @@ func TestListObjectVersions(t *testing.T) {
 	assert.Len(t, versionsResult.ObjectDeleteMarkers, 2)
 	assert.Len(t, versionsResult.ObjectVersions, 2)
 
+	_, err = client.ListObjectVersions(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
 	versions = &ListObjectVersionsRequest{
@@ -2638,6 +2770,10 @@ func TestPutSymlink(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.NotEmpty(t, *result.VersionId)
+
+	_, err = client.PutSymlink(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2720,6 +2856,10 @@ func TestGetSymlink(t *testing.T) {
 	assert.NotEmpty(t, result.ETag)
 	assert.Equal(t, *result.Target, objectName)
 	assert.NotEmpty(t, *result.VersionId)
+
+	_, err = client.GetSymlink(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2823,6 +2963,10 @@ func TestPutObjectTagging(t *testing.T) {
 	assert.Equal(t, 200, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Equal(t, *result.VersionId, versionId)
+
+	_, err = client.PutObjectTagging(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -2949,6 +3093,10 @@ func TestGetObjectTagging(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 	assert.Len(t, result.Tags, 0)
 
+	_, err = client.GetObjectTagging(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
 	request = &GetObjectTaggingRequest{
@@ -3047,6 +3195,10 @@ func TestDeleteObjectTagging(t *testing.T) {
 	assert.Equal(t, 204, result.StatusCode)
 	assert.NotEmpty(t, result.Headers.Get("X-Oss-Request-Id"))
 
+	_, err = client.DeleteObjectTagging(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
+
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
 	request = &DeleteObjectTaggingRequest{
@@ -3140,6 +3292,10 @@ func TestCreateSelectObjectMeta(t *testing.T) {
 	result, err = client.CreateSelectObjectMeta(context.TODO(), csvMeta)
 	assert.Nil(t, err)
 	assert.Equal(t, result.RowsCount, int64(4))
+
+	_, err = client.CreateSelectObjectMeta(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -3249,6 +3405,10 @@ func TestSelectObject(t *testing.T) {
 	assert.Nil(t, err)
 	dataByte, err = io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte), "name\nLora Francis\nEleanor Little\nRosie Hughes\nLawrence Ross\n")
+
+	_, err = client.SelectObject(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field")
 
 	var serr *ServiceError
 	bucketNameNotExist := bucketName + "-not-exist"
@@ -3806,6 +3966,15 @@ func TestPaginator(t *testing.T) {
 	}
 	assert.Equal(t, countBucket, count)
 
+	lbPaginator = client.NewListBucketsPaginator(nil)
+	countBucket = 0
+	for lbPaginator.HasNext() {
+		result, err := lbPaginator.NextPage(context.TODO())
+		assert.Nil(t, err)
+		countBucket += len(result.Buckets)
+	}
+	assert.True(t, countBucket >= count)
+
 	listBucket, err := client.ListBuckets(context.TODO(), &ListBucketsRequest{
 		Prefix: Ptr(bucketNameTestPrefix),
 	})
@@ -3838,6 +4007,14 @@ func TestPaginator(t *testing.T) {
 	}
 	assert.Equal(t, countObj, listObjCount)
 
+	listObjPaginator = client.NewListObjectsPaginator(nil)
+	listObjCount = 0
+	for listObjPaginator.HasNext() {
+		_, err = listObjPaginator.NextPage(context.TODO())
+		assert.NotNil(t, err)
+		break
+	}
+
 	var listObjCountV2 int
 	listObjV2Request := &ListObjectsRequestV2{
 		Bucket:  Ptr(bucketNameTest),
@@ -3850,6 +4027,14 @@ func TestPaginator(t *testing.T) {
 		listObjCountV2 += len(result.Contents)
 	}
 	assert.Equal(t, countObj, listObjCountV2)
+
+	listObjV2Paginator = client.NewListObjectsV2Paginator(nil)
+	listObjCountV2 = 0
+	for listObjPaginator.HasNext() {
+		_, err = listObjPaginator.NextPage(context.TODO())
+		assert.NotNil(t, err)
+		break
+	}
 
 	var listObjVersionCount, listObjDeleted int
 	lovRequest := &ListObjectVersionsRequest{
@@ -3865,6 +4050,13 @@ func TestPaginator(t *testing.T) {
 	}
 	assert.Equal(t, countObj, listObjVersionCount)
 	assert.Equal(t, 0, listObjDeleted)
+
+	lovPaginator = client.NewListObjectVersionsPaginator(nil)
+	for lovPaginator.HasNext() {
+		_, err = lovPaginator.NextPage(context.TODO())
+		assert.NotNil(t, err)
+		break
+	}
 
 	var objMultiName string
 	countObjMulti := 20
@@ -3889,6 +4081,13 @@ func TestPaginator(t *testing.T) {
 		countUploads += len(result.Uploads)
 	}
 	assert.Equal(t, countObjMulti, countUploads)
+
+	lmuPaginator = client.NewListMultipartUploadsPaginator(nil)
+	for lmuPaginator.HasNext() {
+		_, err = lmuPaginator.NextPage(context.TODO())
+		assert.NotNil(t, err)
+		break
+	}
 
 	uploadsResult, err := client.ListMultipartUploads(context.TODO(), &ListMultipartUploadsRequest{
 		Bucket: Ptr(bucketNameTest),
@@ -3935,4 +4134,11 @@ func TestPaginator(t *testing.T) {
 		countPartResult += len(result.Parts)
 	}
 	assert.Equal(t, countPart, countPartResult)
+
+	lpPaginator = client.NewListPartsPaginator(nil)
+	for lmuPaginator.HasNext() {
+		_, err = lpPaginator.NextPage(context.TODO())
+		assert.NotNil(t, err)
+		break
+	}
 }
