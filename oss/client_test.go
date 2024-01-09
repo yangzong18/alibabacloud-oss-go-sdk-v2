@@ -172,6 +172,64 @@ func TestMarshalInput_xmlbody(t *testing.T) {
 	assert.Equal(t, "<BodyConfiguration><StrField1>StrField1</StrField1><StrField2>StrField2</StrField2></BodyConfiguration>", string(body))
 }
 
+type readerBodyRequest struct {
+	StrHostPrtField   *string   `input:"host,bucket,required"`
+	StrQueryPrtField  *string   `input:"query,str-field"`
+	StrHeaderPrtField *string   `input:"header,x-oss-str-field"`
+	IoReaderBodyField io.Reader `input:"body,nop"`
+}
+
+type notSupportBodyTypeRequest struct {
+	StrHostPrtField   *string `input:"host,bucket,required"`
+	StrQueryPrtField  *string `input:"query,str-field"`
+	StrHeaderPrtField *string `input:"header,x-oss-str-field"`
+	StringBodyField   string  `input:"body,nop"`
+}
+
+func TestMarshalInput_body(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var input *OperationInput
+	var request *readerBodyRequest
+	var request1 *notSupportBodyTypeRequest
+	var err error
+
+	input = &OperationInput{
+		Method: "GET",
+	}
+	request = &readerBodyRequest{
+		StrHostPrtField:   Ptr("bucket"),
+		StrQueryPrtField:  Ptr("query"),
+		StrHeaderPrtField: Ptr("header"),
+		IoReaderBodyField: bytes.NewReader([]byte("hello world")),
+	}
+
+	err = c.marshalInput(request, input)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(input.Parameters))
+	assert.Equal(t, "query", input.Parameters["str-field"])
+	assert.Equal(t, 1, len(input.Headers))
+	assert.Equal(t, "header", input.Headers["x-oss-str-field"])
+	assert.NotNil(t, input.Body)
+	data, err := io.ReadAll(input.Body)
+	assert.Nil(t, err)
+	assert.Equal(t, "hello world", string(data))
+
+	// not support body format
+	input = &OperationInput{
+		Method: "GET",
+	}
+	request1 = &notSupportBodyTypeRequest{
+		StrHostPrtField:   Ptr("bucket"),
+		StrQueryPrtField:  Ptr("query"),
+		StrHeaderPrtField: Ptr("header"),
+		StringBodyField:   "hello world",
+	}
+	err = c.marshalInput(request1, input)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "type not support, StringBodyField")
+}
+
 type commonStubRequest struct {
 	StrHostPrtField    *string        `input:"host,bucket"`
 	StrQueryPrtField   *string        `input:"query,str-field"`
