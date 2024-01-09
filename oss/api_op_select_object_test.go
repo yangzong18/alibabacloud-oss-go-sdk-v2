@@ -3,13 +3,13 @@ package oss
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/stretchr/testify/assert"
 	"hash/crc32"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func hexStrToByte(hexString string) string {
@@ -70,7 +70,7 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/meta")
-	data, _ := ioutil.ReadAll(input.Body)
+	data, _ := io.ReadAll(input.Body)
 	assert.Equal(t, "<CsvMetaRequest></CsvMetaRequest>", string(data))
 
 	request = &CreateSelectObjectMetaRequest{
@@ -83,7 +83,7 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/meta")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<CsvMetaRequest><OverwriteIfExists>true</OverwriteIfExists></CsvMetaRequest>", string(data))
 
 	request = &CreateSelectObjectMetaRequest{
@@ -104,7 +104,7 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/meta")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<CsvMetaRequest><InputSerialization><CSV><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter></CSV></InputSerialization><OverwriteIfExists>true</OverwriteIfExists></CsvMetaRequest>", string(data))
 
 	request = &CreateSelectObjectMetaRequest{
@@ -125,7 +125,7 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/meta")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<CsvMetaRequest><InputSerialization><CSV><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter></CSV><CompressionType>None</CompressionType></InputSerialization><OverwriteIfExists>true</OverwriteIfExists></CsvMetaRequest>", string(data))
 
 	request = &CreateSelectObjectMetaRequest{
@@ -142,7 +142,7 @@ func TestMarshalInput_CreateSelectObjectMeta(t *testing.T) {
 	err = c.marshalInput(request, input, marshalMetaRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "json/meta")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<JsonMetaRequest><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization></JsonMetaRequest>", string(data))
 }
 
@@ -314,7 +314,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ := ioutil.ReadAll(input.Body)
+	data, _ := io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IFllYXIsIFN0YXRlQWJiciwgQ2l0eU5hbWUsIFNob3J0X1F1ZXN0aW9uX1RleHQgZnJvbSBvc3NvYmplY3Qgd2hlcmUgTWVhc3VyZSBsaWtlICclYmxvb2QgcHJlc3N1cmUlWWVhcnMn</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -337,7 +337,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qn</Expression><InputSerialization><CSV><FileHeaderInfo>None</FileHeaderInfo><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter><CommentCharacter>Iw==</CommentCharacter><Range></Range></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -356,7 +356,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IFllYXIsU3RhdGVBYmJyLCBDaXR5TmFtZSwgU2hvcnRfUXVlc3Rpb25fVGV4dCBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo><Range>line-range=0-2</Range></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -374,7 +374,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IGF2ZyhjYXN0KHllYXIgYXMgaW50KSksIG1heChjYXN0KHllYXIgYXMgaW50KSksIG1pbihjYXN0KHllYXIgYXMgaW50KSkgZnJvbSBvc3NvYmplY3Qgd2hlcmUgeWVhciA9IDIwMTU=</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -392,7 +392,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IGF2ZyhjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSksIG1heChjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSksIHN1bShjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSkgZnJvbSBvc3NvYmplY3Q=</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -411,7 +411,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLCBfMiBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization></InputSerialization><OutputSerialization><CSV><RecordDelimiter>&#xD;&#xA;</RecordDelimiter><FieldDelimiter>|</FieldDelimiter></CSV></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -427,7 +427,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Q=</Expression><InputSerialization></InputSerialization><OutputSerialization><EnablePayloadCrc>true</EnablePayloadCrc></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -443,7 +443,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLCBfMiBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization></InputSerialization><OutputSerialization></OutputSerialization><Options><SkipPartialDataRecord>true</SkipPartialDataRecord></Options></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -460,7 +460,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization></InputSerialization><OutputSerialization><OutputRawData>true</OutputRawData></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -477,7 +477,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization></InputSerialization><OutputSerialization><OutputRawData>true</OutputRawData><KeepAllColumns>true</KeepAllColumns></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -498,7 +498,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization><OutputHeader>true</OutputHeader></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -520,7 +520,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IG5hbWUgZnJvbSBvc3NvYmplY3Q=</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization><EnablePayloadCrc>true</EnablePayloadCrc><OutputHeader>true</OutputHeader></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -559,7 +559,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "csv/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IHBlcnNvbi5maXJzdG5hbWUgYXMgYWFhIGFzIGZpcnN0bmFtZSwgcGVyc29uLmxhc3RuYW1lLCBleHRyYSBmcm9tIG9zc29iamVjdCc=</Expression><InputSerialization><CSV><FileHeaderInfo>IGNORE</FileHeaderInfo><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter><CommentCharacter>Iw==</CommentCharacter><Range>split-range=10-12</Range><AllowQuotedRecordDelimiter>true</AllowQuotedRecordDelimiter></CSV><CompressionType>GZIP</CompressionType></InputSerialization><OutputSerialization><CSV><RecordDelimiter>&#xA;</RecordDelimiter><FieldDelimiter>,</FieldDelimiter></CSV><OutputRawData>true</OutputRawData><KeepAllColumns>false</KeepAllColumns><EnablePayloadCrc>true</EnablePayloadCrc><OutputHeader>false</OutputHeader></OutputSerialization><Options><SkipPartialDataRecord>false</SkipPartialDataRecord><MaxSkippedRecordsAllowed>2</MaxSkippedRecordsAllowed></Options></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -582,7 +582,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "json/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qub2JqZWN0c1sqXSB3aGVyZSBwYXJ0eSA9ICdEZW1vY3JhdCc=</Expression><InputSerialization><JSON><Type>DOCUMENT</Type></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -605,7 +605,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "json/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qgd2hlcmUgcGFydHkgPSAnRGVtb2NyYXQn</Expression><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -629,7 +629,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "json/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IHBlcnNvbi5maXJzdG5hbWUgYXMgYWFhIGFzIGZpcnN0bmFtZSwgcGVyc29uLmxhc3RuYW1lLCBleHRyYSBmcm9tIG9zc29iamVjdCc=</Expression><InputSerialization><JSON><Type>LINES</Type><Range>line-range=0-1</Range></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 
 	request = &SelectObjectRequest{
@@ -662,7 +662,7 @@ func TestMarshalInput_SelectObject(t *testing.T) {
 	err = c.marshalInput(request, input, marshalSelectObjectRequest, updateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["x-oss-process"], "json/select")
-	data, _ = ioutil.ReadAll(input.Body)
+	data, _ = io.ReadAll(input.Body)
 	assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IHBlcnNvbi5maXJzdG5hbWUgYXMgYWFhIGFzIGZpcnN0bmFtZSwgcGVyc29uLmxhc3RuYW1lLCBleHRyYSBmcm9tIG9zc29iamVjdCc=</Expression><InputSerialization><JSON><Type>LINES</Type><Range>split-range=10-12</Range><ParseJsonNumberAsString>true</ParseJsonNumberAsString></JSON><CompressionType>GZIP</CompressionType></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON><OutputRawData>true</OutputRawData><EnablePayloadCrc>true</EnablePayloadCrc></OutputSerialization><Options><SkipPartialDataRecord>false</SkipPartialDataRecord><MaxSkippedRecordsAllowed>2</MaxSkippedRecordsAllowed></Options></SelectRequest>", string(data))
 }
 
@@ -700,7 +700,7 @@ func TestUnmarshalOutput_SelectObject(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "5C06A3B67B8B5A3DA422****")
 	assert.Equal(t, result.Headers.Get("Date"), "Tue, 04 Dec 2018 15:56:38 GMT")
-	dataByte, err := ioutil.ReadAll(result.Body)
+	dataByte, err := io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte[:25]), "2015,AL,Birmingham,212237")
 
 	hexString = "018000010000014d000000000000000000000145596561722c5374617465416262722c5374617465446573632c436974794e616d652c47656f677261706869634c6576656c2c44617461536f757263652c43617465676f72792c556e6971756549442c4d6561737572652c446174615f56616c75655f556e69742c4461746156616c75655479706549442c446174615f56616c75655f547970652c446174615f56616c75652c4c6f775f436f6e666964656e63655f4c696d69742c486967685f436f6e666964656e63655f4c696d69742c446174615f56616c75655f466f6f746e6f74655f53796d626f6c2c446174615f56616c75655f466f6f746e6f74652c506f70756c6174696f6e436f756e742c47656f4c6f636174696f6e2c43617465676f727949442c4d65617375726549642c43697479464950532c5472616374464950532c53686f72745f5175657374696f6e5f546578740d0a0000000001800005000000140000000000000000000001450000000000000145000000c800000000"
@@ -731,7 +731,7 @@ func TestUnmarshalOutput_SelectObject(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "5C06A3B67B8B5A3DA422****")
 	assert.Equal(t, result.Headers.Get("Date"), "Tue, 04 Dec 2018 15:56:38 GMT")
-	dataByte, err = ioutil.ReadAll(result.Body)
+	dataByte, err = io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte[:25]), "Year,StateAbbr,StateDesc,")
 
 	hexString = "018000010000003e0000000000000000000002e1323031352c55532c2c4865616c746820496e737572616e63650d0a323031352c55532c2c4865616c746820496e737572616e63650d0a0000000001800005000000140000000000000000000002e100000000000002e1000000c800000000"
@@ -762,7 +762,7 @@ func TestUnmarshalOutput_SelectObject(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "5C06A3B67B8B5A3DA422****")
 	assert.Equal(t, result.Headers.Get("Date"), "Tue, 04 Dec 2018 15:56:38 GMT")
-	dataByte, err = ioutil.ReadAll(result.Body)
+	dataByte, err = io.ReadAll(result.Body)
 	assert.Equal(t, string(dataByte[:25]), "2015,US,,Health Insurance")
 
 	body = `<?xml version="1.0" encoding="UTF-8"?>

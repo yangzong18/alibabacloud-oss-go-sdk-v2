@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
@@ -2196,7 +2195,7 @@ func TestMarshalInput_RestoreObject(t *testing.T) {
 	assert.Nil(t, input.OpMetadata.values)
 	assert.Empty(t, input.Parameters["restore"])
 	assert.Equal(t, input.Parameters["versionId"], "CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy****")
-	data, _ := ioutil.ReadAll(input.Body)
+	data, _ := io.ReadAll(input.Body)
 	assert.Equal(t, string(data), "<RestoreRequest><Days>2</Days><JobParameters><Tier>Standard</Tier></JobParameters></RestoreRequest>")
 }
 
@@ -3346,7 +3345,7 @@ func TestMarshalInput_CompleteMultipartUpload(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["uploadId"], "0004B9895DBBB6EC9****")
 	assert.Equal(t, input.Parameters["encoding-type"], "url")
-	body, _ := ioutil.ReadAll(input.Body)
+	body, _ := io.ReadAll(input.Body)
 	assert.Equal(t, string(body), `<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;8EFDA8BE206636A695359836FE0A****&#34;</ETag></Part><Part><PartNumber>2</PartNumber><ETag>&#34;8C315065167132444177411FDA14****&#34;</ETag></Part><Part><PartNumber>3</PartNumber><ETag>&#34;3349DC700140D7F86A0784842780****&#34;</ETag></Part></CompleteMultipartUpload>`)
 	callbackVal := base64.StdEncoding.EncodeToString([]byte(`{"callbackUrl":"www.aliyuncs.com", "callbackBody":"filename=${object}&size=${size}&mimeType=${mimeType}&x=${x:a}&b=${x:b}"}`))
 	callbackVar := base64.StdEncoding.EncodeToString([]byte(`{"x:a":"a", "x:b":"b"}`))
@@ -4517,7 +4516,7 @@ func TestMarshalInput_PutObjectTagging(t *testing.T) {
 	}
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
-	data, _ := ioutil.ReadAll(input.Body)
+	data, _ := io.ReadAll(input.Body)
 	assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag></TagSet></Tagging>`)
 }
 

@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -377,7 +377,7 @@ var testMockPutBucketSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket", r.URL.String())
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, "<CreateBucketConfiguration><StorageClass>Archive</StorageClass><DataRedundancyType>LRS</DataRedundancyType></CreateBucketConfiguration>", string(requestBody))
 		},
@@ -2649,7 +2649,7 @@ var testMockPutObjectSuccessCases = []struct {
 		},
 		[]byte(``),
 		func(t *testing.T, r *http.Request) {
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
@@ -2684,7 +2684,7 @@ var testMockPutObjectSuccessCases = []struct {
 		},
 		[]byte(``),
 		func(t *testing.T, r *http.Request) {
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
@@ -2719,7 +2719,7 @@ var testMockPutObjectSuccessCases = []struct {
 		},
 		[]byte(`{"filename":"object","size":"6","mimeType":""}`),
 		func(t *testing.T, r *http.Request) {
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
@@ -2756,7 +2756,7 @@ var testMockPutObjectSuccessCases = []struct {
 		},
 		[]byte(``),
 		func(t *testing.T, r *http.Request) {
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
@@ -3016,7 +3016,7 @@ var testMockGetObjectSuccessCases = []struct {
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
 			assert.Equal(t, *o.HashCRC64, "316181249502703****")
-			content, err := ioutil.ReadAll(o.Body)
+			content, err := io.ReadAll(o.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(content), "hi oss,this is a demo!")
 			assert.Nil(t, o.VersionId)
@@ -3066,7 +3066,7 @@ var testMockGetObjectSuccessCases = []struct {
 			assert.Equal(t, o.ContentLength, int64(344606))
 			assert.Equal(t, *o.ObjectType, "Normal")
 			assert.Equal(t, *o.StorageClass, "Standard")
-			content, err := ioutil.ReadAll(o.Body)
+			content, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(content), "hi oss")
 			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
 			assert.Equal(t, *o.ServerSideEncryption, "KMS")
@@ -3124,7 +3124,7 @@ var testMockGetObjectSuccessCases = []struct {
 			assert.Equal(t, o.ContentLength, int64(344606))
 			assert.Equal(t, *o.ObjectType, "Normal")
 			assert.Equal(t, *o.StorageClass, "Standard")
-			content, err := ioutil.ReadAll(o.Body)
+			content, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(content), "hi oss")
 			assert.Equal(t, *o.ServerSideDataEncryption, "SM4")
 			assert.Equal(t, *o.ServerSideEncryption, "KMS")
@@ -3617,7 +3617,7 @@ var testMockAppendObjectSuccessCases = []struct {
 		nil,
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
 			strUrl := sortQuery(r)
@@ -3651,7 +3651,7 @@ var testMockAppendObjectSuccessCases = []struct {
 		nil,
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss,append object,this is a demo"), strings.NewReader(string(requestBody)))
 			strUrl := sortQuery(r)
@@ -3688,7 +3688,7 @@ var testMockAppendObjectSuccessCases = []struct {
 		nil,
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss,append object,this is a demo"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption"), "KMS")
@@ -3734,7 +3734,7 @@ var testMockAppendObjectSuccessCases = []struct {
 		nil,
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss,append object,this is a demo"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, r.Header.Get("x-oss-server-side-encryption"), "KMS")
@@ -3814,7 +3814,7 @@ var testMockAppendObjectErrorCases = []struct {
 </Error>`),
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			strUrl := sortQuery(r)
 			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
@@ -3856,7 +3856,7 @@ var testMockAppendObjectErrorCases = []struct {
 </Error>`),
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
-			requestBody, err := ioutil.ReadAll(r.Body)
+			requestBody, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss,append object,this is a demo"), strings.NewReader(string(requestBody)))
 			strUrl := sortQuery(r)
@@ -4068,7 +4068,7 @@ var testMockDeleteMultipleObjectsSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), "<Delete><Quiet>true</Quiet><Object><Key>key1.txt</Key></Object><Object><Key>key2.txt</Key></Object></Delete>")
 		},
@@ -4110,7 +4110,7 @@ var testMockDeleteMultipleObjectsSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), ("<Delete><Quiet>false</Quiet><Object><Key>key1.txt</Key></Object><Object><Key>key2.txt</Key></Object></Delete>"))
 		},
@@ -4159,7 +4159,7 @@ var testMockDeleteMultipleObjectsSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), "<Delete><Quiet>false</Quiet><Object><Key>key1.txt</Key><VersionId>CAEQNRiBgIDyz.6C0BYiIGQ2NWEwNmVhNTA3ZTQ3MzM5ODliYjM1ZTdjYjA4****</VersionId></Object><Object><Key>key2.txt</Key><VersionId>CAEQNRiBgIDyz.6C0BYiIGQ2NWEwNmVhNTA3ZTQ3MzM5ODliYjM1ZTdjYjA5****</VersionId></Object></Delete>")
 		},
@@ -4205,7 +4205,7 @@ var testMockDeleteMultipleObjectsSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), "<Delete><Quiet>false</Quiet><Object><Key>go-sdk-v1&#x01;&#x02;&#x03;&#x04;&#x05;&#x06;&#x07;&#x08;&#x9;&#xA;&#x0B;&#x0C;&#xD;&#x0E;&#x0F;&#x10;&#x11;&#x12;&#x13;&#x14;&#x15;&#x16;&#x17;&#x18;&#x19;&#x1A;&#x1B;&#x1C;&#x1D;&#x1E;&#x1F;</Key><VersionId>CAEQNRiBgIDyz.6C0BYiIGQ2NWEwNmVhNTA3ZTQ3MzM5ODliYjM1ZTdjYjA4****</VersionId></Object></Delete>")
 		},
@@ -4276,7 +4276,7 @@ var testMockDeleteMultipleObjectsErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), "<Delete><Quiet>false</Quiet><Object><Key>key1.txt</Key><VersionId>CAEQNRiBgIDyz.6C0BYiIGQ2NWEwNmVhNTA3ZTQ3MzM5ODliYjM1ZTdjYjA4****</VersionId></Object><Object><Key>key2.txt</Key><VersionId>CAEQNRiBgIDyz.6C0BYiIGQ2NWEwNmVhNTA3ZTQ3MzM5ODliYjM1ZTdjYjA5****</VersionId></Object></Delete>")
 		},
@@ -4318,7 +4318,7 @@ var testMockDeleteMultipleObjectsErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket?delete&encoding-type=url", strUrl)
-			data, err := ioutil.ReadAll(r.Body)
+			data, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
 			assert.Equal(t, string(data), "<Delete><Quiet>false</Quiet><Object><Key>key1.txt</Key></Object><Object><Key>key2.txt</Key></Object></Delete>")
 		},
@@ -4937,7 +4937,7 @@ var testMockRestoreObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?restore&versionId=CAEQNRiBgICb8o6D0BYiIDNlNzk5NGE2M2Y3ZjRhZTViYTAxZGE0ZTEyMWYy%2A%2A%2A%2A", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), "<RestoreRequest><Days>2</Days></RestoreRequest>")
 		},
 		&RestoreObjectRequest{
@@ -4967,7 +4967,7 @@ var testMockRestoreObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			assert.Equal(t, "/bucket/object?restore", r.URL.String())
 
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), "<RestoreRequest><Days>2</Days><JobParameters><Tier>Standard</Tier></JobParameters></RestoreRequest>")
 		},
 		&RestoreObjectRequest{
@@ -5929,7 +5929,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 1")
 			assert.Equal(t, "bce8f3d48247c5d555bb5697bf277b35", r.Header.Get("Content-MD5"))
 		},
@@ -5965,7 +5965,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 2")
 			assert.Equal(t, "f811b746eb3e256f97cb3a190d528353", r.Header.Get("Content-MD5"))
 		},
@@ -6001,7 +6001,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=2&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 2")
 			assert.Equal(t, "f811b746eb3e256f97cb3a190d528353", r.Header.Get("Content-MD5"))
 			assert.Equal(t, r.Header.Get("x-oss-traffic-limit"), strconv.FormatInt(100*1024*8, 10))
@@ -6074,7 +6074,7 @@ var testMockUploadPartErrorCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 1")
 		},
 		&UploadPartRequest{
@@ -6116,7 +6116,7 @@ var testMockUploadPartErrorCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 1")
 		},
 		&UploadPartRequest{
@@ -6159,7 +6159,7 @@ var testMockUploadPartErrorCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "upload part 1")
 		},
 		&UploadPartRequest{
@@ -6530,7 +6530,7 @@ var testMockCompleteMultipartUploadSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?encoding-type=url&uploadId=0004B9895DBBB6EC9", strUrl)
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), `<CompleteMultipartUpload><Part><PartNumber>1</PartNumber><ETag>&#34;8EFDA8BE206636A695359836FE0A****&#34;</ETag></Part><Part><PartNumber>2</PartNumber><ETag>&#34;8C315065167132444177411FDA14****&#34;</ETag></Part><Part><PartNumber>3</PartNumber><ETag>&#34;3349DC700140D7F86A0784842780****&#34;</ETag></Part></CompleteMultipartUpload>`)
 		},
 		&CompleteMultipartUploadRequest{
@@ -7585,7 +7585,7 @@ var testMockPutBucketVersioningSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket?versioning", r.URL.String())
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "<VersioningConfiguration><Status>Suspended</Status></VersioningConfiguration>")
 		},
 		&PutBucketVersioningRequest{
@@ -7611,7 +7611,7 @@ var testMockPutBucketVersioningSuccessCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket?versioning", r.URL.String())
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
 		},
 		&PutBucketVersioningRequest{
@@ -7675,7 +7675,7 @@ var testMockPutBucketVersioningErrorCases = []struct {
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "PUT", r.Method)
 			assert.Equal(t, "/bucket?versioning", r.URL.String())
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(body), "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
 		},
 		&PutBucketVersioningRequest{
@@ -8724,7 +8724,7 @@ var testMockPutObjectTaggingSuccessCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?tagging", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag></TagSet></Tagging>`)
 		},
 		&PutObjectTaggingRequest{
@@ -8760,7 +8760,7 @@ var testMockPutObjectTaggingSuccessCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?tagging&versionId=CAEQNRiBgMClj7qD0BYiIDQ5Y2QyMjc3NGZkODRlMTU5M2VkY2U3MWRiNGRh%2A%2A%2A%2A", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
 		},
 		&PutObjectTaggingRequest{
@@ -8839,7 +8839,7 @@ var testMockPutObjectTaggingErrorCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?tagging", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
 		},
 		&PutObjectTaggingRequest{
@@ -8892,7 +8892,7 @@ var testMockPutObjectTaggingErrorCases = []struct {
 			assert.Equal(t, "PUT", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?tagging", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), `<Tagging><TagSet><Tag><Key>k1</Key><Value>v1</Value></Tag><Tag><Key>k2</Key><Value>v2</Value></Tag></TagSet></Tagging>`)
 		},
 		&PutObjectTaggingRequest{
@@ -9369,7 +9369,7 @@ var testMockCreateSelectObjectMetaSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fmeta", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<CsvMetaRequest></CsvMetaRequest>", string(data))
 		},
 		&CreateSelectObjectMetaRequest{
@@ -9401,7 +9401,7 @@ var testMockCreateSelectObjectMetaSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fmeta", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<CsvMetaRequest><InputSerialization><CSV><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter></CSV></InputSerialization><OverwriteIfExists>true</OverwriteIfExists></CsvMetaRequest>", string(data))
 		},
 		&CreateSelectObjectMetaRequest{
@@ -9441,7 +9441,7 @@ var testMockCreateSelectObjectMetaSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fmeta", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<JsonMetaRequest><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization></JsonMetaRequest>", string(data))
 		},
 		&CreateSelectObjectMetaRequest{
@@ -9516,7 +9516,7 @@ var testMockCreateSelectObjectMetaErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fmeta", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<JsonMetaRequest><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization></JsonMetaRequest>", string(data))
 		},
 		&CreateSelectObjectMetaRequest{
@@ -9563,7 +9563,7 @@ var testMockCreateSelectObjectMetaErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fmeta", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<JsonMetaRequest><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization></JsonMetaRequest>", string(data))
 		},
 		&CreateSelectObjectMetaRequest{
@@ -9636,7 +9636,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IFllYXIsIFN0YXRlQWJiciwgQ2l0eU5hbWUsIFNob3J0X1F1ZXN0aW9uX1RleHQgZnJvbSBvc3NvYmplY3Qgd2hlcmUgTWVhc3VyZSBsaWtlICclYmxvb2QgcHJlc3N1cmUlWWVhcnMn</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9656,7 +9656,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "2015,US,,High Blood Press")
 		},
 	},
@@ -9672,7 +9672,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qn</Expression><InputSerialization><CSV><FileHeaderInfo>None</FileHeaderInfo><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter><CommentCharacter>Iw==</CommentCharacter><Range></Range></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9697,7 +9697,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "Year,StateAbbr,StateDesc,")
 		},
 	},
@@ -9713,7 +9713,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IFllYXIsU3RhdGVBYmJyLCBDaXR5TmFtZSwgU2hvcnRfUXVlc3Rpb25fVGV4dCBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo><Range>line-range=0-2</Range></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9734,7 +9734,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "2015,US,,Health Insurance")
 		},
 	},
@@ -9750,7 +9750,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IGF2ZyhjYXN0KHllYXIgYXMgaW50KSksIG1heChjYXN0KHllYXIgYXMgaW50KSksIG1pbihjYXN0KHllYXIgYXMgaW50KSkgZnJvbSBvc3NvYmplY3Qgd2hlcmUgeWVhciA9IDIwMTU=</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9770,7 +9770,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:14]), "2015,2015,2015")
 		},
 	},
@@ -9786,7 +9786,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IGF2ZyhjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSksIG1heChjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSksIHN1bShjYXN0KGRhdGFfdmFsdWUgYXMgZG91YmxlKSkgZnJvbSBvc3NvYmplY3Q=</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9806,7 +9806,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:14]), "23.67770034843")
 		},
 	},
@@ -9822,7 +9822,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLCBfMiBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization></InputSerialization><OutputSerialization><CSV><RecordDelimiter>&#xD;&#xA;</RecordDelimiter><FieldDelimiter>|</FieldDelimiter></CSV></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9843,7 +9843,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, err := ioutil.ReadAll(o.Body)
+			dataByte, err := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte), "abc|def\r\n")
 		},
 	},
@@ -9859,7 +9859,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLCBfMiBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization></InputSerialization><OutputSerialization></OutputSerialization><Options><SkipPartialDataRecord>true</SkipPartialDataRecord></Options></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9877,7 +9877,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "Year,StateAbbr\n2015,US\n20")
 		},
 	},
@@ -9894,7 +9894,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xIGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization></InputSerialization><OutputSerialization><OutputRawData>true</OutputRawData></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9912,7 +9912,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "Year\n2015\n2015\n2015\n2015\n")
 		},
 	},
@@ -9929,7 +9929,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLF8yIGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization></InputSerialization><OutputSerialization><OutputRawData>true</OutputRawData><KeepAllColumns>true</KeepAllColumns></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9948,7 +9948,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "Year,StateAbbr,,,,,,,,,,,")
 		},
 	},
@@ -9964,7 +9964,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xIGZyb20gb3Nzb2JqZWN0</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization><OutputHeader>true</OutputHeader></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -9987,7 +9987,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "year\n2015\n2015\n2015\n2015\n")
 		},
 	},
@@ -10003,7 +10003,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IFN0YXRlQWJicixDYXRlZ29yeSBmcm9tIG9zc29iamVjdCBsaW1pdCAxMA==</Expression><InputSerialization><CSV><FileHeaderInfo>Use</FileHeaderInfo></CSV></InputSerialization><OutputSerialization><EnablePayloadCrc>true</EnablePayloadCrc><OutputHeader>true</OutputHeader></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10027,7 +10027,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "stateabbr,category\nUS,Pre")
 		},
 	},
@@ -10043,7 +10043,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3QgbGltaXQgMTA=</Expression><InputSerialization><CSV><FileHeaderInfo>IGNORE</FileHeaderInfo><RecordDelimiter>Cg==</RecordDelimiter><FieldDelimiter>LA==</FieldDelimiter><QuoteCharacter>Ig==</QuoteCharacter><CommentCharacter>Iw==</CommentCharacter><Range>split-range=0-12</Range><AllowQuotedRecordDelimiter>true</AllowQuotedRecordDelimiter></CSV><CompressionType>NONE</CompressionType></InputSerialization><OutputSerialization><CSV><RecordDelimiter>&#xA;</RecordDelimiter><FieldDelimiter></FieldDelimiter></CSV><OutputRawData>false</OutputRawData><KeepAllColumns>false</KeepAllColumns><EnablePayloadCrc>true</EnablePayloadCrc><OutputHeader>false</OutputHeader></OutputSerialization><Options><SkipPartialDataRecord>false</SkipPartialDataRecord><MaxSkippedRecordsAllowed>2</MaxSkippedRecordsAllowed></Options></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10084,7 +10084,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "2015,US,United States,,US")
 		},
 	},
@@ -10100,7 +10100,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qub2JqZWN0c1sqXSB3aGVyZSBwYXJ0eSA9ICdEZW1vY3JhdCcgbGltaXQgMTA=</Expression><InputSerialization><JSON><Type>DOCUMENT</Type></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10125,7 +10125,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "{\"caucus\":null,\"congress_")
 		},
 	},
@@ -10141,7 +10141,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qgd2hlcmUgcGFydHkgPSAnRGVtb2NyYXQnIGxpbWl0IDI=</Expression><InputSerialization><JSON><Type>LINES</Type></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10166,7 +10166,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "{\"caucus\":null,\"congress_")
 		},
 	},
@@ -10182,7 +10182,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0ICogZnJvbSBvc3NvYmplY3Qgd2hlcmUgcGFydHkgPSAnRGVtb2NyYXQnIGxpbWl0IDI=</Expression><InputSerialization><JSON><Type>LINES</Type><Range>line-range=0-10</Range></JSON></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10208,7 +10208,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "{\"caucus\":null,\"congress_")
 		},
 	},
@@ -10225,7 +10225,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=json%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IHBlcnNvbi5maXJzdG5hbWUgYXMgYWFhIGFzIGZpcnN0bmFtZSwgcGVyc29uLmxhc3RuYW1lLCBleHRyYSBmcm9tIG9zc29iamVjdCBsaW1pdCAy</Expression><InputSerialization><JSON><Type>LINES</Type><Range>split-range=0-12</Range><ParseJsonNumberAsString>true</ParseJsonNumberAsString></JSON><CompressionType>NONE</CompressionType></InputSerialization><OutputSerialization><JSON><RecordDelimiter>LA==</RecordDelimiter></JSON><OutputRawData>true</OutputRawData><EnablePayloadCrc>false</EnablePayloadCrc></OutputSerialization><Options><SkipPartialDataRecord>false</SkipPartialDataRecord><MaxSkippedRecordsAllowed>2</MaxSkippedRecordsAllowed></Options></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10259,7 +10259,7 @@ var testMockSelectObjectSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-			dataByte, _ := ioutil.ReadAll(o.Body)
+			dataByte, _ := io.ReadAll(o.Body)
 			assert.Equal(t, string(dataByte[:25]), "{\"firstname\":\"Tammy\",\"las")
 		},
 	},
@@ -10312,7 +10312,7 @@ var testMockSelectObjectErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><Expression>c2VsZWN0IF8xLCBfMiBmcm9tIG9zc29iamVjdA==</Expression><InputSerialization></InputSerialization><OutputSerialization><CSV><RecordDelimiter>&#xD;&#xA;</RecordDelimiter><FieldDelimiter>,</FieldDelimiter></CSV></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{
@@ -10361,7 +10361,7 @@ var testMockSelectObjectErrorCases = []struct {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
 			assert.Equal(t, "/bucket/object?x-oss-process=csv%2Fselect", strUrl)
-			data, _ := ioutil.ReadAll(r.Body)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, "<SelectRequest><InputSerialization></InputSerialization><OutputSerialization></OutputSerialization></SelectRequest>", string(data))
 		},
 		&SelectObjectRequest{

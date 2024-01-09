@@ -3,7 +3,6 @@ package oss
 import (
 	"bytes"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"testing"
@@ -1815,7 +1814,7 @@ func TestMarshalInput_PutBucketVersioning(t *testing.T) {
 	}
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
-	body, _ := ioutil.ReadAll(input.Body)
+	body, _ := io.ReadAll(input.Body)
 	assert.Equal(t, string(body), "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>")
 
 	request = &PutBucketVersioningRequest{
@@ -1837,7 +1836,7 @@ func TestMarshalInput_PutBucketVersioning(t *testing.T) {
 	}
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
-	body, _ = ioutil.ReadAll(input.Body)
+	body, _ = io.ReadAll(input.Body)
 	assert.Equal(t, string(body), "<VersioningConfiguration><Status>Suspended</Status></VersioningConfiguration>")
 }
 
