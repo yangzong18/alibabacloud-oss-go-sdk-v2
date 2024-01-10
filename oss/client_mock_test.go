@@ -3113,6 +3113,77 @@ func TestMockPutObject_DisableDetectMimeType(t *testing.T) {
 	}
 }
 
+var testMockPutObjectWithProgressCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":         "application/xml",
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "316181249502703****",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Body:   strings.NewReader("hi oss"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
+			assert.Equal(t, *o.HashCRC64, "316181249502703****")
+			assert.Nil(t, o.VersionId)
+		},
+	},
+}
+
+func TestMockPutObject_Progress(t *testing.T) {
+	for _, c := range testMockPutObjectWithProgressCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureAutoDetectMimeType
+			})
+		assert.NotNil(t, c)
+		n := int64(0)
+		c.Request.ProgressFn = func(transferred, total int64) {
+			n = transferred
+		}
+		output, err := client.PutObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+		assert.Equal(t, int64(len("hi oss")), n)
+	}
+}
+
 var testMockPutObjectErrorCases = []struct {
 	StatusCode     int
 	Headers        map[string]string

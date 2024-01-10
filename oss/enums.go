@@ -222,7 +222,9 @@ func (f AuthMethodType) String() string {
 		return "authentication in header"
 	}
 }
+
 // OperationMetadata Keys
 const (
-	OpMetaKeyResponsHandler string = "opm-response-handler"
+	OpMetaKeyResponsHandler     string = "opm-response-handler"
+	OpMetaKeyRequestBodyTracker string = "opm-request-body-tracker"
 )

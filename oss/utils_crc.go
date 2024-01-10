@@ -136,3 +136,5 @@ func CRC64Combine(crc1 uint64, crc2 uint64, len2 uint64) uint64 {
 	crc1 ^= crc2
 	return crc1
 }
+
+var _ RequestBodyTracker = (*hashCRC64)(nil)

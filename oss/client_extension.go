@@ -307,7 +307,7 @@ func (u *uploaderDelegate) applySource() error {
 		return NewErrParamNull("the body is null")
 	}
 
-	totalSize := getReaderLen(u.body)
+	totalSize := GetReaderLen(u.body)
 
 	//Part Size
 	partSize := u.options.PartSize

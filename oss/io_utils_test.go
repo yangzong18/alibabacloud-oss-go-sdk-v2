@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -957,4 +958,102 @@ func TestRangeReaderGetError(t *testing.T) {
 	n, err = io.ReadFull(ar, dst[n:])
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "range get fail")
+}
+
+type seekerReaderStub struct {
+	r    io.ReadSeeker
+	bErr bool
+	cErr bool
+	eErr bool
+}
+
+func (r *seekerReaderStub) Read(p []byte) (n int, err error) {
+	return r.r.Read(p)
+}
+
+func (r *seekerReaderStub) Seek(offset int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekStart:
+		if r.bErr {
+			return 0, errors.New("SeekStart error")
+		}
+	case io.SeekCurrent:
+		if r.cErr {
+			return 0, errors.New("SeekCurrent error")
+		}
+	case io.SeekEnd:
+		if r.eErr {
+			return 0, errors.New("SeekEnd error")
+		}
+	}
+	return r.r.Seek(offset, whence)
+}
+
+func TestGetReaderLen(t *testing.T) {
+	data := "hello world"
+
+	// bytes.Buffer
+	b := bytes.NewBuffer([]byte(data))
+	n := GetReaderLen(b)
+	assert.Equal(t, int64(len(data)), n)
+
+	// bytes.Reader
+	br := bytes.NewReader([]byte(data))
+	n = GetReaderLen(br)
+	assert.Equal(t, int64(len(data)), n)
+
+	// strings.Reader
+	sr := strings.NewReader(data)
+	n = GetReaderLen(sr)
+	assert.Equal(t, int64(len(data)), n)
+
+	// os.File
+	filePath := randStr(8) + ".txt"
+	createFile(t, filePath, data)
+	f, err := os.Open(filePath)
+	defer os.Remove(filePath)
+	defer f.Close()
+	assert.Nil(t, err)
+	n = GetReaderLen(f)
+	assert.Equal(t, int64(len(data)), n)
+
+	f.Seek(0, io.SeekEnd)
+	n = GetReaderLen(f)
+	assert.Equal(t, int64(0), n)
+
+	f.Seek(2, io.SeekStart)
+	n = GetReaderLen(f)
+	assert.Equal(t, int64(len(data)-2), n)
+
+	// err
+	n = GetReaderLen(nil)
+	assert.Equal(t, int64(-1), n)
+
+	//has not Len() , Seek(), N
+	b = bytes.NewBuffer([]byte(data))
+	bc := io.NopCloser(b)
+	n = GetReaderLen(bc)
+	assert.Equal(t, int64(-1), n)
+
+	//Seek error
+	sef := &seekerReaderStub{
+		r: f,
+	}
+	sef.Seek(0, io.SeekStart)
+	n = GetReaderLen(sef)
+	assert.Equal(t, int64(len(data)), n)
+
+	sef.bErr = true
+	n = GetReaderLen(sef)
+	assert.Equal(t, int64(-1), n)
+
+	sef.bErr = false
+	sef.cErr = true
+	n = GetReaderLen(sef)
+	assert.Equal(t, int64(-1), n)
+
+	sef.cErr = false
+	sef.eErr = true
+	n = GetReaderLen(sef)
+	assert.Equal(t, int64(-1), n)
 }

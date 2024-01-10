@@ -113,7 +113,7 @@ func isReaderSeekable(r io.Reader) bool {
 	}
 }
 
-func getReaderLen(r io.Reader) int64 {
+func GetReaderLen(r io.Reader) int64 {
 	type lenner interface {
 		Len() int
 	}
@@ -719,4 +719,101 @@ func (r *RangeReader) Close() (err error) {
 		err = r.in.Close()
 	}
 	return
+}
+
+// TeeReadNopCloser returns a Reader that writes to w what it reads from r.
+// All reads from r performed through it are matched with
+// corresponding writes to w. There is no internal buffering -
+// the write must complete before the read completes.
+// Any error encountered while writing is reported as a read error.
+func TeeReadNopCloser(reader io.Reader, writers ...io.Writer) io.ReadCloser {
+	return &teeReadNopCloser{
+		reader:  reader,
+		writers: writers,
+		mark:    -1,
+	}
+}
+
+type teeReadNopCloser struct {
+	reader  io.Reader
+	writers []io.Writer
+	mark    int64
+}
+
+func (t *teeReadNopCloser) Read(p []byte) (n int, err error) {
+	n, err = t.reader.Read(p)
+	if n > 0 {
+		for _, w := range t.writers {
+			if nn, err := w.Write(p[:n]); err != nil {
+				return nn, err
+			}
+		}
+	}
+	return
+}
+
+func (t *teeReadNopCloser) Seek(offset int64, whence int) (int64, error) {
+	switch t := t.reader.(type) {
+	case io.Seeker:
+		return t.Seek(offset, whence)
+	}
+	return int64(0), nil
+}
+
+func (t *teeReadNopCloser) Close() error {
+	return nil
+}
+
+// IsSeekable tests if this reader supports Seek method.
+func (t *teeReadNopCloser) IsSeekable() bool {
+	_, ok := t.reader.(io.Seeker)
+	return ok
+}
+
+// MarkSupported tests if this reader supports the Mark and Reset methods.
+func (t *teeReadNopCloser) MarkSupported() bool {
+	return t.IsSeekable()
+}
+
+// Mark marks the current position in this reader. A subsequent call to
+// the Reset method repositions this reader at the last marked position
+// so that subsequent reads re-read the same bytes.
+func (t *teeReadNopCloser) Mark() {
+	if s, ok := t.reader.(io.Seeker); ok {
+		if pos, err := s.Seek(0, io.SeekCurrent); err == nil {
+			t.mark = pos
+		}
+	}
+}
+
+// Reset repositions this stream to the position at the time
+// the Mark method was last called on this reader.
+func (t *teeReadNopCloser) Reset() error {
+	if !t.MarkSupported() {
+		return fmt.Errorf("Mark/Reset not supported")
+	}
+
+	if t.mark < 0 {
+		return fmt.Errorf("Mark is not called yet")
+	}
+
+	// seek to the last marked position
+	if s, ok := t.reader.(io.Seeker); ok {
+		if _, err := s.Seek(t.mark, io.SeekStart); err != nil {
+			return err
+		}
+	}
+
+	// reset writer
+	type reseter interface {
+		Reset()
+	}
+
+	for _, w := range t.writers {
+		if rw, ok := w.(reseter); ok {
+			rw.Reset()
+		}
+	}
+
+	return nil
 }

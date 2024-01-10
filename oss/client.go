@@ -239,6 +239,12 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		return output, NewErrParamInvalid("Endpoint")
 	}
 
+	var writers []io.Writer
+	// tracker in OpertionMetaData
+	if trackers, ok := input.OpMetadata.Get(OpMetaKeyRequestBodyTracker).([]io.Writer); ok {
+		writers = append(writers, trackers...)
+	}
+
 	// host & path
 	host, path := buildURL(input, opts)
 	strUrl := fmt.Sprintf("%s://%s%s", opts.Endpoint.Scheme, host, path)
@@ -272,17 +278,17 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	request.Header.Set("User-Agent", defaultUserAgent())
 
 	// body
-	var body ReadSeekerNopClose
+	var body io.Reader
 	if input.Body == nil {
-		body = ReadSeekNopCloser(strings.NewReader(""))
+		body = strings.NewReader("")
 	} else {
-		body = ReadSeekNopCloser(input.Body)
+		body = input.Body
 	}
-	length, _ := body.GetLen()
+	length := GetReaderLen(body)
 	if length >= 0 && request.Header.Get("Content-Length") == "" {
 		request.ContentLength = length
 	}
-	request.Body = body
+	request.Body = TeeReadNopCloser(body, writers...)
 
 	//signing context
 	subResource, _ := input.OpMetadata.Get(signer.SubResource).([]string)
@@ -337,8 +343,8 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (response *http.Response, err error) {
 	request := signingCtx.Request
 	retryer := opts.Retryer
-	body, _ := request.Body.(ReadSeekerNopClose)
-	bodyStart, _ := body.Seek(0, io.SeekCurrent)
+	body, _ := request.Body.(*teeReadNopCloser)
+	body.Mark()
 	for tries := 1; tries <= retryer.MaxAttempts(); tries++ {
 		if tries > 1 {
 			delay, err := retryer.RetryDelay(tries, err)
@@ -350,7 +356,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 				break
 			}
 
-			if _, err = body.Seek(bodyStart, io.SeekStart); err != nil {
+			if err = body.Reset(); err != nil {
 				break
 			}
 		}
@@ -366,7 +372,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 			break
 		}
 
-		if !isReaderSeekable(request.Body) {
+		if !body.IsSeekable() {
 			break
 		}
 

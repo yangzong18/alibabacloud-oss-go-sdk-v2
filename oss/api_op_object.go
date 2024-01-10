@@ -78,6 +78,9 @@ type PutObjectRequest struct {
 	// Object data.
 	Body io.Reader `input:"body,nop"`
 
+	// Progress callback function
+	ProgressFn ProgressFunc
+
 	RequestCommon
 }
 
@@ -117,12 +120,15 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	if c.hasFeature(FeatureAutoDetectMimeType) {
 		marshalFns = append(marshalFns, updateContentType)
 	}
+
+	var trackers []io.Writer
+	if request.ProgressFn != nil {
+		trackers = append(trackers, NewProgress(request.ProgressFn, GetReaderLen(request.Body)))
+	}
+
 	var responsHandlers []func(*http.Response) error
 	if request.Callback != nil {
 		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
-	}
-	if len(responsHandlers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
 	}
 
 	var unmarshalFns []func(result any, output *OperationOutput) error
@@ -131,6 +137,14 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 		unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
 	} else {
 		unmarshalFns = append(unmarshalFns, discardBody)
+	}
+
+	if len(responsHandlers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
+	}
+
+	if len(trackers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
 	}
 
 	if err = c.marshalInput(request, input, marshalFns...); err != nil {

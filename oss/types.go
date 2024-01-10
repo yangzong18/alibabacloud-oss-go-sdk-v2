@@ -96,3 +96,8 @@ type OperationOutput struct {
 
 	httpRequest *http.Request
 }
+
+type RequestBodyTracker interface {
+	io.Writer
+	Reset()
+}
