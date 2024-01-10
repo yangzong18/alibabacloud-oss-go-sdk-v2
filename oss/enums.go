@@ -184,6 +184,8 @@ const (
 
 	FeatureEnableMD5
 
+	// FeatureAutoDetectMimeType Content-Type is automatically added based on the object name if not specified.
+	// This feature takes effect for PutObject, AppendObject and InitiateMultipartUpload
 	FeatureAutoDetectMimeType
 
 	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType
@@ -198,6 +200,8 @@ const (
 
 func (f SignatureVersionType) String() string {
 	switch f {
+	case SignatureVersionV4:
+		return "OSS Signature Version 4"
 	default:
 		return "OSS Signature Version 1"
 	}
@@ -218,3 +222,7 @@ func (f AuthMethodType) String() string {
 		return "authentication in header"
 	}
 }
+// OperationMetadata Keys
+const (
+	OpMetaKeyResponsHandler string = "opm-response-handler"
+)

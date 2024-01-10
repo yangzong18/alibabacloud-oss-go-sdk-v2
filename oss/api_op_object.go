@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strconv"
 	"time"
@@ -116,18 +117,14 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	if c.hasFeature(FeatureAutoDetectMimeType) {
 		marshalFns = append(marshalFns, updateContentType)
 	}
-	if err = c.marshalInput(request, input, marshalFns...); err != nil {
-		return nil, err
+	var responsHandlers []func(*http.Response) error
+	if request.Callback != nil {
+		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
+	}
+	if len(responsHandlers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
 	}
 
-	if request.Callback != nil {
-		optFns = append(optFns, callbackResponseHandler)
-	}
-	output, err := c.invokeOperation(ctx, input, optFns)
-	if err != nil {
-		return nil, err
-	}
-	result := &PutObjectResult{}
 	var unmarshalFns []func(result any, output *OperationOutput) error
 	unmarshalFns = append(unmarshalFns, unmarshalHeader)
 	if request.Callback != nil {
@@ -135,6 +132,17 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	} else {
 		unmarshalFns = append(unmarshalFns, discardBody)
 	}
+
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
+		return nil, err
+	}
+
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &PutObjectResult{}
 	if err = c.unmarshalOutput(result, output, unmarshalFns...); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
@@ -1526,20 +1534,15 @@ func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteM
 			"encoding-type": "url",
 		},
 	}
-	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
-		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
-	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
-		return nil, err
-	}
+
+	var responsHandlers []func(*http.Response) error
 	if request.Callback != nil {
-		optFns = append(optFns, callbackResponseHandler)
+		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
 	}
-	output, err := c.invokeOperation(ctx, input, optFns)
-	if err != nil {
-		return nil, err
+	if len(responsHandlers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
 	}
-	result := &CompleteMultipartUploadResult{}
+
 	var unmarshalFns []func(result any, output *OperationOutput) error
 	unmarshalFns = append(unmarshalFns, unmarshalHeader)
 	if request.Callback != nil {
@@ -1547,6 +1550,20 @@ func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteM
 	} else {
 		unmarshalFns = append(unmarshalFns, unmarshalBodyXml, unmarshalEncodeType)
 	}
+
+	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
+		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
+	}
+	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.invokeOperation(ctx, input, optFns)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &CompleteMultipartUploadResult{}
 	if err = c.unmarshalOutput(result, output, unmarshalFns...); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}

@@ -218,6 +218,8 @@ func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, opt
 
 	applyOperationOpt(&options, &opOpt)
 
+	applyOperationMetadata(input, &options)
+
 	ctx = applyOperationContext(ctx, &options)
 
 	output, err = c.sendRequest(ctx, input, &options)
@@ -552,6 +554,12 @@ func applyOperationContext(ctx context.Context, c *Options) context.Context {
 		return ctx
 	}
 	return context.WithValue(ctx, "OpReadWriteTimeout", c.OpReadWriteTimeout)
+}
+
+func applyOperationMetadata(input *OperationInput, c *Options) {
+	if handles, ok := input.OpMetadata.Get(OpMetaKeyResponsHandler).([]func(*http.Response) error); ok {
+		c.ResponseHandlers = append(c.ResponseHandlers, handles...)
+	}
 }
 
 // fieldInfo holds details for the input/output of a single field.
