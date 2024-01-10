@@ -1397,3 +1397,156 @@ func TestMockAppendFile_PositionNotEqualToLength(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "PositionNotEqualToLength")
 }
+
+func TestMockAppendFile_CRC(t *testing.T) {
+	data := make([]byte, 0)
+	gmtTime := getNowGMT()
+	first := true
+
+	crc64Err := false
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		switch r.Method {
+		case "HEAD":
+			if first {
+				// header
+
+				//status code
+				w.WriteHeader(404)
+
+			} else {
+				hashall := NewCRC64(0)
+				hashall.Write(data)
+				crc64ecma := fmt.Sprint(hashall.Sum64())
+
+				// header
+				w.Header().Set(HTTPHeaderLastModified, gmtTime)
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(data)))
+				w.Header().Set(HTTPHeaderETag, fmt.Sprintf("etag-%d", len(data)))
+				w.Header().Set(HTTPHeaderContentType, "text/plain")
+				w.Header().Set(HeaderOssObjectType, "Appendable")
+				w.Header().Set(HeaderOssCRC64, crc64ecma)
+
+				//status code
+				w.WriteHeader(200)
+			}
+			first = false
+			//body
+			w.Write(nil)
+
+		case "POST":
+			in, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+
+			var buffer bytes.Buffer
+			buffer.Write(data)
+			buffer.Write(in)
+			data = buffer.Bytes()
+
+			hashall := NewCRC64(0)
+			hashall.Write(data)
+			crc64ecma := fmt.Sprint(hashall.Sum64())
+
+			if crc64Err {
+				crc64ecma = "6707180448768400016"
+			}
+
+			// header
+			w.Header().Set(HTTPHeaderContentLength, "0")
+			w.Header().Set(HTTPHeaderETag, fmt.Sprintf("etag-%d", len(data)))
+			w.Header().Set(HTTPHeaderContentType, "text/plain")
+			w.Header().Set(HeaderOssNextAppendPosition, fmt.Sprintf("%d", len(data)))
+			w.Header().Set(HeaderOssCRC64, crc64ecma)
+
+			//status code
+			w.WriteHeader(200)
+
+			//body
+			w.Write(nil)
+		}
+	}))
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	//No Object Exist
+	f, err := client.AppendFile(context.TODO(), "bucket", "key")
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	//stat
+	stat, err := f.Stat()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), stat.Size())
+	assert.Equal(t, "oss://bucket/key", stat.Name())
+
+	n, err := f.Write([]byte("hello"))
+	assert.Nil(t, err)
+	assert.Equal(t, 5, n)
+
+	n, err = f.Write([]byte(" world"))
+	assert.Nil(t, err)
+	assert.Equal(t, 6, n)
+
+	assert.Equal(t, "hello world", string(data))
+
+	stat, err = f.Stat()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(11), stat.Size())
+	assert.Equal(t, "oss://bucket/key", stat.Name())
+
+	stat, err = f.Stat()
+	assert.Nil(t, err)
+	assert.Equal(t, int64(11), stat.Size())
+	assert.Equal(t, "oss://bucket/key", stat.Name())
+
+	length := 1238
+	str := randStr(length)
+	written, err := f.WriteFrom(io.NopCloser(bytes.NewReader([]byte(str))))
+	assert.Nil(t, err)
+	assert.Equal(t, int64(length), written)
+
+	assert.Equal(t, "hello world"+str, string(data))
+
+	err = f.Close()
+	assert.Nil(t, err)
+
+	// Ojbect Exist
+	data = []byte("object exist")
+	f, err = client.AppendFile(context.TODO(), "bucket", "key")
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	//stat
+	stat, err = f.Stat()
+	assert.Equal(t, int64(len("object exist")), stat.Size())
+
+	n, err = f.Write([]byte(" 123456"))
+	assert.Nil(t, err)
+	assert.Equal(t, 7, n)
+	f.Close()
+
+	// CRC not equal
+	crc64Err = true
+	data = []byte("object exist")
+	f, err = client.AppendFile(context.TODO(), "bucket", "key")
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	//stat
+	stat, err = f.Stat()
+	assert.Equal(t, int64(len("object exist")), stat.Size())
+
+	n, err = f.Write([]byte(" 123456"))
+	assert.NotNil(t, err)
+	assert.Equal(t, 0, n)
+	f.Close()
+}

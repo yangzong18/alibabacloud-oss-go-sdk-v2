@@ -62,6 +62,7 @@ var retriableErrorStrings = []string{
 	"bad record MAC",
 	"stream error:",
 	"tls: use of closed connection",
+	"crc is inconsistent",
 }
 
 var retriableErrors = []error{

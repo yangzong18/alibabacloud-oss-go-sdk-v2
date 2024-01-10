@@ -2821,7 +2821,7 @@ var testMockPutObjectSuccessCases = []struct {
 			"x-oss-request-id":     "534B371674E88A4D8906****",
 			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "316181249502703****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
 		},
 		[]byte(``),
@@ -2844,7 +2844,7 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
-			assert.Equal(t, *o.HashCRC64, "316181249502703****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 			assert.Nil(t, o.VersionId)
 		},
 	},
@@ -2855,7 +2855,7 @@ var testMockPutObjectSuccessCases = []struct {
 			"Date":             "Mon, 13 Nov 2023 08:18:23 GMT",
 
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "870718044876840****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
 			"x-oss-version-id":     "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
 		},
@@ -2879,7 +2879,7 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
-			assert.Equal(t, *o.HashCRC64, "870718044876840****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
 		},
 	},
@@ -2890,7 +2890,7 @@ var testMockPutObjectSuccessCases = []struct {
 			"Date":             "Mon, 13 Nov 2023 08:18:23 GMT",
 
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "870718044876840****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
 			"x-oss-version-id":     "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
 		},
@@ -2915,7 +2915,7 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
-			assert.Equal(t, *o.HashCRC64, "870718044876840****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 			assert.Equal(t, *o.VersionId, "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****")
 			jsonData, err := json.Marshal(o.CallbackResult)
 			assert.Nil(t, err)
@@ -2928,7 +2928,7 @@ var testMockPutObjectSuccessCases = []struct {
 			"x-oss-request-id":     "6551DBCF4311A7303980****",
 			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "870718044876840****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
 		},
 		[]byte(``),
@@ -2952,7 +2952,7 @@ var testMockPutObjectSuccessCases = []struct {
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "si4Nw3Cn9wZ/rPX3XX+j****")
-			assert.Equal(t, *o.HashCRC64, "870718044876840****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 		},
 	},
 	{
@@ -3061,7 +3061,7 @@ var testMockPutObjectDisableDetectMimeTypeCases = []struct {
 			"x-oss-request-id":     "534B371674E88A4D8906****",
 			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "316181249502703****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
 		},
 		[]byte(``),
@@ -3085,7 +3085,7 @@ var testMockPutObjectDisableDetectMimeTypeCases = []struct {
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
-			assert.Equal(t, *o.HashCRC64, "316181249502703****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 			assert.Nil(t, o.VersionId)
 		},
 	},
@@ -3128,7 +3128,7 @@ var testMockPutObjectWithProgressCases = []struct {
 			"x-oss-request-id":     "534B371674E88A4D8906****",
 			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "316181249502703****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
 		},
 		[]byte(``),
@@ -3137,7 +3137,7 @@ var testMockPutObjectWithProgressCases = []struct {
 			assert.Nil(t, err)
 			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
 			assert.Equal(t, "/bucket/object", r.URL.String())
-			assert.Equal(t, "", r.Header.Get(HTTPHeaderContentType))
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
 		},
 		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
@@ -3152,7 +3152,7 @@ var testMockPutObjectWithProgressCases = []struct {
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
-			assert.Equal(t, *o.HashCRC64, "316181249502703****")
+			assert.Equal(t, *o.HashCRC64, "8707180448768400016")
 			assert.Nil(t, o.VersionId)
 		},
 	},
@@ -3169,9 +3169,79 @@ func TestMockPutObject_Progress(t *testing.T) {
 			WithRegion("cn-hangzhou").
 			WithEndpoint(server.URL)
 
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+		n := int64(0)
+		c.Request.ProgressFn = func(transferred, total int64) {
+			n = transferred
+			//fmt.Printf("got transferred:%v, total:%v\n", transferred, total)
+		}
+		output, err := client.PutObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+		assert.Equal(t, int64(len("hi oss")), n)
+	}
+}
+
+var testMockPutObjectWithCrcDisableCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *PutObjectRequest
+	CheckOutputFn  func(t *testing.T, o *PutObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":         "application/xml",
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
+			"x-oss-hash-crc64ecma": "6707180448768400016",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7PhC****",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss"), strings.NewReader(string(requestBody)))
+			assert.Equal(t, "/bucket/object", r.URL.String())
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
+		},
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("object"),
+			Body:   strings.NewReader("hi oss"),
+		},
+		func(t *testing.T, o *PutObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "application/xml", o.Headers.Get("Content-Type"))
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"D41D8CD98F00B204E9800998ECF8****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7PhC****")
+			assert.Equal(t, *o.HashCRC64, "6707180448768400016")
+			assert.Nil(t, o.VersionId)
+		},
+	},
+}
+
+func TestMockPutObject_DisableCRC64(t *testing.T) {
+	//Disable
+	for _, c := range testMockPutObjectWithCrcDisableCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
 		client := NewClient(cfg,
 			func(o *Options) {
-				o.FeatureFlags = o.FeatureFlags & ^FeatureAutoDetectMimeType
+				o.FeatureFlags = o.FeatureFlags & ^FeatureEnableCRC64CheckUpload
 			})
 		assert.NotNil(t, c)
 		n := int64(0)
@@ -3181,6 +3251,19 @@ func TestMockPutObject_Progress(t *testing.T) {
 		output, err := client.PutObject(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
 		assert.Equal(t, int64(len("hi oss")), n)
+
+		//Enable Got Fail
+		client = NewClient(cfg)
+		assert.NotNil(t, c)
+		n = int64(0)
+		c.Request.ProgressFn = func(transferred, total int64) {
+			n = transferred
+		}
+		c.Request.Body = strings.NewReader("hi oss")
+		_, err = client.PutObject(context.TODO(), c.Request)
+		assert.NotNil(t, err)
+		assert.Equal(t, int64(len("hi oss")), n)
+		assert.Contains(t, err.Error(), "crc is inconsistent, client 8707180448768400016, server 6707180448768400016")
 	}
 }
 
@@ -3309,7 +3392,7 @@ var testMockPutObjectErrorCases = []struct {
 			"x-oss-request-id":     "5C3D9175B6FC201293AD****",
 			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
 			"ETag":                 "\"D41D8CD98F00B204E9800998ECF8****\"",
-			"x-oss-hash-crc64ecma": "870718044876840****",
+			"x-oss-hash-crc64ecma": "8707180448768400016",
 			"Content-MD5":          "si4Nw3Cn9wZ/rPX3XX+j****",
 			"x-oss-version-id":     "CAEQHxiBgMD0ooWf3hgiIDcyMzYzZTJkZjgwYzRmN2FhNTZkMWZlMGY0YTVj****",
 		},
@@ -4284,6 +4367,189 @@ func TestMockAppendObject_DisableDetectMimeType(t *testing.T) {
 		assert.NotNil(t, c)
 
 		output, err := client.AppendObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAppendObjectCRC64Cases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AppendObjectRequest
+	CheckOutputFn  func(t *testing.T, o *AppendObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":               "application/xml",
+			"x-oss-request-id":           "534B371674E88A4D8906****",
+			"Date":                       "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-next-append-position": "20",
+			"x-oss-hash-crc64ecma":       "2313496259928504459",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=0", strUrl)
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
+		},
+		&AppendObjectRequest{
+			Bucket:        Ptr("bucket"),
+			Key:           Ptr("object"),
+			Position:      Ptr(int64(0)),
+			Body:          strings.NewReader("hi oss,append object"),
+			InitHashCRC64: Ptr("0"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.NextPosition, int64(20))
+			assert.Equal(t, *o.HashCRC64, "2313496259928504459")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":           "6551DBCF4311A7303980****",
+			"Date":                       "Mon, 13 Nov 2023 08:18:23 GMT",
+			"x-oss-next-append-position": "35",
+			"x-oss-hash-crc64ecma":       "8586970469916596321",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader(",this is a demo"), strings.NewReader(string(requestBody)))
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=20", strUrl)
+		},
+		&AppendObjectRequest{
+			Bucket:        Ptr("bucket"),
+			Key:           Ptr("object"),
+			Position:      Ptr(int64(20)),
+			Body:          strings.NewReader(",this is a demo"),
+			InitHashCRC64: Ptr("2313496259928504459"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "6551DBCF4311A7303980****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.HashCRC64, "8586970469916596321")
+			assert.Equal(t, o.NextPosition, int64(35))
+		},
+	},
+}
+
+func TestMockAppendObject_CRC64(t *testing.T) {
+	for _, c := range testMockAppendObjectCRC64Cases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		output, err := client.AppendObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAppendObjectDisableCRC64Cases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AppendObjectRequest
+	CheckOutputFn  func(t *testing.T, o *AppendObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":               "application/xml",
+			"x-oss-request-id":           "534B371674E88A4D8906****",
+			"Date":                       "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-next-append-position": "20",
+			"x-oss-hash-crc64ecma":       "4313496259928504459",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=0", strUrl)
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
+		},
+		&AppendObjectRequest{
+			Bucket:        Ptr("bucket"),
+			Key:           Ptr("object"),
+			Position:      Ptr(int64(0)),
+			Body:          strings.NewReader("hi oss,append object"),
+			InitHashCRC64: Ptr("0"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.NextPosition, int64(20))
+			assert.Equal(t, *o.HashCRC64, "4313496259928504459")
+		},
+	},
+}
+
+func TestMockAppendObject_DisableCRC64(t *testing.T) {
+	for _, c := range testMockAppendObjectDisableCRC64Cases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		//Enable, meets error
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+
+		_, err := client.AppendObject(context.TODO(), c.Request)
+		assert.NotNil(t, err)
+		assert.Contains(t, err.Error(), "crc is inconsistent, client 2313496259928504459, server 4313496259928504459")
+
+		// Disable, no error
+		client = NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureEnableCRC64CheckUpload
+			})
+		assert.NotNil(t, c)
+		c.Request.Body = strings.NewReader("hi oss,append object")
+		output, err := client.AppendObject(context.TODO(), c.Request)
+		assert.Nil(t, err)
+		c.CheckOutputFn(t, output, err)
+
+		// don't set initCRC, no error
+		client = NewClient(cfg)
+		assert.NotNil(t, c)
+		c.Request.InitHashCRC64 = nil
+		c.Request.Body = strings.NewReader("hi oss,append object")
+		output, err = client.AppendObject(context.TODO(), c.Request)
+		assert.Nil(t, err)
 		c.CheckOutputFn(t, output, err)
 	}
 }
@@ -6539,7 +6805,7 @@ var testMockUploadPartSuccessCases = []struct {
 			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
 			"ETag":                 "\"7265F4D211B56873A381D321F586****\"",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Ph****",
-			"x-oss-hash-crc64ecma": "316181249502703*****",
+			"x-oss-hash-crc64ecma": "6571598172666981661",
 		},
 		nil,
 		func(t *testing.T, r *http.Request) {
@@ -6565,7 +6831,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F586****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Ph****")
-			assert.Equal(t, *o.HashCRC64, "316181249502703*****")
+			assert.Equal(t, *o.HashCRC64, "6571598172666981661")
 		},
 	},
 	{
@@ -6575,7 +6841,7 @@ var testMockUploadPartSuccessCases = []struct {
 			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
 			"ETag":                 "\"7265F4D211B56873A381D321F587****\"",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Pp****",
-			"x-oss-hash-crc64ecma": "316181249502704*****",
+			"x-oss-hash-crc64ecma": "2060813895736234537",
 		},
 		nil,
 		func(t *testing.T, r *http.Request) {
@@ -6601,7 +6867,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F587****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Pp****")
-			assert.Equal(t, *o.HashCRC64, "316181249502704*****")
+			assert.Equal(t, *o.HashCRC64, "2060813895736234537")
 		},
 	},
 	{
@@ -6611,7 +6877,7 @@ var testMockUploadPartSuccessCases = []struct {
 			"Date":                 "Mon, 13 Nov 2023 08:18:23 GMT",
 			"ETag":                 "\"7265F4D211B56873A381D321F587****\"",
 			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Pp****",
-			"x-oss-hash-crc64ecma": "316181249502704*****",
+			"x-oss-hash-crc64ecma": "2060813895736234537",
 		},
 		nil,
 		func(t *testing.T, r *http.Request) {
@@ -6639,7 +6905,7 @@ var testMockUploadPartSuccessCases = []struct {
 			assert.Equal(t, "Mon, 13 Nov 2023 08:18:23 GMT", o.Headers.Get("Date"))
 			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F587****\"")
 			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Pp****")
-			assert.Equal(t, *o.HashCRC64, "316181249502704*****")
+			assert.Equal(t, *o.HashCRC64, "2060813895736234537")
 		},
 	},
 }
@@ -6660,6 +6926,81 @@ func TestMockUploadPart_Success(t *testing.T) {
 
 		output, err := client.UploadPart(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartDisableCRC64Cases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"7265F4D211B56873A381D321F586****\"",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Ph****",
+			"x-oss-hash-crc64ecma": "8571598172666981661",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+			assert.Equal(t, "bce8f3d48247c5d555bb5697bf277b35", r.Header.Get("Content-MD5"))
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Body:       strings.NewReader("upload part 1"),
+			ContentMD5: Ptr("bce8f3d48247c5d555bb5697bf277b35"),
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F586****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Ph****")
+			assert.Equal(t, *o.HashCRC64, "8571598172666981661")
+		},
+	},
+}
+
+func TestMockUploadPart_DisableCRC64(t *testing.T) {
+	for _, c := range testMockUploadPartDisableCRC64Cases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		//Disable
+		client := NewClient(cfg,
+			func(o *Options) {
+				o.FeatureFlags = o.FeatureFlags & ^FeatureEnableCRC64CheckUpload
+			})
+		assert.NotNil(t, c)
+		output, err := client.UploadPart(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+
+		client = NewClient(cfg)
+		assert.NotNil(t, c)
+		c.Request.Body = strings.NewReader("upload part 1")
+		_, err = client.UploadPart(context.TODO(), c.Request)
+		assert.NotNil(t, err)
+		assert.Contains(t, err.Error(), "crc is inconsistent, client 6571598172666981661, server 8571598172666981661")
 	}
 }
 

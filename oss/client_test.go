@@ -813,7 +813,7 @@ func TestHasFeature(t *testing.T) {
 	assert.False(t, c.hasFeature(0))
 	assert.True(t, c.hasFeature(FeatureCorrectClockSkew))
 	assert.True(t, c.hasFeature(FeatureAutoDetectMimeType))
-
+	assert.True(t, c.hasFeature(FeatureEnableCRC64CheckUpload))
 }
 
 func TestFeatureCorrectClockSkew(t *testing.T) {

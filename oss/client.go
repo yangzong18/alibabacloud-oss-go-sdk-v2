@@ -513,6 +513,15 @@ func tryConvertServiceError(response *http.Response) (err error) {
 	return se
 }
 
+func checkResponseCRC64(ccrc string, response *http.Response) (err error) {
+	if scrc := response.Header.Get(HeaderOssCRC64); scrc != "" {
+		if scrc != ccrc {
+			return fmt.Errorf("crc is inconsistent, client %s, server %s", ccrc, scrc)
+		}
+	}
+	return nil
+}
+
 func applyOperationOpt(c *Options, op *Options) {
 	if c == nil || op == nil {
 		return

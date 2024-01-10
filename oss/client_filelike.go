@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -489,7 +490,8 @@ type AppendOnlyFile struct {
 	info os.FileInfo
 
 	// current write position
-	offset int64
+	offset    int64
+	hashCRC64 *string
 
 	closed bool
 }
@@ -520,10 +522,11 @@ func (c *Client) AppendFile(ctx context.Context, bucket string, key string, optF
 			return nil, err
 		}
 	} else {
-		if ToString(result.ObjectType) != "Appendable" {
+		if !strings.EqualFold(ToString(result.ObjectType), "Appendable") {
 			return nil, errors.New("Not a appendable file")
 		}
 		f.offset = result.ContentLength
+		f.hashCRC64 = result.HashCRC64
 	}
 
 	return f, nil
@@ -559,21 +562,28 @@ func (f *AppendOnlyFile) write(b []byte) (n int, err error) {
 	offset := f.offset
 
 	request := &AppendObjectRequest{
-		Bucket:   &f.bucket,
-		Key:      &f.key,
-		Position: Ptr(f.offset),
-		Body:     bytes.NewReader(b),
+		Bucket:        &f.bucket,
+		Key:           &f.key,
+		Position:      Ptr(f.offset),
+		Body:          bytes.NewReader(b),
+		InitHashCRC64: f.hashCRC64,
+	}
+
+	if f.offset == 0 {
+		request.InitHashCRC64 = Ptr("0")
 	}
 
 	var result *AppendObjectResult
 	if result, err = f.client.AppendObject(f.context, request); err == nil {
 		f.offset = result.NextPosition
+		f.hashCRC64 = result.HashCRC64
 	} else {
 		var serr *ServiceError
 		if errors.As(err, &serr) && serr.Code == "PositionNotEqualToLength" {
-			if position, ok := f.nextAppendPosition(); ok {
+			if position, hashcrc, ok := f.nextAppendPosition(); ok {
 				if offset+int64(len(b)) == position {
 					f.offset = position
+					f.hashCRC64 = hashcrc
 					err = nil
 				}
 			}
@@ -622,11 +632,12 @@ func (f *AppendOnlyFile) writeFrom(r io.Reader) (n int64, err error) {
 	} else {
 		var serr *ServiceError
 		if errors.As(err, &serr) && serr.Code == "PositionNotEqualToLength" {
-			if position, ok := f.nextAppendPosition(); ok {
+			if position, hashcrc, ok := f.nextAppendPosition(); ok {
 				if rs != nil {
 					if curr, e := rs.Seek(0, io.SeekCurrent); e == nil {
 						if offset+(curr-roffset) == position {
 							f.offset = position
+							f.hashCRC64 = hashcrc
 							err = nil
 						}
 					}
@@ -638,11 +649,11 @@ func (f *AppendOnlyFile) writeFrom(r io.Reader) (n int64, err error) {
 	return f.offset - offset, err
 }
 
-func (f *AppendOnlyFile) nextAppendPosition() (int64, bool) {
+func (f *AppendOnlyFile) nextAppendPosition() (int64, *string, bool) {
 	if h, e := f.client.HeadObject(f.context, &HeadObjectRequest{Bucket: &f.bucket, Key: &f.key}); e == nil {
-		return h.ContentLength, true
+		return h.ContentLength, h.HashCRC64, true
 	}
-	return 0, false
+	return 0, nil, false
 }
 
 // wrapErr wraps an error that occurred during an operation on an open file.

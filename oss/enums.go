@@ -188,7 +188,11 @@ const (
 	// This feature takes effect for PutObject, AppendObject and InitiateMultipartUpload
 	FeatureAutoDetectMimeType
 
-	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType
+	// FeatureEnableCRC64CheckUpload check data integrity of uploads via the crc64.
+	// This feature takes effect for PutObject, AppendObject, UploadPart, Uploader.UploadFrom and Uploader.UploadFile
+	FeatureEnableCRC64CheckUpload
+
+	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType + FeatureEnableCRC64CheckUpload
 )
 
 type SignatureVersionType int

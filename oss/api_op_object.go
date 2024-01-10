@@ -122,13 +122,19 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 	}
 
 	var trackers []io.Writer
+	var responsHandlers []func(*http.Response) error
 	if request.ProgressFn != nil {
 		trackers = append(trackers, NewProgress(request.ProgressFn, GetReaderLen(request.Body)))
 	}
-
-	var responsHandlers []func(*http.Response) error
 	if request.Callback != nil {
 		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
+	}
+	if c.hasFeature(FeatureEnableCRC64CheckUpload) {
+		hash := NewCRC64(0)
+		trackers = append(trackers, hash)
+		responsHandlers = append(responsHandlers, func(response *http.Response) error {
+			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
+		})
 	}
 
 	var unmarshalFns []func(result any, output *OperationOutput) error
@@ -571,6 +577,9 @@ type AppendObjectRequest struct {
 	// Object data.
 	Body io.Reader `input:"body,nop"`
 
+	// Specify the initial value of CRC64. If not set, the crc check is ignored.
+	InitHashCRC64 *string
+
 	RequestCommon
 }
 
@@ -620,6 +629,27 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 	if c.hasFeature(FeatureAutoDetectMimeType) {
 		marshalFns = append(marshalFns, updateContentType)
 	}
+
+	var trackers []io.Writer
+	var responsHandlers []func(*http.Response) error
+	if c.hasFeature(FeatureEnableCRC64CheckUpload) && request.InitHashCRC64 != nil {
+		initcrc, cerr := strconv.ParseUint(ToString(request.InitHashCRC64), 10, 64)
+		if cerr != nil {
+			return nil, NewErrParamInvalid("request.InitHashCRC64")
+		}
+		hash := NewCRC64(initcrc)
+		trackers = append(trackers, hash)
+		responsHandlers = append(responsHandlers, func(response *http.Response) error {
+			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
+		})
+	}
+	if len(responsHandlers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
+	}
+	if len(trackers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
+	}
+
 	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
@@ -1336,6 +1366,24 @@ func (c *Client) UploadPart(ctx context.Context, request *UploadPartRequest, opt
 		Bucket: request.Bucket,
 		Key:    request.Key,
 	}
+
+	var trackers []io.Writer
+	var responsHandlers []func(*http.Response) error
+	if c.hasFeature(FeatureEnableCRC64CheckUpload) {
+		hash := NewCRC64(0)
+		trackers = append(trackers, hash)
+		responsHandlers = append(responsHandlers, func(response *http.Response) error {
+			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
+		})
+	}
+	if len(responsHandlers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
+	}
+
+	if len(trackers) > 0 {
+		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
+	}
+
 	if err = c.marshalInput(request, input); err != nil {
 		return nil, err
 	}
