@@ -49,6 +49,18 @@ func (m OperationMetadata) Has(key any) bool {
 	return ok
 }
 
+func (m OperationMetadata) Clone() OperationMetadata {
+	vs := make(map[any][]any, len(m.values))
+	for k, v := range m.values {
+		vv := make([]any, len(v))
+		copy(vv, v)
+		vs[k] = vv
+	}
+	return OperationMetadata{
+		values: vs,
+	}
+}
+
 type RequestCommon struct {
 	Headers    map[string]string
 	Parameters map[string]string

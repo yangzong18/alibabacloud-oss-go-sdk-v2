@@ -11484,7 +11484,7 @@ var testMockSelectObjectErrorCases = []struct {
 		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <Error>
   <Code>NoSuchKey</Code>
-  <Message>The specified key does not exist.</Message
+  <Message>The specified key does not exist.</Message>
   <RequestId>65699DB6E6F906F45A83****</RequestId>
   <HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
   <Key>object</Key>
