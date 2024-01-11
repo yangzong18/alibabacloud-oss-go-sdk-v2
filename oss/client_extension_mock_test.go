@@ -25,19 +25,20 @@ import (
 )
 
 type uploaderMockTracker struct {
-	partNum       int
-	saveDate      [][]byte
-	checkTime     []time.Time
-	timeout       []time.Duration
-	uploadPartCnt int32
-	putObjectCnt  int32
-	contentType   string
-	uploadPartErr []bool
-	InitiateMPErr bool
-	CompleteMPErr bool
-	AbortMPErr    bool
-	putObjectErr  bool
-	ListPartsErr  bool
+	partNum        int
+	saveDate       [][]byte
+	checkTime      []time.Time
+	timeout        []time.Duration
+	uploadPartCnt  int32
+	putObjectCnt   int32
+	contentType    string
+	uploadPartErr  []bool
+	InitiateMPErr  bool
+	CompleteMPErr  bool
+	AbortMPErr     bool
+	putObjectErr   bool
+	ListPartsErr   bool
+	crcPartInvalid []bool
 }
 
 func testSetupUploaderMockServer(t *testing.T, tracker *uploaderMockTracker) *httptest.Server {
@@ -154,7 +155,11 @@ func testSetupUploaderMockServer(t *testing.T, tracker *uploaderMockTracker) *ht
 				tracker.saveDate[num-1] = in
 
 				// header
-				w.Header().Set(HeaderOssCRC64, crc64ecma)
+				if tracker.crcPartInvalid != nil && tracker.crcPartInvalid[num-1] {
+					w.Header().Set(HeaderOssCRC64, "12345")
+				} else {
+					w.Header().Set(HeaderOssCRC64, crc64ecma)
+				}
 				w.Header().Set(HTTPHeaderETag, etag)
 
 				//status code
@@ -231,6 +236,9 @@ func testSetupUploaderMockServer(t *testing.T, tracker *uploaderMockTracker) *ht
 						buf.WriteString("    <LastModified>2012-02-23T07:01:34.000Z</LastModified>")
 						buf.WriteString("    <ETag>etag</ETag>")
 						buf.WriteString(fmt.Sprintf("    <Size>%v</Size>", len(d)))
+						hash := NewCRC64(0)
+						hash.Write(d)
+						buf.WriteString(fmt.Sprintf("    <HashCrc64ecma>%v</HashCrc64ecma>", fmt.Sprint(hash.Sum64())))
 						buf.WriteString("  </Part>")
 					}
 				}
@@ -1707,6 +1715,91 @@ func TestUploadParallelFromStreamWithoutSeeker(t *testing.T) {
 	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
 	//FeatureAutoDetectMimeType is enabled default
 	assert.Equal(t, "application/octet-stream", tracker.contentType)
+}
+
+func TestUploadCRC64Fail(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	tracker := &uploaderMockTracker{
+		partNum:        partsNum,
+		saveDate:       make([][]byte, partsNum),
+		checkTime:      make([]time.Time, partsNum),
+		timeout:        make([]time.Duration, partsNum),
+		uploadPartErr:  make([]bool, partsNum),
+		crcPartInvalid: make([]bool, partsNum),
+	}
+
+	data := []byte(randStr(length))
+	hash := NewCRC64(0)
+	hash.Write(data)
+	dataCrc64ecma := fmt.Sprint(hash.Sum64())
+
+	server := testSetupUploaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	u := client.NewUploader(
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 1
+			uo.PartSize = partSize
+		},
+	)
+	assert.Equal(t, 1, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+	tracker.crcPartInvalid[2] = true
+	_, err := u.UploadFrom(
+		context.TODO(),
+		&UploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key")},
+		bytes.NewReader(data))
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "crc is inconsistent")
+
+	//disable crc check
+	client = NewClient(cfg,
+		func(o *Options) {
+			o.FeatureFlags = o.FeatureFlags & ^FeatureEnableCRC64CheckUpload
+		})
+
+	u = client.NewUploader(
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 1
+			uo.PartSize = partSize
+		},
+	)
+	assert.Equal(t, 1, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+	tracker.crcPartInvalid[2] = true
+	tracker.saveDate = make([][]byte, partsNum)
+	result, err := u.UploadFrom(
+		context.TODO(),
+		&UploadRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key")},
+		bytes.NewReader(data))
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, "uploadId-1234", *result.UploadId)
+	assert.Equal(t, dataCrc64ecma, *result.HashCRC64)
+
+	mr := NewMultiBytesReader(tracker.saveDate)
+	all, err := io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall := NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma := fmt.Sprint(hashall.Sum64())
+	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
 }
 
 type downloaderMockTracker struct {

@@ -234,6 +234,7 @@ type uploaderDelegate struct {
 	body      io.Reader
 	readerPos int64
 	totalSize int64
+	hashCRC64 uint64
 
 	// Source's Info, from file or reader
 	filePath string
@@ -343,7 +344,9 @@ func (u *uploaderDelegate) adjustSource() error {
 
 		// find consecutive sequence from min part number
 		var (
-			checkPartNumber int32 = 1
+			checkPartNumber int32  = 1
+			updateCRC64     bool   = u.client.hasFeature(FeatureEnableCRC64CheckUpload)
+			hashCRC64       uint64 = 0
 		)
 	outerLoop:
 		for paginator.HasNext() {
@@ -358,6 +361,10 @@ func (u *uploaderDelegate) adjustSource() error {
 					break outerLoop
 				}
 				checkPartNumber++
+				if updateCRC64 && p.HashCRC64 != nil {
+					value, _ := strconv.ParseUint(ToString(p.HashCRC64), 10, 64)
+					hashCRC64 = CRC64Combine(hashCRC64, value, uint64(p.Size))
+				}
 			}
 		}
 
@@ -369,6 +376,7 @@ func (u *uploaderDelegate) adjustSource() error {
 		}
 		u.partNumber = partNumber
 		u.readerPos = newOffset
+		u.hashCRC64 = hashCRC64
 	}
 	return nil
 }
@@ -491,8 +499,27 @@ func (u *uploaderDelegate) nextReader() (io.ReadSeeker, int, func(), error) {
 
 type uploaderChunk struct {
 	partNum int32
+	size    int
 	body    io.ReadSeeker
 	cleanup func()
+}
+
+type uploadPartCRC struct {
+	partNumber int32
+	size       int
+	hashCRC64  *string
+}
+
+type uploadPartCRCs []uploadPartCRC
+
+func (slice uploadPartCRCs) Len() int {
+	return len(slice)
+}
+func (slice uploadPartCRCs) Less(i, j int) bool {
+	return slice[i].partNumber < slice[j].partNumber
+}
+func (slice uploadPartCRCs) Swap(i, j int) {
+	slice[i], slice[j] = slice[j], slice[i]
 }
 
 func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
@@ -504,10 +531,12 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 	defer release()
 
 	var (
-		wg       sync.WaitGroup
-		mu       sync.Mutex
-		parts    UploadParts
-		errValue atomic.Value
+		wg        sync.WaitGroup
+		mu        sync.Mutex
+		parts     UploadParts
+		errValue  atomic.Value
+		crcParts  uploadPartCRCs
+		enableCRC = u.client.hasFeature(FeatureEnableCRC64CheckUpload)
 	)
 
 	// Init the multipart
@@ -561,6 +590,10 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 				if err == nil {
 					mu.Lock()
 					parts = append(parts, UploadPart{ETag: upResult.ETag, PartNumber: data.partNum})
+					if enableCRC {
+						crcParts = append(crcParts,
+							uploadPartCRC{partNumber: data.partNum, hashCRC64: upResult.HashCRC64, size: data.size})
+					}
 					mu.Unlock()
 				} else {
 					saveErrFn(err)
@@ -598,7 +631,7 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 		}
 		qnum++
 		//fmt.Printf("send chunk: %d\n", qnum)
-		ch <- uploaderChunk{body: reader, partNum: qnum, cleanup: cleanup}
+		ch <- uploaderChunk{body: reader, partNum: qnum, cleanup: cleanup, size: nextChunkLen}
 	}
 
 	// Close the channel, wait for workers
@@ -626,6 +659,13 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 			_, _ = u.client.AbortMultipartUpload(u.context, abortRequest, u.options.ClientOptions...)
 		}
 		return nil, u.wrapErr(uploadId, err)
+	}
+
+	if enableCRC {
+		caclCRC := fmt.Sprint(u.combineCRC(crcParts))
+		if err = checkResponseHeaderCRC64(caclCRC, cmResult.Headers); err != nil {
+			return nil, u.wrapErr(uploadId, err)
+		}
 	}
 
 	return &UploadResult{
@@ -671,6 +711,25 @@ func (u *uploaderDelegate) wrapErr(uploadId string, err error) error {
 		UploadId: uploadId,
 		Path:     fmt.Sprintf("oss://%s/%s", *u.request.Bucket, *u.request.Key),
 		Err:      err}
+}
+
+func (u *uploaderDelegate) combineCRC(crcs uploadPartCRCs) uint64 {
+	if len(crcs) == 0 {
+		return 0
+	}
+	sort.Sort(crcs)
+	crc := u.hashCRC64
+	for _, c := range crcs {
+		if c.hashCRC64 == nil {
+			return 0
+		}
+		if value, err := strconv.ParseUint(*c.hashCRC64, 10, 64); err == nil {
+			crc = CRC64Combine(crc, value, uint64(c.size))
+		} else {
+			break
+		}
+	}
+	return crc
 }
 
 type DownloaderOptions struct {
