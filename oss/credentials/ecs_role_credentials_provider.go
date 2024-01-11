@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ type ecsRoleCredentialsProvider struct {
 	ramCredUrl string
 	ramRole    string
 	timeout    time.Duration
+	retries    int
 }
 
 type ecsRoleCredentials struct {
@@ -29,12 +31,34 @@ type ecsRoleCredentials struct {
 	Code            string    `json:"Code,omitempty"`
 }
 
-func (p *ecsRoleCredentialsProvider) getRoleFromMetaData(ctx context.Context) (string, error) {
+func (p *ecsRoleCredentialsProvider) httpGet(ctx context.Context, url string) (*http.Response, error) {
 	c := &http.Client{
 		Timeout: p.timeout,
 	}
+	var resp *http.Response
+	var err error
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	for i := 0; i < p.retries; i++ {
+		resp, err = c.Do(req)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+			time.Sleep(500 * time.Millisecond)
+			continue
+		}
+		return resp, nil
+	}
+	return nil, err
+}
 
-	resp, err := c.Get(p.ramCredUrl)
+func (p *ecsRoleCredentialsProvider) getRoleFromMetaData(ctx context.Context) (string, error) {
+	resp, err := p.httpGet(ctx, p.ramCredUrl)
 	if err != nil {
 		return "", err
 	}
@@ -55,11 +79,12 @@ func (p *ecsRoleCredentialsProvider) getRoleFromMetaData(ctx context.Context) (s
 
 func (p *ecsRoleCredentialsProvider) getCredentialsFromMetaData(ctx context.Context) (ecsRoleCredentials, error) {
 	var ecsCred ecsRoleCredentials
-	c := &http.Client{
-		Timeout: p.timeout,
+	u, err := url.Parse(p.ramCredUrl)
+	if err != nil {
+		return ecsCred, err
 	}
-	url := path.Join(p.ramCredUrl, p.ramRole)
-	resp, err := c.Get(url)
+	u.Path = path.Join(u.Path, p.ramRole)
+	resp, err := p.httpGet(ctx, u.String())
 	if err != nil {
 		return ecsCred, err
 	}
@@ -86,38 +111,56 @@ func (p *ecsRoleCredentialsProvider) getCredentialsFromMetaData(ctx context.Cont
 
 func (p *ecsRoleCredentialsProvider) GetCredentials(ctx context.Context) (cred Credentials, err error) {
 	if len(p.ramRole) == 0 {
-		if name, err := p.getRoleFromMetaData(ctx); err != nil {
+		name, err := p.getRoleFromMetaData(ctx)
+		if err != nil {
 			return cred, err
-		} else {
-			p.ramRole = name
 		}
+		p.ramRole = name
 	}
-
 	ecsCred, err := p.getCredentialsFromMetaData(ctx)
 	if err != nil {
 		return cred, err
 	}
-
 	cred.AccessKeyID = ecsCred.AccessKeyId
 	cred.AccessKeySecret = ecsCred.AccessKeySecret
 	cred.SecurityToken = ecsCred.SecurityToken
 	if !ecsCred.Expiration.IsZero() {
 		cred.Expires = &ecsCred.Expiration
 	}
-
 	return cred, nil
 }
 
-func NewEcsRoleCredentialsProviderWithoutRefresh(roleNmae string) CredentialsProvider {
+type EcsRoleCredentialsProviderOptions struct {
+	RamRole string
+	Timeout time.Duration
+	Retries int
+}
+
+func NewEcsRoleCredentialsProviderWithoutRefresh(optFns ...func(*EcsRoleCredentialsProviderOptions)) CredentialsProvider {
+	options := EcsRoleCredentialsProviderOptions{
+		RamRole: "",
+		Timeout: time.Second * 10,
+		Retries: 3,
+	}
+	for _, fn := range optFns {
+		fn(&options)
+	}
 	return &ecsRoleCredentialsProvider{
 		ramCredUrl: ecs_ram_cred_url,
-		ramRole:    roleNmae,
-		timeout:    15 * time.Second,
+		ramRole:    options.RamRole,
+		timeout:    options.Timeout,
+		retries:    options.Retries,
 	}
 }
 
-func NewEcsRoleCredentialsProvider(roleNmae string) CredentialsProvider {
-	p := NewEcsRoleCredentialsProviderWithoutRefresh(roleNmae)
+func EcsRamRole(ramRole string) func(*EcsRoleCredentialsProviderOptions) {
+	return func(options *EcsRoleCredentialsProviderOptions) {
+		options.RamRole = ramRole
+	}
+}
+
+func NewEcsRoleCredentialsProvider(optFns ...func(*EcsRoleCredentialsProviderOptions)) CredentialsProvider {
+	p := NewEcsRoleCredentialsProviderWithoutRefresh(optFns...)
 	provider := NewCredentialsFetcherProvider(CredentialsFetcherFunc(func(ctx context.Context) (Credentials, error) {
 		return p.GetCredentials(ctx)
 	}))

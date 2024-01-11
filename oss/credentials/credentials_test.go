@@ -3,6 +3,8 @@ package credentials
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"runtime"
 	"sync/atomic"
@@ -594,4 +596,248 @@ func TestMixedCredentialsProvider(t *testing.T) {
 	assert.Equal(t, "sk", cred.AccessKeySecret)
 	assert.Equal(t, "token", cred.SecurityToken)
 	assert.NotNil(t, cred.Expires)
+}
+
+func testSetupEcsRoleMockServer(t *testing.T, nowTime time.Time, isExpiration bool) *httptest.Server {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isExpiration {
+			nowTime = time.Now()
+		}
+		time.Sleep(4 * time.Second)
+		switch r.Method {
+		case "GET":
+			if r.URL.Path == "/latest/meta-data/ram/security-credentials/" {
+				responseData := []byte(`EcsRamRoleTest`)
+				w.Write(responseData)
+			} else if r.URL.Path == "/latest/meta-data/ram/security-credentials/EcsRamRoleTest" {
+				update := nowTime.UTC().Format("2006-01-02T15:04:05Z")
+				expiration := nowTime.Add(+5 * time.Second).UTC().Format("2006-01-02T15:04:05Z")
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintln(w, `{"AccessKeyId": "accessKeyId","AccessKeySecret": "accessKeySecret","SecurityToken": "securityToken","Expiration": "`+expiration+`","LastUpdated" : "`+update+`","Code" : "Success"}`)
+			}
+		}
+	}))
+	return server
+}
+
+func TestNewEcsRoleCredentialsProviderWithoutRefresh(t *testing.T) {
+	defaultProvider := NewEcsRoleCredentialsProviderWithoutRefresh()
+	assert.NotNil(t, defaultProvider)
+	ecsRoleProvider, ok := defaultProvider.(*ecsRoleCredentialsProvider)
+	assert.True(t, ok)
+	assert.NotNil(t, ecsRoleProvider)
+	assert.Equal(t, "", ecsRoleProvider.ramRole)
+	assert.Equal(t, 3, ecsRoleProvider.retries)
+	assert.Equal(t, 10*time.Second, ecsRoleProvider.timeout)
+
+	defaultProvider = NewEcsRoleCredentialsProviderWithoutRefresh(EcsRamRole("EcsRamRoleTest"))
+	assert.NotNil(t, defaultProvider)
+	ecsRoleProvider, ok = defaultProvider.(*ecsRoleCredentialsProvider)
+	assert.True(t, ok)
+	assert.NotNil(t, ecsRoleProvider)
+	assert.Equal(t, "EcsRamRoleTest", ecsRoleProvider.ramRole)
+	assert.Equal(t, 3, ecsRoleProvider.retries)
+	assert.Equal(t, 10*time.Second, ecsRoleProvider.timeout)
+
+	defaultProvider = NewEcsRoleCredentialsProviderWithoutRefresh(func(o *EcsRoleCredentialsProviderOptions) {
+		o.Timeout = 15 * time.Second
+		o.Retries = 10
+		o.RamRole = "ramosstest"
+	})
+	assert.NotNil(t, defaultProvider)
+	ecsRoleProvider, ok = defaultProvider.(*ecsRoleCredentialsProvider)
+	assert.True(t, ok)
+	assert.NotNil(t, ecsRoleProvider)
+	assert.Equal(t, "ramosstest", ecsRoleProvider.ramRole)
+	assert.Equal(t, 10, ecsRoleProvider.retries)
+	assert.Equal(t, 15*time.Second, ecsRoleProvider.timeout)
+
+	nowTime := time.Now()
+	server := testSetupEcsRoleMockServer(t, nowTime, false)
+	defer server.Close()
+	provider := newStubEcsRoleCredentialsProviderWithoutRefresh(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.timeout = 15 * time.Second
+		o.retries = 3
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+	})
+	ctx := context.Background()
+	creds, err := provider.GetCredentials(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "accessKeyId", creds.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", creds.AccessKeySecret)
+	assert.Equal(t, "securityToken", creds.SecurityToken)
+	assert.Equal(t, nowTime.Add(+5*time.Second).UTC().Format("2006-01-02T15:04:05Z"), (*creds.Expires).Format("2006-01-02T15:04:05Z"))
+
+	provider = newStubEcsRoleCredentialsProviderWithoutRefresh(func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.timeout = 15 * time.Second
+		o.retries = 3
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+	})
+	creds, err = provider.GetCredentials(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "accessKeyId", creds.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", creds.AccessKeySecret)
+	assert.Equal(t, "securityToken", creds.SecurityToken)
+	assert.Equal(t, nowTime.Add(+5*time.Second).UTC().Format("2006-01-02T15:04:05Z"), (*creds.Expires).Format("2006-01-02T15:04:05Z"))
+
+	ctxt1, cancel1 := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel1()
+	creds, err = provider.GetCredentials(ctxt1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+
+	provider = newStubEcsRoleCredentialsProviderWithoutRefresh(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.timeout = 1 * time.Second
+		o.retries = 2
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+	})
+	creds, err = provider.GetCredentials(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+func TestNewEcsRoleCredentialsProvider(t *testing.T) {
+	ecsRoleProvider := NewEcsRoleCredentialsProvider()
+	assert.NotNil(t, ecsRoleProvider)
+	fetcherProvider, ok := ecsRoleProvider.(*CredentialsFetcherProvider)
+	assert.True(t, ok)
+	assert.NotNil(t, fetcherProvider)
+	assert.Equal(t, defaultExpiredFactor, fetcherProvider.expiredFactor)
+	assert.Equal(t, defaultRefreshDuration, fetcherProvider.refreshDuration)
+	assert.NotNil(t, fetcherProvider.fetcher)
+
+	ecsRoleProvider = NewEcsRoleCredentialsProvider(EcsRamRole("EcsRamRoleTest"))
+	assert.NotNil(t, ecsRoleProvider)
+	fetcherProvider, ok = ecsRoleProvider.(*CredentialsFetcherProvider)
+	assert.True(t, ok)
+	assert.NotNil(t, fetcherProvider)
+	assert.Equal(t, defaultExpiredFactor, fetcherProvider.expiredFactor)
+	assert.Equal(t, defaultRefreshDuration, fetcherProvider.refreshDuration)
+	assert.NotNil(t, fetcherProvider.fetcher)
+
+	nowTime := time.Now()
+	server := testSetupEcsRoleMockServer(t, nowTime, false)
+	defer server.Close()
+	provider := newStubEcsRoleCredentialsProvider(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+	})
+	ctx := context.Background()
+	creds, err := provider.GetCredentials(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "accessKeyId", creds.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", creds.AccessKeySecret)
+	assert.Equal(t, "securityToken", creds.SecurityToken)
+	assert.Equal(t, nowTime.Add(+5*time.Second).UTC().Format("2006-01-02T15:04:05Z"), (*creds.Expires).Format("2006-01-02T15:04:05Z"))
+
+	provider = newStubEcsRoleCredentialsProvider(func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+	})
+	creds, err = provider.GetCredentials(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "accessKeyId", creds.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", creds.AccessKeySecret)
+	assert.Equal(t, "securityToken", creds.SecurityToken)
+	assert.Equal(t, nowTime.Add(+5*time.Second).UTC().Format("2006-01-02T15:04:05Z"), (*creds.Expires).Format("2006-01-02T15:04:05Z"))
+
+	ctxt1, cancel1 := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel1()
+	creds, err = provider.GetCredentials(ctxt1)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "FetchCredentialsCanceled")
+
+	provider = newStubEcsRoleCredentialsProvider(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.ramCredUrl = server.URL + "/latest/meta-data/ram/security-credentials/"
+		o.timeout = 3 * time.Second
+		o.retries = 3
+	})
+	creds, err = provider.GetCredentials(ctx)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+
+	nowTime = time.Now()
+	server1 := testSetupEcsRoleMockServer(t, nowTime, true)
+	defer server1.Close()
+	provider = newStubEcsRoleCredentialsProvider(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.ramCredUrl = server1.URL + "/latest/meta-data/ram/security-credentials/"
+		o.timeout = 15 * time.Second
+		o.retries = 3
+	})
+	assert.NotNil(t, provider)
+	cred, err := provider.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "accessKeyId", cred.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", cred.AccessKeySecret)
+	assert.Equal(t, "securityToken", cred.SecurityToken)
+	assert.NotNil(t, cred.Expires)
+	assert.False(t, cred.Expired())
+
+	// 1st
+	cred1, err := provider.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "accessKeyId", cred1.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", cred1.AccessKeySecret)
+	assert.Equal(t, "securityToken", cred1.SecurityToken)
+	assert.NotNil(t, cred1.Expires)
+	assert.False(t, cred1.Expired())
+
+	// 2st
+	cred2, err := provider.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "accessKeyId", cred2.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", cred2.AccessKeySecret)
+	assert.Equal(t, "securityToken", cred2.SecurityToken)
+	assert.Equal(t, cred1.Expires, cred2.Expires)
+	time.Sleep(4 * time.Second)
+	assert.True(t, cred.Expired())
+	// 3st
+	cred3, err := provider.GetCredentials(context.TODO())
+	assert.Nil(t, err)
+	assert.Equal(t, "accessKeyId", cred3.AccessKeyID)
+	assert.Equal(t, "accessKeySecret", cred3.AccessKeySecret)
+	assert.Equal(t, "securityToken", cred3.SecurityToken)
+	assert.False(t, cred3.Expired())
+	assert.True(t, cred3.Expires.After(*cred.Expires))
+
+	provider = newStubEcsRoleCredentialsProvider(stubEcsRamRole("EcsRamRoleTest"), func(o *stubEcsRoleCredentialsProviderOptions) {
+		o.ramCredUrl = server1.URL + "/latest/meta-data/ram/security-credentials/"
+		o.timeout = 2 * time.Second
+		o.retries = 2
+	})
+	assert.NotNil(t, provider)
+	cred, err = provider.GetCredentials(context.TODO())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
+}
+
+type stubEcsRoleCredentialsProviderOptions ecsRoleCredentialsProvider
+
+func stubEcsRamRole(ramRole string) func(*stubEcsRoleCredentialsProviderOptions) {
+	return func(options *stubEcsRoleCredentialsProviderOptions) {
+		options.ramRole = ramRole
+	}
+}
+
+func newStubEcsRoleCredentialsProviderWithoutRefresh(optFns ...func(*stubEcsRoleCredentialsProviderOptions)) CredentialsProvider {
+	options := stubEcsRoleCredentialsProviderOptions{
+		ramRole: "",
+		timeout: time.Second * 10,
+		retries: 3,
+	}
+	for _, fn := range optFns {
+		fn(&options)
+	}
+	return &ecsRoleCredentialsProvider{
+		ramCredUrl: options.ramCredUrl,
+		ramRole:    options.ramRole,
+		timeout:    options.timeout,
+		retries:    options.retries,
+	}
+}
+
+func newStubEcsRoleCredentialsProvider(optFns ...func(*stubEcsRoleCredentialsProviderOptions)) CredentialsProvider {
+	p := newStubEcsRoleCredentialsProviderWithoutRefresh(optFns...)
+	provider := NewCredentialsFetcherProvider(CredentialsFetcherFunc(func(ctx context.Context) (Credentials, error) {
+		return p.GetCredentials(ctx)
+	}))
+	return provider
 }
