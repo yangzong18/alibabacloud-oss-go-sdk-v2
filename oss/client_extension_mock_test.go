@@ -2677,7 +2677,9 @@ func TestDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
 	assert.Equal(t, int64(partSize), dcp.Info.Data.PartSize)
 
 	assert.Equal(t, int64(tracker.failPartNum*tracker.partSize), dcp.Info.Data.DownloadInfo.Offset)
-	assert.Equal(t, uint64(0), dcp.Info.Data.DownloadInfo.CRC64)
+	h := NewCRC64(0)
+	h.Write(data[0:int(dcp.Info.Data.DownloadInfo.Offset)])
+	assert.Equal(t, h.Sum64(), dcp.Info.Data.DownloadInfo.CRC64)
 
 	// resume from checkpoint
 	tracker.failPartNum = 0
@@ -2687,6 +2689,7 @@ func TestDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
 			do.ParallelNum = 3
 			do.CheckpointDir = "."
 			do.EnableCheckpoint = true
+			do.VerifyData = true
 		})
 
 	assert.Nil(t, err)

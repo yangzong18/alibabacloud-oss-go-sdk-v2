@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"io"
 	"net/http"
 	"os"
@@ -741,6 +742,8 @@ type DownloaderOptions struct {
 
 	CheckpointDir string
 
+	VerifyData bool
+
 	UseTempFile bool
 
 	ClientOptions []func(*Options)
@@ -883,6 +886,9 @@ func (d *Downloader) DownloadFile(ctx context.Context, request *DownloadRequest,
 		return nil, err
 	}
 
+	// CRC Part
+	delegate.updateCRCFlag()
+
 	// download
 	result, err = delegate.download()
 
@@ -912,6 +918,10 @@ type downloaderDelegate struct {
 	//Destination's Info
 	filePath     string
 	tempFilePath string
+
+	//crc
+	calcCRC  bool
+	checkCRC bool
 
 	checkpoint *downloadCheckpoint
 }
@@ -1094,6 +1104,7 @@ func (d *downloaderDelegate) adjustRange() error {
 func (d *downloaderDelegate) checkCheckpoint() error {
 	if d.options.EnableCheckpoint {
 		d.checkpoint = newDownloadCheckpoint(&d.request, d.tempFilePath, d.options.CheckpointDir, d.headers, d.options.PartSize)
+		d.checkpoint.VerifyData = d.options.VerifyData
 		if err := d.checkpoint.load(); err != nil {
 			return err
 		}
@@ -1108,13 +1119,23 @@ func (d *downloaderDelegate) checkCheckpoint() error {
 	return nil
 }
 
+func (d *downloaderDelegate) updateCRCFlag() error {
+	if d.client.hasFeature(FeatureEnableCRC64CheckDownload) {
+		d.checkCRC = d.request.Range == nil
+		d.calcCRC = (d.checkpoint != nil && d.checkpoint.VerifyData) || d.checkCRC
+	}
+	return nil
+}
+
 func (d *downloaderDelegate) download() (*DownloadResult, error) {
 	var (
-		wg       sync.WaitGroup
-		errValue atomic.Value
-		cpCh     chan downloadedChunk
-		cpWg     sync.WaitGroup
-		cpChunks downloadedChunks
+		wg            sync.WaitGroup
+		errValue      atomic.Value
+		cpCh          chan downloadedChunk
+		cpWg          sync.WaitGroup
+		cpChunks      downloadedChunks
+		enableTracker bool   = d.calcCRC || d.checkpoint != nil
+		tCRC64        uint64 = 0
 	)
 
 	saveErrFn := func(e error) {
@@ -1156,9 +1177,18 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 		}
 	}
 
-	// checkpointFn runs in worker goroutines to update checkpoint info
-	checkpointFn := func(ch chan downloadedChunk) {
+	// trackerFn runs in worker goroutines to update checkpoint info or calc downloaded crc
+	trackerFn := func(ch chan downloadedChunk) {
 		defer cpWg.Done()
+		var (
+			tOffset int64 = 0
+		)
+
+		if d.checkpoint != nil {
+			tOffset = d.checkpoint.Info.Data.DownloadInfo.Offset
+			tCRC64 = d.checkpoint.Info.Data.DownloadInfo.CRC64
+		}
+
 		for {
 			chunk, ok := <-ch
 			if !ok {
@@ -1166,7 +1196,7 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 			}
 			cpChunks = append(cpChunks, chunk)
 			sort.Sort(cpChunks)
-			newOffset := d.checkpoint.Info.Data.DownloadInfo.Offset
+			newOffset := tOffset
 			i := 0
 			for ii := range cpChunks {
 				if cpChunks[ii].start == newOffset {
@@ -1176,11 +1206,18 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 					break
 				}
 			}
-			if newOffset != d.checkpoint.Info.Data.DownloadInfo.Offset {
+			if newOffset != tOffset {
 				//remove updated chunk in cpChunks
+				if d.calcCRC {
+					tCRC64 = d.combineCRC(tCRC64, cpChunks[0:i])
+				}
+				tOffset = newOffset
 				cpChunks = cpChunks[i:]
-				d.checkpoint.Info.Data.DownloadInfo.Offset = newOffset
-				d.checkpoint.dump()
+				if d.checkpoint != nil {
+					d.checkpoint.Info.Data.DownloadInfo.Offset = tOffset
+					d.checkpoint.Info.Data.DownloadInfo.CRC64 = tCRC64
+					d.checkpoint.dump()
+				}
 			}
 		}
 	}
@@ -1192,11 +1229,11 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 		go writeChunkFn(ch)
 	}
 
-	// Start checkpoint worker if enable checkpoint
-	if d.checkpoint != nil {
+	// Start checkpoint worker if need track downloaded chunk
+	if enableTracker {
 		cpCh = make(chan downloadedChunk, 1)
 		cpWg.Add(1)
-		go checkpointFn(cpCh)
+		go trackerFn(cpCh)
 	}
 
 	// Queue the next range of bytes to read.
@@ -1213,9 +1250,18 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 	close(ch)
 	wg.Wait()
 
-	if d.checkpoint != nil {
+	if enableTracker {
 		close(cpCh)
 		cpWg.Wait()
+	}
+
+	if d.checkCRC {
+		if len(cpChunks) > 0 {
+			sort.Sort(cpChunks)
+		}
+		if derr := checkResponseHeaderCRC64(fmt.Sprint(d.combineCRC(tCRC64, cpChunks)), d.headers); derr != nil {
+			saveErrFn(derr)
+		}
 	}
 
 	if err := getErrFn(); err != nil {
@@ -1266,14 +1312,41 @@ func (d *downloaderDelegate) downloadChunk(chunk downloaderChunk) (downloadedChu
 	}
 
 	reader, _ := NewRangeReader(d.context, getFn, &HTTPRange{chunk.start, chunk.size}, d.etag)
-	n, err := io.Copy(&chunk, reader)
+	defer reader.Close()
+
+	var (
+		r         io.Reader = reader
+		w         hash.Hash64
+		hashCRC64 uint64 = 0
+	)
+
+	if d.calcCRC {
+		w = NewCRC64(0)
+		r = io.TeeReader(reader, w)
+	}
+	n, err := io.Copy(&chunk, r)
 	d.incrWritten(n)
+
+	if w != nil {
+		hashCRC64 = w.Sum64()
+	}
 
 	return downloadedChunk{
 		start: chunk.start,
 		size:  n,
-		crc64: uint64(0),
+		crc64: hashCRC64,
 	}, err
+}
+
+func (u *downloaderDelegate) combineCRC(hashCRC uint64, crcs downloadedChunks) uint64 {
+	if len(crcs) == 0 {
+		return hashCRC
+	}
+	crc := hashCRC
+	for _, c := range crcs {
+		crc = CRC64Combine(crc, c.crc64, uint64(c.size))
+	}
+	return crc
 }
 
 // ----- download chcekpoint  -----

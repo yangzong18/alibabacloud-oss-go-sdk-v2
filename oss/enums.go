@@ -192,7 +192,12 @@ const (
 	// This feature takes effect for PutObject, AppendObject, UploadPart, Uploader.UploadFrom and Uploader.UploadFile
 	FeatureEnableCRC64CheckUpload
 
-	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType + FeatureEnableCRC64CheckUpload
+	// FeatureEnableCRC64CheckDownload check data integrity of downloads via the crc64.
+	// This feature takes effect for Downloader.DownloadFile
+	FeatureEnableCRC64CheckDownload
+
+	FeatureFlagsDefault = FeatureCorrectClockSkew + FeatureAutoDetectMimeType +
+		FeatureEnableCRC64CheckUpload + FeatureEnableCRC64CheckDownload
 )
 
 type SignatureVersionType int
