@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"hash"
 	"io"
 	"net"
 	"net/http"
@@ -241,8 +242,10 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 
 	var writers []io.Writer
 	// tracker in OpertionMetaData
-	if trackers, ok := input.OpMetadata.Get(OpMetaKeyRequestBodyTracker).([]io.Writer); ok {
-		writers = append(writers, trackers...)
+	for _, w := range input.OpMetadata.Values(OpMetaKeyRequestBodyTracker) {
+		if ww, ok := w.(io.Writer); ok {
+			writers = append(writers, ww)
+		}
 	}
 
 	// host & path
@@ -451,12 +454,6 @@ func buildURL(input *OperationInput, opts *Options) (host string, path string) {
 	return host, ("/" + strings.Join(paths, "/"))
 }
 
-func callbackResponseHandler(opts *Options) {
-	opts.ResponseHandlers = []func(*http.Response) error{
-		callbackErrorResponseHandler,
-	}
-}
-
 func serviceErrorResponseHandler(response *http.Response) error {
 	if response.StatusCode/100 == 2 {
 		return nil
@@ -465,10 +462,11 @@ func serviceErrorResponseHandler(response *http.Response) error {
 }
 
 func callbackErrorResponseHandler(response *http.Response) error {
-	if response.StatusCode == 200 {
-		return nil
+	if response.StatusCode == 203 &&
+		response.Request.Header.Get(HeaderOssCallback) != "" {
+		return tryConvertServiceError(response)
 	}
-	return tryConvertServiceError(response)
+	return nil
 }
 
 func tryConvertServiceError(response *http.Response) (err error) {
@@ -513,8 +511,8 @@ func tryConvertServiceError(response *http.Response) (err error) {
 	return se
 }
 
-func checkResponseCRC64(ccrc string, response *http.Response) (err error) {
-	if scrc := response.Header.Get(HeaderOssCRC64); scrc != "" {
+func checkResponseHeaderCRC64(ccrc string, header http.Header) (err error) {
+	if scrc := header.Get(HeaderOssCRC64); scrc != "" {
 		if scrc != ccrc {
 			return fmt.Errorf("crc is inconsistent, client %s, server %s", ccrc, scrc)
 		}
@@ -572,8 +570,10 @@ func applyOperationContext(ctx context.Context, c *Options) context.Context {
 }
 
 func applyOperationMetadata(input *OperationInput, c *Options) {
-	if handles, ok := input.OpMetadata.Get(OpMetaKeyResponsHandler).([]func(*http.Response) error); ok {
-		c.ResponseHandlers = append(c.ResponseHandlers, handles...)
+	for _, h := range input.OpMetadata.Values(OpMetaKeyResponsHandler) {
+		if hh, ok := h.(func(*http.Response) error); ok {
+			c.ResponseHandlers = append(c.ResponseHandlers, hh)
+		}
 	}
 }
 
@@ -1022,7 +1022,6 @@ func updateContentType(_ any, input *OperationInput) error {
 	if input.Headers == nil {
 		input.Headers = map[string]string{}
 	}
-
 	if _, ok := input.Headers[HTTPHeaderContentType]; !ok {
 		value := TypeByExtension(ToString(input.Key))
 		if value == "" {
@@ -1031,6 +1030,49 @@ func updateContentType(_ any, input *OperationInput) error {
 		input.Headers[HTTPHeaderContentType] = value
 	}
 	return nil
+}
+
+func addProgress(request any, input *OperationInput) error {
+	var w io.Writer
+	switch req := request.(type) {
+	case *PutObjectRequest:
+		if req.ProgressFn == nil {
+			return nil
+		}
+		w = NewProgress(req.ProgressFn, GetReaderLen(input.Body))
+	default:
+		return nil
+	}
+	input.OpMetadata.Add(OpMetaKeyRequestBodyTracker, w)
+	return nil
+}
+
+func addCrcCheck(request any, input *OperationInput) error {
+	var w io.Writer = NewCRC64(0)
+	input.OpMetadata.Add(OpMetaKeyRequestBodyTracker, w)
+	input.OpMetadata.Add(OpMetaKeyResponsHandler, func(response *http.Response) error {
+		return checkResponseHeaderCRC64(fmt.Sprint(w.(hash.Hash64).Sum64()), response.Header)
+	})
+	return nil
+}
+
+func addCallback(_ any, input *OperationInput) error {
+	input.OpMetadata.Add(OpMetaKeyResponsHandler, callbackErrorResponseHandler)
+	return nil
+}
+
+func (c *Client) updateContentType(request any, input *OperationInput) error {
+	if !c.hasFeature(FeatureAutoDetectMimeType) {
+		return nil
+	}
+	return updateContentType(request, input)
+}
+
+func (c *Client) addCrcCheck(request any, input *OperationInput) error {
+	if !c.hasFeature(FeatureEnableCRC64CheckUpload) {
+		return nil
+	}
+	return addCrcCheck(request, input)
 }
 
 func encodeSourceObject(request any) string {

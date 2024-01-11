@@ -3,8 +3,8 @@ package oss
 import (
 	"context"
 	"fmt"
+	"hash"
 	"io"
-	"net/http"
 	"sort"
 	"strconv"
 	"time"
@@ -116,41 +116,20 @@ func (c *Client) PutObject(ctx context.Context, request *PutObjectRequest, optFn
 		Key:    request.Key,
 	}
 
-	var marshalFns []func(any, *OperationInput) error
-	if c.hasFeature(FeatureAutoDetectMimeType) {
-		marshalFns = append(marshalFns, updateContentType)
+	marshalFns := []func(any, *OperationInput) error{
+		addProgress,
+		c.updateContentType,
+		c.addCrcCheck,
+	}
+	unmarshalFns := []func(result any, output *OperationOutput) error{
+		unmarshalHeader,
 	}
 
-	var trackers []io.Writer
-	var responsHandlers []func(*http.Response) error
-	if request.ProgressFn != nil {
-		trackers = append(trackers, NewProgress(request.ProgressFn, GetReaderLen(request.Body)))
-	}
 	if request.Callback != nil {
-		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
-	}
-	if c.hasFeature(FeatureEnableCRC64CheckUpload) {
-		hash := NewCRC64(0)
-		trackers = append(trackers, hash)
-		responsHandlers = append(responsHandlers, func(response *http.Response) error {
-			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
-		})
-	}
-
-	var unmarshalFns []func(result any, output *OperationOutput) error
-	unmarshalFns = append(unmarshalFns, unmarshalHeader)
-	if request.Callback != nil {
+		marshalFns = append(marshalFns, addCallback)
 		unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
 	} else {
 		unmarshalFns = append(unmarshalFns, discardBody)
-	}
-
-	if len(responsHandlers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
-	}
-
-	if len(trackers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
 	}
 
 	if err = c.marshalInput(request, input, marshalFns...); err != nil {
@@ -625,29 +604,28 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 		Bucket:     request.Bucket,
 		Key:        request.Key,
 	}
-	var marshalFns []func(any, *OperationInput) error
-	if c.hasFeature(FeatureAutoDetectMimeType) {
-		marshalFns = append(marshalFns, updateContentType)
+
+	marshalFns := []func(any, *OperationInput) error{
+		c.updateContentType,
 	}
 
-	var trackers []io.Writer
-	var responsHandlers []func(*http.Response) error
+	unmarshalFns := []func(any, *OperationOutput) error{
+		discardBody,
+		unmarshalHeader,
+	}
+
+	// AppendObject is not idempotent, and cannot be retried
 	if c.hasFeature(FeatureEnableCRC64CheckUpload) && request.InitHashCRC64 != nil {
-		initcrc, cerr := strconv.ParseUint(ToString(request.InitHashCRC64), 10, 64)
-		if cerr != nil {
+		var init uint64
+		init, err = strconv.ParseUint(ToString(request.InitHashCRC64), 10, 64)
+		if err != nil {
 			return nil, NewErrParamInvalid("request.InitHashCRC64")
 		}
-		hash := NewCRC64(initcrc)
-		trackers = append(trackers, hash)
-		responsHandlers = append(responsHandlers, func(response *http.Response) error {
-			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
+		var w io.Writer = NewCRC64(init)
+		input.OpMetadata.Add(OpMetaKeyRequestBodyTracker, w)
+		unmarshalFns = append(unmarshalFns, func(result any, output *OperationOutput) error {
+			return checkResponseHeaderCRC64(fmt.Sprint(w.(hash.Hash64).Sum64()), output.Headers)
 		})
-	}
-	if len(responsHandlers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
-	}
-	if len(trackers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
 	}
 
 	if err = c.marshalInput(request, input, marshalFns...); err != nil {
@@ -660,7 +638,7 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 	}
 
 	result := &AppendObjectResult{}
-	if err = c.unmarshalOutput(result, output, discardBody, unmarshalHeader); err != nil {
+	if err = c.unmarshalOutput(result, output, unmarshalFns...); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 
@@ -1291,15 +1269,16 @@ func (c *Client) InitiateMultipartUpload(ctx context.Context, request *InitiateM
 			"encoding-type": "url",
 		},
 	}
+
 	marshalFns := []func(any, *OperationInput) error{
 		updateContentMd5,
+		c.updateContentType,
 	}
-	if c.hasFeature(FeatureAutoDetectMimeType) {
-		marshalFns = append(marshalFns, updateContentType)
-	}
+
 	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
+
 	output, err := c.invokeOperation(ctx, input, optFns)
 	if err != nil {
 		return nil, err
@@ -1367,24 +1346,11 @@ func (c *Client) UploadPart(ctx context.Context, request *UploadPartRequest, opt
 		Key:    request.Key,
 	}
 
-	var trackers []io.Writer
-	var responsHandlers []func(*http.Response) error
-	if c.hasFeature(FeatureEnableCRC64CheckUpload) {
-		hash := NewCRC64(0)
-		trackers = append(trackers, hash)
-		responsHandlers = append(responsHandlers, func(response *http.Response) error {
-			return checkResponseCRC64(fmt.Sprint(hash.Sum64()), response)
-		})
-	}
-	if len(responsHandlers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
+	marshalFns := []func(any, *OperationInput) error{
+		c.addCrcCheck,
 	}
 
-	if len(trackers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyRequestBodyTracker, trackers)
-	}
-
-	if err = c.marshalInput(request, input); err != nil {
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
 	output, err := c.invokeOperation(ctx, input, optFns)
@@ -1597,26 +1563,25 @@ func (c *Client) CompleteMultipartUpload(ctx context.Context, request *CompleteM
 		},
 	}
 
-	var responsHandlers []func(*http.Response) error
-	if request.Callback != nil {
-		responsHandlers = append(responsHandlers, callbackErrorResponseHandler)
-	}
-	if len(responsHandlers) > 0 {
-		input.OpMetadata.Set(OpMetaKeyResponsHandler, responsHandlers)
+	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
+		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
 	}
 
-	var unmarshalFns []func(result any, output *OperationOutput) error
-	unmarshalFns = append(unmarshalFns, unmarshalHeader)
+	marshalFns := []func(any, *OperationInput) error{
+		updateContentMd5,
+	}
+	unmarshalFns := []func(result any, output *OperationOutput) error{
+		unmarshalHeader,
+	}
+
 	if request.Callback != nil {
+		marshalFns = append(marshalFns, addCallback)
 		unmarshalFns = append(unmarshalFns, unmarshalCallbackBody)
 	} else {
 		unmarshalFns = append(unmarshalFns, unmarshalBodyXml, unmarshalEncodeType)
 	}
 
-	if request.CompleteMultipartUpload != nil && len(request.CompleteMultipartUpload.Parts) > 0 {
-		sort.Sort(UploadParts(request.CompleteMultipartUpload.Parts))
-	}
-	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
+	if err = c.marshalInput(request, input, marshalFns...); err != nil {
 		return nil, err
 	}
 

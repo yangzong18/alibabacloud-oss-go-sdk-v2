@@ -6,29 +6,39 @@ import (
 )
 
 type OperationMetadata struct {
-	values map[any]any
+	values map[any][]any
 }
 
 func (m OperationMetadata) Get(key any) any {
+	if m.values == nil {
+		return nil
+	}
+	v := m.values[key]
+	if len(v) == 0 {
+		return nil
+	}
+	return v[0]
+}
+
+func (m OperationMetadata) Values(key any) []any {
+	if m.values == nil {
+		return nil
+	}
 	return m.values[key]
 }
 
-func (m OperationMetadata) Clone() OperationMetadata {
-	vs := make(map[any]any, len(m.values))
-	for k, v := range m.values {
-		vs[k] = v
+func (m *OperationMetadata) Add(key, value any) {
+	if m.values == nil {
+		m.values = map[any][]any{}
 	}
-
-	return OperationMetadata{
-		values: vs,
-	}
+	m.values[key] = append(m.values[key], value)
 }
 
 func (m *OperationMetadata) Set(key, value any) {
 	if m.values == nil {
-		m.values = map[any]any{}
+		m.values = map[any][]any{}
 	}
-	m.values[key] = value
+	m.values[key] = []any{value}
 }
 
 func (m OperationMetadata) Has(key any) bool {
