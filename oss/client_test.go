@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/transport"
 	"github.com/stretchr/testify/assert"
 )
 

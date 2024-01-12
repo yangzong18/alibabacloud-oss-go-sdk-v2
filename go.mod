@@ -1,4 +1,4 @@
-module github.com/aliyun/aliyun-oss-go-sdk/v3
+module github.com/aliyun/aliyun-oss-go-sdk-v2
 
 go 1.18
 

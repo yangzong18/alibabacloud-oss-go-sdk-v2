@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/retry"
 )
 
 type HTTPClient interface {

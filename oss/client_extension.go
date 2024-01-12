@@ -721,6 +721,73 @@ func (m *DownloadError) Unwrap() error {
 	return m.Err
 }
 
+func (d *Downloader) DownloadSmallFile(ctx context.Context, request *GetObjectRequest, filePath string) (result *DownloadResult, err error) {
+	var file *os.File
+	if file, err = os.Open(filePath); err != nil {
+		return
+	}
+	defer file.Close()
+	p := progressTracker{
+		pr: nil, /*request ProgressFn*/
+	}
+	for i := 0; i < d.client.options.RetryMaxAttempts; i++ {
+		var out *GetObjectResult
+		if out, err = d.client.GetObject(ctx, request); err != nil {
+			return
+		}
+		p.total = out.ContentLength
+		tr := io.TeeReader(out.Body, &p)
+		var n int64
+		if n, err = io.Copy(file, tr); err == nil {
+			return &DownloadResult{Written: n}, nil
+		}
+		file.Seek(0, io.SeekStart)
+		p.Reset()
+	}
+	return
+}
+
+func (d *Downloader) DownloadSmallFile2(ctx context.Context, request *GetObjectRequest, filePath string) (result *DownloadResult, err error) {
+	var file *os.File
+	requestWarp := *request
+	if file, err = os.Open(filePath); err != nil {
+		return
+	}
+	defer file.Close()
+	r, _ := ParseRange(ToString(request.Range))
+	reader, _ := NewRangeReader(
+		ctx,
+		func(ctx context.Context, httpRange HTTPRange) (output *ReaderRangeGetOutput, err error) {
+			// update range
+			requestWarp.Range = nil
+			rangeStr := httpRange.FormatHTTPRange()
+			requestWarp.RangeBehavior = nil
+			if rangeStr != nil {
+				requestWarp.Range = rangeStr
+				requestWarp.RangeBehavior = Ptr("standard")
+			}
+			result, err := d.client.GetObject(ctx, &requestWarp, d.options.ClientOptions...)
+			if err != nil {
+				return nil, err
+			}
+
+			return &ReaderRangeGetOutput{
+				Body:          result.Body,
+				ETag:          result.ETag,
+				ContentLength: result.ContentLength,
+				ContentRange:  result.ContentRange,
+			}, nil
+		},
+		r,
+		"",
+	)
+	if n, err := io.Copy(file, io.TeeReader(reader, NewProgress(nil, -1))); err == nil {
+		return &DownloadResult{Written: n}, nil
+	} else {
+		return nil, err
+	}
+}
+
 func (d *Downloader) DownloadFile(ctx context.Context, request *GetObjectRequest, filePath string, optFns ...func(*DownloaderOptions)) (result *DownloadResult, err error) {
 	// Downloader wrapper
 	delegate, err := d.newDelegate(ctx, request, optFns...)

@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
 )
 
 var (

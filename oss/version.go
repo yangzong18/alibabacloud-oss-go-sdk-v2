@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	major = "3"
+	major = "1"
 	minor = "0"
 	patch = "0"
 	tag   = "-devpreview"

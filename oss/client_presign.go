@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/signer"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/signer"
 )
 
 type PresignOptions struct {

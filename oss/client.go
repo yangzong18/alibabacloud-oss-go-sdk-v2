@@ -18,10 +18,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/credentials"
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/retry"
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/signer"
-	"github.com/aliyun/aliyun-oss-go-sdk/v3/oss/transport"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/retry"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/signer"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/transport"
 )
 
 type Options struct {
