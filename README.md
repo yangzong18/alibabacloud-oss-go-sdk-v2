@@ -4,7 +4,7 @@
 
 aliyun-oss-go-sdk-v2 is the Developer Preview for the v2 of the OSS SDK for the Go programming language
 
-## [README in English](https://github.com/aliyun/aliyun-oss-go-sdk-v2/blob/master/README.md)
+## [README in Chinese](README-CN.md)
 
 ## About
 > - This Go SDK is based on the official APIs of [Alibaba Cloud OSS](http://www.aliyun.com/product/oss/).
@@ -168,14 +168,13 @@ func main() {
 }
 ```
 
-#### Complete Example
+##  Complete Example
 More example projects can be found in the `sample` folder 
 
-## 注意事项
-### 运行sample
+### Running Example
 > - Go to the sample code folder `sample`。
 > - Configure credentials values from the environment variables, like `export OSS_ACCESS_KEY_ID="your access key id"`, `export OSS_ACCESS_KEY_SECRET="your access key secrect"`
 > - Take list_objects.go as an example，run `go run list_objects.go` command。
 
 ## License
-> - Apache-2.0, see [license file](LICENSE)
+> - Apache-2.0, see [license file](LICENSE.txt)

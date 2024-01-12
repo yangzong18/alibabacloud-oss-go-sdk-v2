@@ -4,7 +4,7 @@
 
 aliyun-oss-go-sdk-v2 是OSS在Go编译语言下的第二版SDK, 处于开发预览版状态
 
-## [README in English](https://github.com/aliyun/aliyun-oss-go-sdk-v2/blob/master/README.md)
+## [README in English](README.md)
 
 ## 关于
 > - 此Go SDK基于[阿里云对象存储服务](http://www.aliyun.com/product/oss/)官方API构建。
@@ -168,15 +168,14 @@ func main() {
 }
 ```
 
-#### 其他
-更多的示例程序，请参看`sample` 目录
+## 更多示例
+请参看`sample`目录
 
-## 注意事项
-### 运行sample
+### 运行示例
 > - 进入示例程序目录 `sample`。
 > - 通过环境变量，配置访问凭证, `export OSS_ACCESS_KEY_ID="your access key id"`, `export OSS_ACCESS_KEY_SECRET="your access key secrect"`
 > - 以list_objects.go 为例，执行 `go run list_objects.go`。
 
-## License
-> - Apache-2.0, see [license file](LICENSE)
+## 许可协议
+> - Apache-2.0, 请参阅 [许可文件](LICENSE.txt)
 
