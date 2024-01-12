@@ -11,7 +11,7 @@ import (
 )
 
 func TestDownloadCheckpoint(t *testing.T) {
-	request := &DownloadRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
@@ -41,7 +41,7 @@ func TestDownloadCheckpoint(t *testing.T) {
 	assert.Equal(t, partSize, cp.Info.Data.PartSize)
 
 	//has version id
-	request = &DownloadRequest{
+	request = &GetObjectRequest{
 		Bucket:    Ptr("bucket"),
 		Key:       Ptr("key"),
 		VersionId: Ptr("id"),
@@ -53,7 +53,7 @@ func TestDownloadCheckpoint(t *testing.T) {
 	assert.Equal(t, "", cp_vid.Info.Data.ObjectInfo.Range)
 
 	//has range
-	request = &DownloadRequest{
+	request = &GetObjectRequest{
 		Bucket:    Ptr("bucket"),
 		Key:       Ptr("key"),
 		VersionId: Ptr("id"),
@@ -127,7 +127,7 @@ func TestDownloadCheckpoint(t *testing.T) {
 }
 
 func TestDownloadCheckpointInvalidCpPath(t *testing.T) {
-	request := &DownloadRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
@@ -158,7 +158,7 @@ func TestDownloadCheckpointInvalidCpPath(t *testing.T) {
 }
 
 func TestDownloadCheckpointValid(t *testing.T) {
-	request := &DownloadRequest{
+	request := &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
@@ -262,7 +262,7 @@ func TestDownloadCheckpointValid(t *testing.T) {
 }
 
 func TestUploadCheckpoint(t *testing.T) {
-	request := &UploadRequest{
+	request := &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
@@ -339,7 +339,7 @@ func TestUploadCheckpoint(t *testing.T) {
 }
 
 func TestUploadCheckpointInvalidCpPath(t *testing.T) {
-	request := &UploadRequest{
+	request := &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}
@@ -370,7 +370,7 @@ func TestUploadCheckpointInvalidCpPath(t *testing.T) {
 }
 
 func TestUploadCheckpointValid(t *testing.T) {
-	request := &UploadRequest{
+	request := &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}

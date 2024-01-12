@@ -279,6 +279,22 @@ func maxInt64(a, b int64) int64 {
 	}
 }
 
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	} else {
+		return b
+	}
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	} else {
+		return b
+	}
+}
+
 // ParseRange parses a ContentRange from a ContentRange: header.
 // It only accepts bytes 22-33/42 and bytes 22-33/* format.
 func ParseContentRange(s string) (from int64, to int64, total int64, err error) {

@@ -73,74 +73,6 @@ func (c *Client) NewUploader(optFns ...func(*UploaderOptions)) *Uploader {
 	return u
 }
 
-type UploadRequest struct {
-	// The name of the bucket.
-	Bucket *string `input:"host,bucket,required"`
-
-	// The name of the object.
-	Key *string `input:"path,key,required"`
-
-	// The caching behavior of the web page when the object is downloaded.
-	CacheControl *string `input:"header,Cache-Control"`
-
-	// The method that is used to access the object.
-	ContentDisposition *string `input:"header,Content-Disposition"`
-
-	// The method that is used to encode the object.
-	ContentEncoding *string `input:"header,Content-Encoding"`
-
-	// The size of the data in the HTTP message body. Unit: bytes.
-	ContentLength *int64 `input:"header,Content-Length"`
-
-	// The MD5 hash of the object that you want to upload.
-	ContentMD5 *string `input:"header,Content-MD5"`
-
-	// A standard MIME type describing the format of the contents.
-	ContentType *string `input:"header,Content-Type"`
-
-	// The expiration time of the cache in UTC.
-	Expires *string `input:"header,Expires"`
-
-	// Specifies whether the object that is uploaded by calling the PutObject operation
-	// overwrites an existing object that has the same name. Valid values: true and false
-	ForbidOverwrite *string `input:"header,x-oss-forbid-overwrite"`
-
-	// The encryption method on the server side when an object is created.
-	// Valid values: AES256 and KMS
-	ServerSideEncryption *string `input:"header,x-oss-server-side-encryption"`
-
-	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
-	// This header is valid only when the x-oss-server-side-encryption header is set to KMS.
-	ServerSideDataEncryption *string `input:"header,x-oss-server-side-data-encryption"`
-
-	// The ID of the customer master key (CMK) that is managed by Key Management Service (KMS).
-	SSEKMSKeyId *string `input:"header,x-oss-server-side-encryption-key-id"`
-
-	// The access control list (ACL) of the object.
-	Acl ObjectACLType `input:"header,x-oss-object-acl"`
-
-	// The storage class of the object.
-	StorageClass StorageClassType `input:"header,x-oss-storage-class"`
-
-	// The metadata of the object that you want to upload.
-	Metadata map[string]string `input:"header,x-oss-meta-,usermeta"`
-
-	// The tags that are specified for the object by using a key-value pair.
-	// You can specify multiple tags for an object. Example: TagA=A&TagB=B.
-	Tagging *string `input:"header,x-oss-tagging"`
-
-	// A callback parameter is a Base64-encoded string that contains multiple fields in the JSON format.
-	Callback *string `input:"header,x-oss-callback"`
-
-	// Configure custom parameters by using the callback-var parameter.
-	CallbackVar *string `input:"header,x-oss-callback-var"`
-
-	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
-	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
-
-	RequestCommon
-}
-
 type UploadResult struct {
 	UploadId *string
 
@@ -171,7 +103,7 @@ func (m *UploadError) Unwrap() error {
 	return m.Err
 }
 
-func (u *Uploader) UploadFrom(ctx context.Context, request *UploadRequest, body io.Reader, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
+func (u *Uploader) UploadFrom(ctx context.Context, request *PutObjectRequest, body io.Reader, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
 	// Uploader wrapper
 	delegate, err := u.newDelegate(ctx, request, optFns...)
 	if err != nil {
@@ -186,7 +118,7 @@ func (u *Uploader) UploadFrom(ctx context.Context, request *UploadRequest, body 
 	return delegate.upload()
 }
 
-func (u *Uploader) UploadFile(ctx context.Context, request *UploadRequest, filePath string, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
+func (u *Uploader) UploadFile(ctx context.Context, request *PutObjectRequest, filePath string, optFns ...func(*UploaderOptions)) (*UploadResult, error) {
 	// Uploader wrapper
 	delegate, err := u.newDelegate(ctx, request, optFns...)
 	if err != nil {
@@ -225,7 +157,7 @@ type uploaderDelegate struct {
 	options UploaderOptions
 	client  *Client
 	context context.Context
-	request *UploadRequest
+	request *PutObjectRequest
 
 	body      io.Reader
 	readerPos int64
@@ -245,7 +177,7 @@ type uploaderDelegate struct {
 	checkpoint *uploadCheckpoint
 }
 
-func (u *Uploader) newDelegate(ctx context.Context, request *UploadRequest, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
+func (u *Uploader) newDelegate(ctx context.Context, request *PutObjectRequest, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
 	if request == nil {
 		return nil, NewErrParamNull("request")
 	}
@@ -768,64 +700,6 @@ func (c *Client) NewDownloader(optFns ...func(*DownloaderOptions)) *Downloader {
 	return u
 }
 
-type DownloadRequest struct {
-	// The name of the bucket.
-	Bucket *string `input:"host,bucket,required"`
-
-	// The name of the object.
-	Key *string `input:"path,key,required"`
-
-	// If the ETag specified in the request matches the ETag value of the object,
-	// the object and 200 OK are returned. Otherwise, 412 Precondition Failed is returned.
-	IfMatch *string `input:"header,If-Match"`
-
-	// If the ETag specified in the request does not match the ETag value of the object,
-	// the object and 200 OK are returned. Otherwise, 304 Not Modified is returned.
-	IfNoneMatch *string `input:"header,If-None-Match"`
-
-	// If the time specified in this header is earlier than the object modified time or is invalid,
-	// the object and 200 OK are returned. Otherwise, 304 Not Modified is returned.
-	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
-	IfModifiedSince *string `input:"header,If-Modified-Since"`
-
-	// If the time specified in this header is the same as or later than the object modified time,
-	// the object and 200 OK are returned. Otherwise, 412 Precondition Failed is returned.
-	// The time must be in GMT. Example: Fri, 13 Nov 2015 14:47:53 GMT.
-	IfUnmodifiedSince *string `input:"header,If-Unmodified-Since"`
-
-	// The content range of the object to be returned.
-	// If the value of Range is valid, the total size of the object and the content range are returned.
-	// For example, Content-Range: bytes 0~9/44 indicates that the total size of the object is 44 bytes,
-	// and the range of data returned is the first 10 bytes.
-	// However, if the value of Range is invalid, the entire object is returned,
-	// and the response does not include the Content-Range parameter.
-	Range *string `input:"header,Range"`
-
-	// The cache-control header to be returned in the response.
-	ResponseCacheControl *string `input:"query,response-cache-control"`
-
-	// The content-disposition header to be returned in the response.
-	ResponseContentDisposition *string `input:"query,response-content-disposition"`
-
-	// The content-encoding header to be returned in the response.
-	ResponseContentEncoding *string `input:"query,response-content-encoding"`
-
-	// The content-language header to be returned in the response.
-	ResponseContentLanguage *string `input:"query,response-content-language"`
-
-	// The content-type header to be returned in the response.
-	ResponseContentType *string `input:"query,response-content-type"`
-
-	// The expires header to be returned in the response.
-	ResponseExpires *string `input:"query,response-expires"`
-
-	// VersionId used to reference a specific version of the object.
-	VersionId *string `input:"query,versionId"`
-
-	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
-	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
-}
-
 type DownloadResult struct {
 	Written int64
 }
@@ -847,7 +721,7 @@ func (m *DownloadError) Unwrap() error {
 	return m.Err
 }
 
-func (d *Downloader) DownloadFile(ctx context.Context, request *DownloadRequest, filePath string, optFns ...func(*DownloaderOptions)) (result *DownloadResult, err error) {
+func (d *Downloader) DownloadFile(ctx context.Context, request *GetObjectRequest, filePath string, optFns ...func(*DownloaderOptions)) (result *DownloadResult, err error) {
 	// Downloader wrapper
 	delegate, err := d.newDelegate(ctx, request, optFns...)
 	if err != nil {
@@ -896,7 +770,7 @@ type downloaderDelegate struct {
 
 	m sync.Mutex
 
-	request DownloadRequest
+	request *GetObjectRequest
 	w       io.WriterAt
 	rstart  int64
 	pos     int64
@@ -956,7 +830,7 @@ func (c *downloaderChunk) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (d *Downloader) newDelegate(ctx context.Context, request *DownloadRequest, optFns ...func(*DownloaderOptions)) (*downloaderDelegate, error) {
+func (d *Downloader) newDelegate(ctx context.Context, request *GetObjectRequest, optFns ...func(*DownloaderOptions)) (*downloaderDelegate, error) {
 	if request == nil {
 		return nil, NewErrParamNull("request")
 	}
@@ -977,7 +851,7 @@ func (d *Downloader) newDelegate(ctx context.Context, request *DownloadRequest, 
 		options: d.options,
 		client:  d.client,
 		context: ctx,
-		request: *request,
+		request: request,
 	}
 
 	for _, opt := range optFns {
@@ -996,7 +870,7 @@ func (d *Downloader) newDelegate(ctx context.Context, request *DownloadRequest, 
 
 func (d *downloaderDelegate) checkSource() error {
 	var request HeadObjectRequest
-	copyRequest(&request, &d.request)
+	copyRequest(&request, d.request)
 	result, err := d.client.HeadObject(d.context, &request, d.options.ClientOptions...)
 	if err != nil {
 		return err
@@ -1089,7 +963,7 @@ func (d *downloaderDelegate) adjustRange() error {
 
 func (d *downloaderDelegate) checkCheckpoint() error {
 	if d.options.EnableCheckpoint {
-		d.checkpoint = newDownloadCheckpoint(&d.request, d.tempFilePath, d.options.CheckpointDir, d.headers, d.options.PartSize)
+		d.checkpoint = newDownloadCheckpoint(d.request, d.tempFilePath, d.options.CheckpointDir, d.headers, d.options.PartSize)
 		d.checkpoint.VerifyData = d.options.VerifyData
 		if err := d.checkpoint.load(); err != nil {
 			return err
@@ -1140,6 +1014,11 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 	// writeChunkFn runs in worker goroutines to pull chunks off of the ch channel
 	writeChunkFn := func(ch chan downloaderChunk) {
 		defer wg.Done()
+		var hash hash.Hash64
+		if d.calcCRC {
+			hash = NewCRC64(0)
+		}
+
 		for {
 			chunk, ok := <-ch
 			if !ok {
@@ -1150,7 +1029,7 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 				continue
 			}
 
-			dchunk, derr := d.downloadChunk(chunk)
+			dchunk, derr := d.downloadChunk(chunk, hash)
 
 			if derr != nil && derr != io.EOF {
 				saveErrFn(derr)
@@ -1217,7 +1096,7 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 
 	// Start tracker worker if need track downloaded chunk
 	if tracker {
-		cpCh = make(chan downloadedChunk, 1)
+		cpCh = make(chan downloadedChunk, maxInt(3, d.options.ParallelNum))
 		cpWg.Add(1)
 		go trackerFn(cpCh)
 	}
@@ -1251,10 +1130,7 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 	}
 
 	if err := getErrFn(); err != nil {
-		return nil, &DownloadError{
-			Err:  err,
-			Path: fmt.Sprintf("oss://%s/%s", ToString(d.request.Bucket), ToString(d.request.Key)),
-		}
+		return nil, d.wrapErr(err)
 	}
 
 	return &DownloadResult{
@@ -1269,10 +1145,10 @@ func (d *downloaderDelegate) incrWritten(n int64) {
 	d.written += n
 }
 
-func (d *downloaderDelegate) downloadChunk(chunk downloaderChunk) (downloadedChunk, error) {
+func (d *downloaderDelegate) downloadChunk(chunk downloaderChunk, hash hash.Hash64) (downloadedChunk, error) {
 	// Get the next byte range of data
 	var request GetObjectRequest
-	copyRequest(&request, &d.request)
+	copyRequest(&request, d.request)
 
 	getFn := func(ctx context.Context, httpRange HTTPRange) (output *ReaderRangeGetOutput, err error) {
 		// update range
@@ -1301,26 +1177,25 @@ func (d *downloaderDelegate) downloadChunk(chunk downloaderChunk) (downloadedChu
 	defer reader.Close()
 
 	var (
-		r         io.Reader = reader
-		w         hash.Hash64
-		hashCRC64 uint64 = 0
+		r     io.Reader = reader
+		crc64 uint64    = 0
 	)
-
-	if d.calcCRC {
-		w = NewCRC64(0)
-		r = io.TeeReader(reader, w)
+	if hash != nil {
+		hash.Reset()
+		r = io.TeeReader(reader, hash)
 	}
+
 	n, err := io.Copy(&chunk, r)
 	d.incrWritten(n)
 
-	if w != nil {
-		hashCRC64 = w.Sum64()
+	if hash != nil {
+		crc64 = hash.Sum64()
 	}
 
 	return downloadedChunk{
 		start: chunk.start,
 		size:  n,
-		crc64: hashCRC64,
+		crc64: crc64,
 	}, err
 }
 
@@ -1333,4 +1208,10 @@ func (u *downloaderDelegate) combineCRC(hashCRC uint64, crcs downloadedChunks) u
 		crc = CRC64Combine(crc, c.crc64, uint64(c.size))
 	}
 	return crc
+}
+
+func (u *downloaderDelegate) wrapErr(err error) error {
+	return &DownloadError{
+		Path: fmt.Sprintf("oss://%s/%s", *u.request.Bucket, *u.request.Key),
+		Err:  err}
 }

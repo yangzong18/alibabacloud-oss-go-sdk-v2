@@ -51,7 +51,7 @@ type downloadCheckpoint struct {
 	}
 }
 
-func newDownloadCheckpoint(request *DownloadRequest, filePath string, baseDir string, header http.Header, partSize int64) *downloadCheckpoint {
+func newDownloadCheckpoint(request *GetObjectRequest, filePath string, baseDir string, header http.Header, partSize int64) *downloadCheckpoint {
 	var buf strings.Builder
 	name := fmt.Sprintf("%v/%v", ToString(request.Bucket), ToString(request.Key))
 	buf.WriteString("oss://" + escapePath(name, false))
@@ -250,7 +250,7 @@ type uploadCheckpoint struct {
 	}
 }
 
-func newUploadCheckpoint(request *UploadRequest, filePath string, baseDir string, fileInfo os.FileInfo, partSize int64) *uploadCheckpoint {
+func newUploadCheckpoint(request *PutObjectRequest, filePath string, baseDir string, fileInfo os.FileInfo, partSize int64) *uploadCheckpoint {
 	name := fmt.Sprintf("%v/%v", ToString(request.Bucket), ToString(request.Key))
 	hashmd5 := md5.New()
 	hashmd5.Write([]byte("oss://" + escapePath(name, false)))

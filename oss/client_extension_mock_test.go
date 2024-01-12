@@ -291,7 +291,7 @@ func TestMockUploadSinglePart(t *testing.T) {
 
 	result, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -352,7 +352,7 @@ func TestMockUploadSequential(t *testing.T) {
 
 	result, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -427,7 +427,7 @@ func TestMockUploadParallel(t *testing.T) {
 
 	result, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		},
@@ -480,7 +480,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "null field")
 	assert.Contains(t, err.Error(), "request")
 
-	_, err = u.UploadFrom(context.TODO(), &UploadRequest{
+	_, err = u.UploadFrom(context.TODO(), &PutObjectRequest{
 		Bucket: nil,
 		Key:    Ptr("key"),
 	}, nil)
@@ -488,7 +488,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "null field")
 	assert.Contains(t, err.Error(), "request.Bucket")
 
-	_, err = u.UploadFrom(context.TODO(), &UploadRequest{
+	_, err = u.UploadFrom(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    nil,
 	}, nil)
@@ -502,7 +502,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "null field")
 	assert.Contains(t, err.Error(), "request")
 
-	_, err = u.UploadFile(context.TODO(), &UploadRequest{
+	_, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: nil,
 		Key:    Ptr("key"),
 	}, "file")
@@ -510,7 +510,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "null field")
 	assert.Contains(t, err.Error(), "request.Bucket")
 
-	_, err = u.UploadFile(context.TODO(), &UploadRequest{
+	_, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    nil,
 	}, "file")
@@ -519,7 +519,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	assert.Contains(t, err.Error(), "request.Key")
 
 	//Invalid filePath
-	_, err = u.UploadFile(context.TODO(), &UploadRequest{
+	_, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, "#@!Ainvalud-path")
@@ -529,7 +529,7 @@ func TestMockUploadArgmentCheck(t *testing.T) {
 	// nil body
 	_, err = u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		nil)
@@ -609,7 +609,7 @@ func TestUpload_newDelegate(t *testing.T) {
 	// nil body
 	d, err := u.newDelegate(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -630,7 +630,7 @@ func TestUpload_newDelegate(t *testing.T) {
 
 	// empty body
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -642,7 +642,7 @@ func TestUpload_newDelegate(t *testing.T) {
 
 	// non-empty body
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -656,7 +656,7 @@ func TestUpload_newDelegate(t *testing.T) {
 
 	// non-empty without seek body
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -672,7 +672,7 @@ func TestUpload_newDelegate(t *testing.T) {
 	var localFile = randStr(8) + ".txt"
 	createFile(t, localFile, "12345")
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -690,7 +690,7 @@ func TestUpload_newDelegate(t *testing.T) {
 	// options
 	// non-empty body
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		}, func(uo *UploaderOptions) {
@@ -708,7 +708,7 @@ func TestUpload_newDelegate(t *testing.T) {
 
 	// non-empty body
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		}, func(uo *UploaderOptions) {
@@ -727,7 +727,7 @@ func TestUpload_newDelegate(t *testing.T) {
 	//adjust partSize
 	maxSize := DefaultUploadPartSize * int64(MaxUploadParts*4)
 	d, err = u.newDelegate(context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 		})
@@ -780,7 +780,7 @@ func TestMockUploadSinglePartFromFile(t *testing.T) {
 	assert.Equal(t, DefaultUploadParallel, u.options.ParallelNum)
 	assert.Equal(t, DefaultUploadPartSize, u.options.PartSize)
 
-	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -846,7 +846,7 @@ func TestMockUploadSequentialFromFile(t *testing.T) {
 	assert.Equal(t, 1, u.options.ParallelNum)
 	assert.Equal(t, partSize, u.options.PartSize)
 
-	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -926,7 +926,7 @@ func TestMockUploadParallelFromFile(t *testing.T) {
 	tracker.timeout[0] = 1 * time.Second
 	tracker.timeout[2] = 500 * time.Millisecond
 
-	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1000,7 +1000,7 @@ func TestMockUploadWithEmptyBody(t *testing.T) {
 
 	result, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(nil))
@@ -1056,7 +1056,7 @@ func TestMockUploadSinglePartFail(t *testing.T) {
 
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1110,7 +1110,7 @@ func TestMockUploadSequentialInitiateMultipartUploadFail(t *testing.T) {
 
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1165,7 +1165,7 @@ func TestMockUploadSequentialUploadPartFail(t *testing.T) {
 
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1223,7 +1223,7 @@ func TestMockUploadSequentialCompleteMultipartUploadFail(t *testing.T) {
 
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1287,7 +1287,7 @@ func TestMockUploadParallelUploadPartFail(t *testing.T) {
 
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1358,7 +1358,7 @@ func TestMockUploaderUploadFileEnableCheckpointNotUseCp(t *testing.T) {
 	tracker.timeout[0] = 1 * time.Second
 	tracker.timeout[2] = 500 * time.Millisecond
 
-	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1456,7 +1456,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.uploadPartErr[3] = true
 	os.Remove(cpFile)
 
-	result, err := u.UploadFile(context.TODO(), &UploadRequest{
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1488,7 +1488,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.uploadPartErr[3] = false
 	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
 
-	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1529,7 +1529,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.uploadPartErr[0] = true
 	os.Remove(cpFile)
 
-	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1549,7 +1549,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.uploadPartErr[0] = false
 	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
 
-	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1587,7 +1587,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.uploadPartErr[3] = true
 	os.Remove(cpFile)
 
-	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1608,7 +1608,7 @@ func TestMockUploaderUploadFileEnableCheckpointUseCp(t *testing.T) {
 	tracker.ListPartsErr = true
 	atomic.StoreInt32(&tracker.uploadPartCnt, 0)
 
-	result, err = u.UploadFile(context.TODO(), &UploadRequest{
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, localFile)
@@ -1690,7 +1690,7 @@ func TestMockUploadParallelFromStreamWithoutSeeker(t *testing.T) {
 	assert.Nil(t, err)
 	defer file.Close()
 
-	result, err := u.UploadFrom(context.TODO(), &UploadRequest{
+	result, err := u.UploadFrom(context.TODO(), &PutObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 	}, io.LimitReader(file, int64(length)))
@@ -1758,7 +1758,7 @@ func TestMockUploadCRC64Fail(t *testing.T) {
 	tracker.crcPartInvalid[2] = true
 	_, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1783,7 +1783,7 @@ func TestMockUploadCRC64Fail(t *testing.T) {
 	tracker.saveDate = make([][]byte, partsNum)
 	result, err := u.UploadFrom(
 		context.TODO(),
-		&UploadRequest{
+		&PutObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key")},
 		bytes.NewReader(data))
@@ -1937,7 +1937,7 @@ func TestMockDownloaderSingleRead(t *testing.T) {
 
 	localFile := randStr(8) + "-no-surfix"
 
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(length), result.Written)
 
@@ -1989,7 +1989,7 @@ func TestMockDownloaderLoopSingleRead(t *testing.T) {
 			assert.Nil(t, os.Remove(localFile))
 		}
 		tracker.maxRangeCount = 0
-		result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 			func(do *DownloaderOptions) {
 				do.ParallelNum = 1
 				do.PartSize = int64(i)
@@ -2044,7 +2044,7 @@ func TestMockDownloaderLoopSingleReadWithRange(t *testing.T) {
 				tracker.maxRangeCount = 0
 				httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
 				result, err := d.DownloadFile(context.TODO(),
-					&DownloadRequest{
+					&GetObjectRequest{
 						Bucket: Ptr("bucket"),
 						Key:    Ptr("key"),
 						Range:  httpRange.FormatHTTPRange()},
@@ -2110,7 +2110,7 @@ func TestMockDownloaderParalleRead(t *testing.T) {
 
 	localFile := randStr(8) + "-no-surfix"
 
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
 	assert.Nil(t, err)
 	assert.Equal(t, int64(length), result.Written)
 
@@ -2163,7 +2163,7 @@ func TestMockDownloaderLoopParalleRead(t *testing.T) {
 			assert.Nil(t, os.Remove(localFile))
 		}
 		tracker.maxRangeCount = 0
-		result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+		result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 			func(do *DownloaderOptions) {
 				do.ParallelNum = 4
 				do.PartSize = int64(i)
@@ -2218,7 +2218,7 @@ func TestMockDownloaderLoopParalleReadWithRange(t *testing.T) {
 				tracker.maxRangeCount = 0
 				httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
 				result, err := d.DownloadFile(context.TODO(),
-					&DownloadRequest{
+					&GetObjectRequest{
 						Bucket: Ptr("bucket"),
 						Key:    Ptr("key"),
 						Range:  httpRange.FormatHTTPRange()},
@@ -2280,15 +2280,15 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "null field")
 
-	_, err = d.newDelegate(context.TODO(), &DownloadRequest{})
+	_, err = d.newDelegate(context.TODO(), &GetObjectRequest{})
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Bucket")
 
-	_, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")})
+	_, err = d.newDelegate(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket")})
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Key")
 
-	delegate, err := d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")})
+	delegate, err := d.newDelegate(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")})
 	assert.Nil(t, err)
 	assert.NotNil(t, delegate)
 	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
@@ -2297,7 +2297,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.False(t, delegate.options.EnableCheckpoint)
 	assert.Empty(t, delegate.options.CheckpointDir)
 
-	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = 5
 			do.PartSize = 1
@@ -2307,7 +2307,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.Equal(t, 5, delegate.options.ParallelNum)
 	assert.Equal(t, int64(1), delegate.options.PartSize)
 
-	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = 0
 			do.PartSize = 0
@@ -2317,7 +2317,7 @@ func TestDownloaderDelegateConstruct(t *testing.T) {
 	assert.Equal(t, DefaultDownloadParallel, delegate.options.ParallelNum)
 	assert.Equal(t, DefaultDownloadPartSize, delegate.options.PartSize)
 
-	delegate, err = d.newDelegate(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
+	delegate, err = d.newDelegate(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")},
 		func(do *DownloaderOptions) {
 			do.ParallelNum = -1
 			do.PartSize = -1
@@ -2342,15 +2342,15 @@ func TestDownloaderDownloadFileArgument(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "null field")
 
-	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{}, "file")
+	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{}, "file")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Bucket")
 
-	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket")}, "file")
+	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket")}, "file")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "request.Key")
 
-	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
+	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "operation error HeadObject")
 }
@@ -2390,7 +2390,7 @@ func TestMockDownloaderDownloadFileWithoutTempFile(t *testing.T) {
 
 	localFile := randStr(8) + "-no-surfix"
 
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.UseTempFile = false
 			do.PartSize = 1024
@@ -2448,7 +2448,7 @@ func TestMockDownloaderDownloadFileInvalidPartSizeAndParallelNum(t *testing.T) {
 		os.Remove(localFile)
 	}()
 
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = 0
 			do.ParallelNum = 0
@@ -2502,7 +2502,7 @@ func TestMockDownloaderDownloadFileFileSizeLessPartSize(t *testing.T) {
 		os.Remove(localFile)
 	}()
 
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = 0
 			do.ParallelNum = 0
@@ -2549,7 +2549,7 @@ func TestMockDownloaderDownloadFileFileChange(t *testing.T) {
 		os.Remove(localFile)
 	}()
 
-	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	_, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = int64(partSize)
 			do.ParallelNum = 3
@@ -2590,7 +2590,7 @@ func TestMockDownloaderDownloadFileEnableCheckpointNormal(t *testing.T) {
 		os.Remove(localFile)
 	}()
 
-	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	_, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = int64(partSize)
 			do.ParallelNum = 3
@@ -2645,7 +2645,7 @@ func TestMockDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
 	os.Remove(localFile)
 	os.Remove(localFileTmep)
 	os.Remove(cpFileName)
-	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	_, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = int64(partSize)
 			do.ParallelNum = 3
@@ -2683,7 +2683,7 @@ func TestMockDownloaderDownloadFileEnableCheckpoint2(t *testing.T) {
 
 	// resume from checkpoint
 	tracker.failPartNum = 0
-	result, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile,
 		func(do *DownloaderOptions) {
 			do.PartSize = int64(partSize)
 			do.ParallelNum = 3
@@ -2748,7 +2748,7 @@ func TestMockDownloaderDownloadFileEnableCheckpointWithRange(t *testing.T) {
 	os.Remove(cpFileName)
 	httpRange := HTTPRange{Offset: int64(rs), Count: int64(rcount)}
 	_, err := d.DownloadFile(context.TODO(),
-		&DownloadRequest{
+		&GetObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 			Range:  httpRange.FormatHTTPRange()},
@@ -2789,7 +2789,7 @@ func TestMockDownloaderDownloadFileEnableCheckpointWithRange(t *testing.T) {
 	// resume from checkpoint
 	tracker.failPartNum = 0
 	result, err := d.DownloadFile(context.TODO(),
-		&DownloadRequest{
+		&GetObjectRequest{
 			Bucket: Ptr("bucket"),
 			Key:    Ptr("key"),
 			Range:  httpRange.FormatHTTPRange()},
@@ -2846,18 +2846,18 @@ func TestMockDownloaderDownloadWithError(t *testing.T) {
 	assert.Equal(t, 1, d.options.ParallelNum)
 
 	// filePath is invalid
-	_, err := d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
+	_, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, "")
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "invalid field, filePath")
 
 	localFile := "./no-exist-folder/file-no-surfix"
-	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "The system cannot find the path specified")
 
 	// Range is invalid
 	localFile = randStr(8) + "-no-surfix"
-	_, err = d.DownloadFile(context.TODO(), &DownloadRequest{
+	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{
 		Bucket: Ptr("bucket"),
 		Key:    Ptr("key"),
 		Range:  Ptr("invalid range")},
