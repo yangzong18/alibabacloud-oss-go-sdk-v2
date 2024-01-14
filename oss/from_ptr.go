@@ -12,6 +12,16 @@ func ToBool(p *bool) (v bool) {
 	return *p
 }
 
+// ToInt returns int value if the pointer is not nil.
+// Returns a int zero value if the pointer is nil.
+func ToInt(p *int) (v int) {
+	if p == nil {
+		return v
+	}
+
+	return *p
+}
+
 // ToString returns bool value if the pointer is not nil.
 // Returns a string zero value if the pointer is nil.
 func ToString(p *string) (v string) {

@@ -68,6 +68,12 @@ type Config struct {
 
 	// Authentication with OSS Signature Version
 	SignatureVersion SignatureVersionType
+
+	// The level of the output log
+	LogLevel *int
+
+	// A interface for the SDK to log messages to.
+	LogPrinter LogPrinter
 }
 
 func NewConfig() *Config {
@@ -82,7 +88,7 @@ func (c Config) Copy() Config {
 func LoadDefaultConfig() *Config {
 	config := &Config{
 		RetryMaxAttempts: 3,
-		SignatureVersion: SignatureVersionV1,
+		SignatureVersion: SignatureVersionV4,
 	}
 	return config
 }
@@ -169,5 +175,15 @@ func (c *Config) WithDownloadBandwidthlimit(value int64) *Config {
 
 func (c *Config) WithSignatureVersion(value SignatureVersionType) *Config {
 	c.SignatureVersion = value
+	return c
+}
+
+func (c *Config) WithLogLevel(level int) *Config {
+	c.LogLevel = Ptr(level)
+	return c
+}
+
+func (c *Config) WithLogPrinter(printer LogPrinter) *Config {
+	c.LogPrinter = printer
 	return c
 }

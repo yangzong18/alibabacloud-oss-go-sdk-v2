@@ -64,6 +64,9 @@ type innerOptions struct {
 
 	// A clock offset that how much client time is different from server time
 	ClockOffset time.Duration
+
+	// Logger
+	Log Logger
 }
 
 type Client struct {
@@ -80,7 +83,9 @@ func NewClient(cfg *Config, optFns ...func(*Options)) *Client {
 		HttpClient:          cfg.HttpClient,
 		FeatureFlags:        FeatureFlagsDefault,
 	}
-	inner := innerOptions{}
+	inner := innerOptions{
+		Log: NewLogger(ToInt(cfg.LogLevel), cfg.LogPrinter),
+	}
 
 	resolveEndpoint(cfg, &options)
 	resolveRetryer(cfg, &options)
@@ -210,6 +215,17 @@ func resolveFeatureFlags(cfg *Config, o *Options) {
 }
 
 func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
+	if c.inner.Log.Level() >= LogInfo {
+		c.inner.Log.Infof("InvokeOperation Start: input[%p], OpName:%s, Bucket:%s, Key:%s",
+			input, input.OpName,
+			ToString(input.Bucket), ToString(input.Key))
+		defer func() {
+			c.inner.Log.Infof("InvokeOperation End: input[%p], OpName:%s, output:'%v', err:'%v'",
+				input, input.OpName,
+				c.dumpOperationOutput(output), err)
+		}()
+	}
+
 	options := c.options.Copy()
 	opOpt := Options{}
 
@@ -235,6 +251,15 @@ func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, opt
 }
 
 func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *Options) (output *OperationOutput, err error) {
+	var request *http.Request
+	var response *http.Response
+	if c.inner.Log.Level() >= LogInfo {
+		c.inner.Log.Infof("sendRequest Start: input[%p]", input)
+		defer func() {
+			c.inner.Log.Infof("sendRequest End: input[%p], http.Request[%p], http.Response[%p]", input, request, response)
+		}()
+	}
+
 	// covert input into httpRequest
 	if !isValidEndpoint(opts.Endpoint) {
 		return output, NewErrParamInvalid("Endpoint")
@@ -267,7 +292,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 		strUrl += "?" + buf.String()
 	}
 
-	request, err := http.NewRequestWithContext(ctx, input.Method, strUrl, nil)
+	request, err = http.NewRequestWithContext(ctx, input.Method, strUrl, nil)
 	if err != nil {
 		return output, err
 	}
@@ -314,7 +339,7 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	}
 
 	// send http request
-	response, err := c.sendHttpRequest(ctx, signingCtx, opts)
+	response, err = c.sendHttpRequest(ctx, signingCtx, opts)
 
 	if err != nil {
 		return output, err
@@ -347,6 +372,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 	request := signingCtx.Request
 	retryer := opts.Retryer
 	body, _ := request.Body.(*teeReadNopCloser)
+	resetTime := signingCtx.Time.IsZero()
 	body.Mark()
 	for tries := 1; tries <= retryer.MaxAttempts(); tries++ {
 		if tries > 1 {
@@ -354,6 +380,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 			if err != nil {
 				break
 			}
+
 			if err = sleepWithContext(ctx, delay); err != nil {
 				err = &CanceledError{Err: err}
 				break
@@ -362,6 +389,12 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 			if err = body.Reset(); err != nil {
 				break
 			}
+
+			if resetTime {
+				signingCtx.Time = time.Time{}
+			}
+
+			c.inner.Log.Infof("Attempt retry, request[%p], tries:%v, retry delay:%v", request, tries, delay)
 		}
 
 		if response, err = c.sendHttpRequestOnce(ctx, signingCtx, opts); err == nil {
@@ -389,6 +422,13 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (
 	response *http.Response, err error,
 ) {
+	if c.inner.Log.Level() > LogInfo {
+		c.inner.Log.Infof("sendHttpRequestOnce Start, http.Request[%p]", signingCtx.Request)
+		defer func() {
+			c.inner.Log.Infof("sendHttpRequestOnce End, http.Request[%p], response[%p], err:%v", signingCtx.Request, response, err)
+		}()
+	}
+
 	if _, anonymous := opts.CredentialsProvider.(*credentials.AnonymousCredentialsProvider); !anonymous {
 		cred, err := opts.CredentialsProvider.GetCredentials(ctx)
 		if err != nil {
@@ -399,11 +439,16 @@ func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.Sig
 		if err = c.options.Signer.Sign(ctx, signingCtx); err != nil {
 			return response, err
 		}
+		c.inner.Log.Debugf("sendHttpRequestOnce::Sign request[%p], StringToSign:%s", signingCtx.Request, signingCtx.StringToSign)
 	}
+
+	c.logHttpPRequet(signingCtx.Request)
 
 	if response, err = opts.HttpClient.Do(signingCtx.Request); err != nil {
 		return response, err
 	}
+
+	c.logHttpResponse(signingCtx.Request, response)
 
 	for _, fn := range opts.ResponseHandlers {
 		if err = fn(response); err != nil {
@@ -422,6 +467,8 @@ func (c *Client) postSendHttpRequestOnce(signingCtx *signer.SigningContext, resp
 				e.Code == "RequestTimeTooSkewed" &&
 				!e.Timestamp.IsZero() {
 				signingCtx.ClockOffset = e.Timestamp.Sub(signingCtx.Time)
+				c.inner.Log.Warnf("Got RequestTimeTooSkewed error, correct clock request[%p], ClockOffset:%v, Server Time:%v, Client time:%v",
+					signingCtx.Request, signingCtx.ClockOffset, e.Timestamp, signingCtx.Time)
 			}
 		}
 	}
@@ -1121,6 +1168,69 @@ func (c *Client) toClientError(err error, code string, output *OperationOutput) 
 
 func (c *Client) hasFeature(flag FeatureFlagsType) bool {
 	return (c.options.FeatureFlags & flag) > 0
+}
+
+func (c *Client) dumpOperationOutput(output *OperationOutput) string {
+	if output == nil {
+		return ""
+	}
+	return fmt.Sprintf("http.Request[%p] Status:%v, StatusCode%v, RequestId:%v",
+		output.httpRequest, output.Status, output.StatusCode,
+		output.Headers.Get(HeaderOssRequestID),
+	)
+}
+
+// LoggerHTTPReq Print the header information of the http request
+func (c *Client) logHttpPRequet(request *http.Request) {
+	if c.inner.Log.Level() < LogDebug {
+		return
+	}
+	var logBuffer bytes.Buffer
+	logBuffer.WriteString(fmt.Sprintf("http.request[%p]", request))
+	if request != nil {
+		logBuffer.WriteString(fmt.Sprintf("Method:%s\t", request.Method))
+		logBuffer.WriteString(fmt.Sprintf("Host:%s\t", request.URL.Host))
+		logBuffer.WriteString(fmt.Sprintf("Path:%s\t", request.URL.Path))
+		logBuffer.WriteString(fmt.Sprintf("Query:%s\t", request.URL.RawQuery))
+		logBuffer.WriteString(fmt.Sprintf("Header info:"))
+
+		for k, v := range request.Header {
+			var valueBuffer bytes.Buffer
+			for j := 0; j < len(v); j++ {
+				if j > 0 {
+					valueBuffer.WriteString(" ")
+				}
+				valueBuffer.WriteString(v[j])
+			}
+			logBuffer.WriteString(fmt.Sprintf("\t%s:%s", k, valueBuffer.String()))
+		}
+	}
+
+	c.inner.Log.Debugf("%s", logBuffer.String())
+}
+
+// LoggerHTTPResp Print Response to http request
+func (c *Client) logHttpResponse(request *http.Request, response *http.Response) {
+	if c.inner.Log.Level() < LogDebug {
+		return
+	}
+	var logBuffer bytes.Buffer
+	logBuffer.WriteString(fmt.Sprintf("http.request[%p]|http.response[%p]", request, response))
+	if response != nil {
+		logBuffer.WriteString(fmt.Sprintf("StatusCode:%d\t", response.StatusCode))
+		logBuffer.WriteString(fmt.Sprintf("Header info:"))
+		for k, v := range response.Header {
+			var valueBuffer bytes.Buffer
+			for j := 0; j < len(v); j++ {
+				if j > 0 {
+					valueBuffer.WriteString(" ")
+				}
+				valueBuffer.WriteString(v[j])
+			}
+			logBuffer.WriteString(fmt.Sprintf("\t%s:%s", k, valueBuffer.String()))
+		}
+	}
+	c.inner.Log.Debugf("%s", logBuffer.String())
 }
 
 // Content-Type
