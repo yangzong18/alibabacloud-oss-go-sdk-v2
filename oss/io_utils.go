@@ -817,3 +817,33 @@ func (t *teeReadNopCloser) Reset() error {
 
 	return nil
 }
+
+type DiscardReadCloser struct {
+	RC      io.ReadCloser
+	Discard int
+}
+
+func (drc *DiscardReadCloser) Read(b []byte) (int, error) {
+	n, err := drc.RC.Read(b)
+	if drc.Discard == 0 || n <= 0 {
+		return n, err
+	}
+
+	if n <= drc.Discard {
+		drc.Discard -= n
+		return 0, err
+	}
+
+	realLen := n - drc.Discard
+	copy(b[0:realLen], b[drc.Discard:n])
+	drc.Discard = 0
+	return realLen, err
+}
+
+func (drc *DiscardReadCloser) Close() error {
+	closer, ok := drc.RC.(io.ReadCloser)
+	if ok {
+		return closer.Close()
+	}
+	return nil
+}

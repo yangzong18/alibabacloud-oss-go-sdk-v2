@@ -130,6 +130,19 @@ const (
 	HeaderOssERR                                = "X-Oss-Err"
 )
 
+// OSS headers for client sider encryption
+const (
+	OssClientSideEncryptionKey                      string = "X-Oss-Meta-Client-Side-Encryption-Key"
+	OssClientSideEncryptionStart                           = "X-Oss-Meta-Client-Side-Encryption-Start"
+	OssClientSideEncryptionCekAlg                          = "X-Oss-Meta-Client-Side-Encryption-Cek-Alg"
+	OssClientSideEncryptionWrapAlg                         = "X-Oss-Meta-Client-Side-Encryption-Wrap-Alg"
+	OssClientSideEncryptionMatDesc                         = "X-Oss-Meta-Client-Side-Encryption-Matdesc"
+	OssClientSideEncryptionUnencryptedContentLength        = "X-Oss-Meta-Client-Side-Encryption-Unencrypted-Content-Length"
+	OssClientSideEncryptionUnencryptedContentMD5           = "X-Oss-Meta-Client-Side-Encryption-Unencrypted-Content-Md5"
+	OssClientSideEncryptionDataSize                        = "X-Oss-Meta-Client-Side-Encryption-Data-Size"
+	OssClientSideEncryptionPartSize                        = "X-Oss-Meta-Client-Side-Encryption-Part-Size"
+)
+
 // HTTP headers
 const (
 	HTTPHeaderAcceptEncoding     string = "Accept-Encoding"
@@ -141,6 +154,7 @@ const (
 	HTTPHeaderContentMD5                = "Content-MD5"
 	HTTPHeaderContentType               = "Content-Type"
 	HTTPHeaderContentLanguage           = "Content-Language"
+	HTTPHeaderContentRange              = "Content-Range"
 	HTTPHeaderDate                      = "Date"
 	HTTPHeaderETag                      = "ETag"
 	HTTPHeaderExpires                   = "Expires"

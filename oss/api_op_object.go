@@ -166,6 +166,24 @@ func (r HTTPRange) FormatHTTPRange() *string {
 	return &dataRange
 }
 
+type HTTPContentRange struct {
+	Offset int64
+	Count  int64
+	Total  int64
+}
+
+func (r HTTPContentRange) FormatHTTPContentRange() *string {
+	if r.Offset == 0 && r.Count == 0 {
+		return nil // No specified range
+	}
+	endOffset := "" // if count == CountToEnd (0)
+	if r.Count > 0 {
+		endOffset = strconv.FormatInt((r.Offset+r.Count)-1, 10)
+	}
+	dataRange := fmt.Sprintf("bytes %v-%s/%s", r.Offset, endOffset, strconv.FormatInt(r.Total, 10))
+	return &dataRange
+}
+
 type GetObjectRequest struct {
 	// The name of the bucket.
 	Bucket *string `input:"host,bucket,required"`
