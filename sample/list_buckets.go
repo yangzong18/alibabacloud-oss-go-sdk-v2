@@ -56,9 +56,7 @@ func main() {
 	}
 
 	// Create the Paginator for the ListBuckets operation.
-	p := client.NewListBucketsPaginator(&oss.ListObjectsRequest{
-		Bucket: oss.Ptr(bucketName),
-	})
+	p := client.NewListBucketsPaginator(request)
 
 	// Iterate through the object pages
 	var i int
