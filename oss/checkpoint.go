@@ -14,6 +14,10 @@ import (
 	"strings"
 )
 
+const (
+	CheckpointMagic = "92611BED-89E2-46B6-89E5-72F273D4B0A3"
+)
+
 // ----- download chcekpoint  -----
 type downloadCheckpoint struct {
 	CpDirPath  string // checkpoint dir full path

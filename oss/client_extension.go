@@ -15,26 +15,6 @@ import (
 	"sync/atomic"
 )
 
-const (
-	MaxUploadParts int32 = 10000
-
-	MinUploadPartSize int64 = 5 * 1024 * 1024
-
-	DefaultUploadPartSize = MinUploadPartSize
-
-	DefaultUploadParallel = 3
-
-	DefaultDownloadPartSize = MinUploadPartSize
-
-	DefaultDownloadParallel = 3
-
-	FilePermMode = os.FileMode(0664) // Default file permission
-
-	TempFileSuffix = ".temp" // Temp file suffix
-
-	CheckpointMagic = "92611BED-89E2-46B6-89E5-72F273D4B0A3"
-)
-
 type UploaderOptions struct {
 	PartSize int64
 
