@@ -22,6 +22,16 @@ func ToInt(p *int) (v int) {
 	return *p
 }
 
+// ToInt64 returns int value if the pointer is not nil.
+// Returns a int64 zero value if the pointer is nil.
+func ToInt64(p *int64) (v int64) {
+	if p == nil {
+		return v
+	}
+
+	return *p
+}
+
 // ToString returns bool value if the pointer is not nil.
 // Returns a string zero value if the pointer is nil.
 func ToString(p *string) (v string) {

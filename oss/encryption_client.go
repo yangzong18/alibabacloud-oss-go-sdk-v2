@@ -25,6 +25,21 @@ type EncryptionClient struct {
 	alignLen         int
 }
 
+// EncryptionMultiPartContext save encryption or decryption information
+type EncryptionMultiPartContext struct {
+	ContentCipher crypto.ContentCipher
+	DataSize      int64
+	PartSize      int64
+}
+
+// Valid judge PartCryptoContext is valid or not
+func (ec EncryptionMultiPartContext) Valid() bool {
+	if ec.ContentCipher == nil || ec.PartSize == 0 {
+		return false
+	}
+	return true
+}
+
 func NewEncryptionClient(c *Client, masterCipher crypto.MasterCipher, optFns ...func(*EncryptionClientOptions)) (*EncryptionClient, error) {
 	options := EncryptionClientOptions{}
 	for _, fn := range optFns {
@@ -66,7 +81,7 @@ func (e *EncryptionClient) HeadObject(ctx context.Context, request *HeadObjectRe
 	return e.client.HeadObject(ctx, request, optFns...)
 }
 
-// PutObject Downloads a object.
+// GetObject Downloads a object.
 func (e *EncryptionClient) GetObject(ctx context.Context, request *GetObjectRequest, optFns ...func(*Options)) (*GetObjectResult, error) {
 	return e.getObjectSecurely(ctx, request, optFns...)
 }
@@ -74,6 +89,31 @@ func (e *EncryptionClient) GetObject(ctx context.Context, request *GetObjectRequ
 // PutObject Uploads a object.
 func (e *EncryptionClient) PutObject(ctx context.Context, request *PutObjectRequest, optFns ...func(*Options)) (*PutObjectResult, error) {
 	return e.putObjectSecurely(ctx, request, optFns...)
+}
+
+// InitiateMultipartUpload Initiates a multipart upload task before you can upload data in parts to Object Storage Service (OSS).
+func (e *EncryptionClient) InitiateMultipartUpload(ctx context.Context, request *InitiateMultipartUploadRequest, optFns ...func(*Options)) (*InitiateMultipartUploadResult, error) {
+	return e.initiateMultipartUploadSecurely(ctx, request, optFns...)
+}
+
+// UploadPart Call the UploadPart interface to upload data in blocks (parts) based on the specified Object name and uploadId.
+func (e *EncryptionClient) UploadPart(ctx context.Context, request *UploadPartRequest, optFns ...func(*Options)) (*UploadPartResult, error) {
+	return e.uploadPartSecurely(ctx, request, optFns...)
+}
+
+// CompleteMultipartUpload Completes the multipart upload task of an object after all parts of the object are uploaded.
+func (e *EncryptionClient) CompleteMultipartUpload(ctx context.Context, request *CompleteMultipartUploadRequest, optFns ...func(*Options)) (*CompleteMultipartUploadResult, error) {
+	return e.client.CompleteMultipartUpload(ctx, request, optFns...)
+}
+
+// AbortMultipartUpload Cancels a multipart upload task and deletes the parts uploaded in the task.
+func (e *EncryptionClient) AbortMultipartUpload(ctx context.Context, request *AbortMultipartUploadRequest, optFns ...func(*Options)) (*AbortMultipartUploadResult, error) {
+	return e.client.AbortMultipartUpload(ctx, request, optFns...)
+}
+
+// ListParts Lists all parts that are uploaded by using a specified upload ID.
+func (e *EncryptionClient) ListParts(ctx context.Context, request *ListPartsRequest, optFns ...func(*Options)) (*ListPartsResult, error) {
+	return e.client.ListParts(ctx, request, optFns...)
 }
 
 func (e *EncryptionClient) getObjectSecurely(ctx context.Context, request *GetObjectRequest, optFns ...func(*Options)) (*GetObjectResult, error) {
@@ -199,11 +239,88 @@ func (e *EncryptionClient) putObjectSecurely(ctx context.Context, request *PutOb
 	return e.client.PutObject(ctx, &eRequest, optFns...)
 }
 
+func (e *EncryptionClient) initiateMultipartUploadSecurely(ctx context.Context, request *InitiateMultipartUploadRequest, optFns ...func(*Options)) (*InitiateMultipartUploadResult, error) {
+	var err error
+	if request == nil {
+		return nil, NewErrParamNull("request")
+	}
+	if err = e.validEncryptionContext(request); err != nil {
+		return nil, err
+	}
+	cc, err := e.defualtCCBuilder.ContentCipher()
+	if err != nil {
+		return nil, err
+	}
+	eRequest := *request
+	addMultiPartCryptoHeaders(&eRequest, cc.GetCipherData())
+
+	result, err := e.client.InitiateMultipartUpload(ctx, &eRequest, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result.CSEMultiPartContext = &EncryptionMultiPartContext{
+		ContentCipher: cc,
+		PartSize:      ToInt64(request.CSEPartSize),
+		DataSize:      ToInt64(request.CSEDataSize),
+	}
+	return result, nil
+}
+
+func (e *EncryptionClient) uploadPartSecurely(ctx context.Context, request *UploadPartRequest, optFns ...func(*Options)) (*UploadPartResult, error) {
+	if request == nil {
+		return nil, NewErrParamNull("request")
+	}
+	if request.CSEMultiPartContext == nil {
+		return nil, NewErrParamNull("request.CSEMultiPartContext")
+	}
+	cseCtx := request.CSEMultiPartContext
+	if !cseCtx.Valid() {
+		return nil, fmt.Errorf("request.CSEMultiPartContext is invalid")
+	}
+	if cseCtx.PartSize%int64(e.alignLen) != 0 {
+		return nil, fmt.Errorf("CSEMultiPartContext's PartSize must be aligned to %v", e.alignLen)
+	}
+
+	cipherData := cseCtx.ContentCipher.GetCipherData().Clone()
+	// caclulate iv based on part number
+	if request.PartNumber > 1 {
+		cipherData.SeekIV(uint64(request.PartNumber-1) * uint64(cseCtx.PartSize))
+	}
+
+	// for parallel upload part
+	cc, _ := cseCtx.ContentCipher.Clone(cipherData)
+
+	cryptoReader, err := cc.EncryptContent(request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	eRequest := *request
+	eRequest.Body = cryptoReader
+	addUploadPartCryptoHeaders(&eRequest, cseCtx, cc.GetCipherData())
+
+	return e.client.UploadPart(ctx, &eRequest, optFns...)
+}
+
 func (e *EncryptionClient) getContentCipherBuilder(envelope crypto.Envelope) crypto.ContentCipherBuilder {
 	if ccb, ok := e.ccBuilderMap[envelope.MatDesc]; ok {
 		return ccb
 	}
 	return e.defualtCCBuilder
+}
+
+func (e *EncryptionClient) validEncryptionContext(request *InitiateMultipartUploadRequest) error {
+	partSize := ToInt64(request.CSEPartSize)
+	if partSize <= 0 {
+		return NewErrParamInvalid("request.CSEPartSize")
+	}
+
+	if partSize%int64(e.alignLen) != 0 {
+		return fmt.Errorf("request.CSEPartSize must aligned to the %v", e.alignLen)
+	}
+
+	return nil
 }
 
 func hasEncryptedHeader(headers http.Header) bool {
@@ -232,6 +349,70 @@ func addCryptoHeaders(request *PutObjectRequest, cd *crypto.CipherData) {
 	if len(cd.MatDesc) > 0 {
 		request.Headers[OssClientSideEncryptionMatDesc] = cd.MatDesc
 	}
+
+	// encrypted key
+	strEncryptedKey := base64.StdEncoding.EncodeToString(cd.EncryptedKey)
+	request.Headers[OssClientSideEncryptionKey] = strEncryptedKey
+
+	// encrypted iv
+	strEncryptedIV := base64.StdEncoding.EncodeToString(cd.EncryptedIV)
+	request.Headers[OssClientSideEncryptionStart] = strEncryptedIV
+
+	// wrap alg
+	request.Headers[OssClientSideEncryptionWrapAlg] = cd.WrapAlgorithm
+
+	// cek alg
+	request.Headers[OssClientSideEncryptionCekAlg] = cd.CEKAlgorithm
+}
+
+// addMultiPartCryptoHeaders save Envelope information in oss meta
+func addMultiPartCryptoHeaders(request *InitiateMultipartUploadRequest, cd *crypto.CipherData) {
+	if request.Headers == nil {
+		request.Headers = map[string]string{}
+	}
+
+	// matDesc
+	if len(cd.MatDesc) > 0 {
+		request.Headers[OssClientSideEncryptionMatDesc] = cd.MatDesc
+	}
+
+	if ToInt64(request.CSEDataSize) > 0 {
+		request.Headers[OssClientSideEncryptionDataSize] = fmt.Sprint(*request.CSEDataSize)
+	}
+
+	request.Headers[OssClientSideEncryptionPartSize] = fmt.Sprint(*request.CSEPartSize)
+
+	// encrypted key
+	strEncryptedKey := base64.StdEncoding.EncodeToString(cd.EncryptedKey)
+	request.Headers[OssClientSideEncryptionKey] = strEncryptedKey
+
+	// encrypted iv
+	strEncryptedIV := base64.StdEncoding.EncodeToString(cd.EncryptedIV)
+	request.Headers[OssClientSideEncryptionStart] = strEncryptedIV
+
+	// wrap alg
+	request.Headers[OssClientSideEncryptionWrapAlg] = cd.WrapAlgorithm
+
+	// cek alg
+	request.Headers[OssClientSideEncryptionCekAlg] = cd.CEKAlgorithm
+}
+
+// addUploadPartCryptoHeaders save Envelope information in oss meta
+func addUploadPartCryptoHeaders(request *UploadPartRequest, cseContext *EncryptionMultiPartContext, cd *crypto.CipherData) {
+	if request.Headers == nil {
+		request.Headers = map[string]string{}
+	}
+
+	// matDesc
+	if len(cd.MatDesc) > 0 {
+		request.Headers[OssClientSideEncryptionMatDesc] = cd.MatDesc
+	}
+
+	if cseContext.DataSize > 0 {
+		request.Headers[OssClientSideEncryptionDataSize] = fmt.Sprint(cseContext.DataSize)
+	}
+
+	request.Headers[OssClientSideEncryptionPartSize] = fmt.Sprint(cseContext.PartSize)
 
 	// encrypted key
 	strEncryptedKey := base64.StdEncoding.EncodeToString(cd.EncryptedKey)

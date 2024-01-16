@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -70,15 +72,18 @@ NxcSycsQ5br97QfyEsgbMQJANTZ/HyMowmDPIC+n9ExdLSrf4JydARSfntFbPsy1
 )
 
 type encryptionMockTracker struct {
-	lastModified string
-	savedata     []byte
-	saveHeaders  http.Header
+	lastModified  string
+	savedata      []byte
+	saveHeaders   http.Header
+	saveMPData    [][]byte
+	saveMPHeaders []http.Header
 }
 
 func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker) *httptest.Server {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		length := len(tracker.savedata)
 		data := tracker.savedata
+		query := r.URL.Query()
 		switch r.Method {
 		case "PUT":
 			in, err := io.ReadAll(r.Body)
@@ -87,23 +92,43 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 			hash.Write(in)
 			crc64ecma := fmt.Sprint(hash.Sum64())
 
-			//save data & headers
-			tracker.savedata = in
-			tracker.saveHeaders = r.Header
-
 			md5hash := md5.New()
 			md5hash.Write(in)
 			etag := fmt.Sprintf("\"%s\"", strings.ToUpper(hex.EncodeToString(md5hash.Sum(nil))))
 
-			//PutObject
-			w.Header().Set(HeaderOssCRC64, crc64ecma)
-			w.Header().Set(HTTPHeaderETag, etag)
+			if query.Get("uploadId") == "uploadId-1234" {
+				//UploadPart
+				//save data & headers
+				num, err := strconv.Atoi(query.Get("partNumber"))
+				assert.Nil(t, err)
+				assert.Equal(t, "uploadId-1234", query.Get("uploadId"))
+				tracker.saveMPData[num-1] = in
+				tracker.saveMPHeaders[num-1] = r.Header
 
-			//status code
-			w.WriteHeader(200)
+				// header
+				w.Header().Set(HeaderOssCRC64, crc64ecma)
+				w.Header().Set(HTTPHeaderETag, etag)
 
-			//body
-			w.Write(nil)
+				//status code
+				w.WriteHeader(200)
+
+				//body
+				w.Write(nil)
+			} else {
+				//PutObject
+				//save data & headers
+				tracker.savedata = in
+				tracker.saveHeaders = r.Header
+
+				w.Header().Set(HeaderOssCRC64, crc64ecma)
+				w.Header().Set(HTTPHeaderETag, etag)
+
+				//status code
+				w.WriteHeader(200)
+
+				//body
+				w.Write(nil)
+			}
 		case "GET":
 			// header
 			var httpRange *HTTPRange
@@ -147,6 +172,50 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 			sendData := data[int(offset):int(offset+sendLen)]
 			//fmt.Printf("sendData offset%d, len:%d, total:%d\n", offset, len(sendData), length)
 			w.Write(sendData)
+
+		case "POST":
+			//url := r.URL.String()
+			//strings.Contains(url, "/bucket/key?uploads")
+			if query.Get("uploads") == "" && query.Get("uploadId") == "" {
+				// InitiateMultipartUpload
+				sendData := []byte(`
+				<InitiateMultipartUploadResult>
+					<Bucket>bucket</Bucket>
+					<Key>key</Key>
+					<UploadId>uploadId-1234</UploadId>
+				</InitiateMultipartUploadResult>`)
+				tracker.saveHeaders = r.Header
+				w.Header().Set(HTTPHeaderContentType, "application/xml")
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(sendData)))
+				w.WriteHeader(200)
+				w.Write(sendData)
+			} else if query.Get("uploadId") == "uploadId-1234" {
+				// strings.Contains(url, "/bucket/key?uploadId=uploadId-1234")
+				// CompleteMultipartUpload
+				sendData := []byte(`
+				<CompleteMultipartUploadResult>
+					<EncodingType>url</EncodingType>
+					<Location>bucket/key</Location>
+					<Bucket>bucket</Bucket>
+					<Key>key</Key>
+					<ETag>etag</ETag>
+			  	</CompleteMultipartUploadResult>`)
+
+				mr := NewMultiBytesReader(tracker.saveMPData)
+				all, err := io.ReadAll(mr)
+				tracker.savedata = all
+				assert.Nil(t, err)
+				w.Header().Set(HTTPHeaderContentType, "application/xml")
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(sendData)))
+				hash := NewCRC64(0)
+				hash.Write(all)
+				crc64ecma := fmt.Sprint(hash.Sum64())
+				w.Header().Set(HeaderOssCRC64, crc64ecma)
+				w.WriteHeader(200)
+				w.Write(sendData)
+			} else {
+				assert.Fail(t, "not support")
+			}
 		}
 	}))
 	return server
@@ -769,4 +838,217 @@ func TestMockEncryptionCompatibility(t *testing.T) {
 	fhash.Write(fData)
 
 	assert.Equal(t, fhash.Sum64(), ghash.Sum64())
+}
+
+func TestMockEncryptionMultiPart(t *testing.T) {
+	length := 1234
+	partSize := int64(128)
+	partsNum := length/int(partSize) + 1
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	tracker := &encryptionMockTracker{
+		lastModified:  gmtTime,
+		saveMPData:    make([][]byte, partsNum),
+		saveMPHeaders: make([]http.Header, partsNum),
+	}
+	server := testSetupEncryptionMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	assert.NotNil(t, client)
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "value"}, rsaPublicKey, rsaPrivateKey)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	initResult, err := eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key"),
+		CSEPartSize: Ptr(partSize),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, initResult)
+
+	assert.NotNil(t, initResult.CSEMultiPartContext)
+	assert.NotNil(t, initResult.CSEMultiPartContext.ContentCipher)
+	assert.Equal(t, partSize, initResult.CSEMultiPartContext.PartSize)
+	assert.Equal(t, int64(0), initResult.CSEMultiPartContext.DataSize)
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, crypto.AesCtrAlgorithm, tracker.saveHeaders.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, crypto.RsaCryptoWrap, tracker.saveHeaders.Get(OssClientSideEncryptionWrapAlg))
+	assert.Equal(t, "{\"tag\":\"value\"}", tracker.saveHeaders.Get(OssClientSideEncryptionMatDesc))
+	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionUnencryptedContentLength))
+	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionUnencryptedContentMD5))
+	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionDataSize))
+	assert.Equal(t, fmt.Sprint(partSize), tracker.saveHeaders.Get(OssClientSideEncryptionPartSize))
+
+	var parts UploadParts
+	for i := 0; i < partsNum; i++ {
+		start := i * int(partSize)
+		end := start + int(partSize)
+		end = minInt(end, length)
+		upResult, err := eclient.UploadPart(context.TODO(), &UploadPartRequest{
+			Bucket:              Ptr("bucket"),
+			Key:                 Ptr("key"),
+			UploadId:            initResult.UploadId,
+			PartNumber:          int32(i + 1),
+			CSEMultiPartContext: initResult.CSEMultiPartContext,
+			Body:                bytes.NewReader(data[start:end]),
+		})
+		assert.Nil(t, err)
+		assert.NotNil(t, upResult)
+		parts = append(parts, UploadPart{PartNumber: int32(i + 1), ETag: upResult.ETag})
+
+		assert.NotEmpty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionKey))
+		assert.NotEmpty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionStart))
+		assert.Equal(t, crypto.AesCtrAlgorithm, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionCekAlg))
+		assert.Equal(t, crypto.RsaCryptoWrap, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionWrapAlg))
+		assert.Equal(t, "{\"tag\":\"value\"}", tracker.saveMPHeaders[i].Get(OssClientSideEncryptionMatDesc))
+		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionUnencryptedContentLength))
+		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionUnencryptedContentMD5))
+		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionDataSize))
+		assert.Equal(t, fmt.Sprint(partSize), tracker.saveMPHeaders[i].Get(OssClientSideEncryptionPartSize))
+	}
+
+	sort.Sort(parts)
+	cmResult, err := eclient.CompleteMultipartUpload(context.TODO(), &CompleteMultipartUploadRequest{
+		Bucket:                  Ptr("bucket"),
+		Key:                     Ptr("key"),
+		UploadId:                initResult.UploadId,
+		CompleteMultipartUpload: &CompleteMultipartUpload{Parts: parts},
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, cmResult)
+	assert.Len(t, tracker.savedata, length)
+	assert.NotEqualValues(t, data, tracker.savedata)
+
+	// GetObject
+	gResult, err := eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, gResult)
+	gData, err := io.ReadAll(gResult.Body)
+	assert.Nil(t, err)
+	assert.Len(t, gData, length)
+	assert.NotEqualValues(t, data, tracker.savedata)
+
+}
+
+func TestEncryptionClientMultiPartErrorTest(t *testing.T) {
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	assert.NotNil(t, client)
+
+	_, err := NewEncryptionClient(client, nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field, masterCipher")
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "rsa"}, rsaPublicKey, rsaPrivateKey)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+	assert.Equal(t, client, eclient.Unwrap())
+
+	eclient, err = NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	// InitiateMultipartUpload
+	_, err = eclient.InitiateMultipartUpload(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field, request")
+
+	_, err = eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid field, request.CSEPartSize")
+
+	partSize := int64(0)
+	_, err = eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key"),
+		CSEPartSize: Ptr(partSize),
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "invalid field, request.CSEPartSize")
+
+	partSize = 12
+	_, err = eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key"),
+		CSEPartSize: Ptr(partSize),
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.CSEPartSize must aligned to the")
+
+	partSize = 16
+	_, err = eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket:      Ptr("bucket"),
+		Key:         Ptr("key"),
+		CSEPartSize: Ptr(partSize),
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "operation error InitiateMultipartUpload")
+
+	// UploadPart
+	_, err = eclient.UploadPart(context.TODO(), nil)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field, request")
+
+	_, err = eclient.UploadPart(context.TODO(), &UploadPartRequest{
+		Bucket:     Ptr("bucket"),
+		Key:        Ptr("key"),
+		PartNumber: 1,
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "null field, request.CSEMultiPartContext")
+
+	_, err = eclient.UploadPart(context.TODO(), &UploadPartRequest{
+		Bucket:              Ptr("bucket"),
+		Key:                 Ptr("key"),
+		PartNumber:          1,
+		CSEMultiPartContext: &EncryptionMultiPartContext{},
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.CSEMultiPartContext is invalid")
+
+	_, err = eclient.UploadPart(context.TODO(), &UploadPartRequest{
+		Bucket:     Ptr("bucket"),
+		Key:        Ptr("key"),
+		PartNumber: 1,
+		CSEMultiPartContext: &EncryptionMultiPartContext{
+			ContentCipher: &fakeEncryptionContentCipher{},
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.CSEMultiPartContext is invalid")
+
+	_, err = eclient.UploadPart(context.TODO(), &UploadPartRequest{
+		Bucket:     Ptr("bucket"),
+		Key:        Ptr("key"),
+		PartNumber: 1,
+		CSEMultiPartContext: &EncryptionMultiPartContext{
+			ContentCipher: &fakeEncryptionContentCipher{},
+			PartSize:      15,
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "CSEMultiPartContext's PartSize must be aligned to")
+
 }

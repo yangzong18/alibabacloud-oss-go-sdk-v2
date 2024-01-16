@@ -1252,6 +1252,13 @@ type InitiateMultipartUploadRequest struct {
 	// You can specify multiple tags for an object. Example: TagA=A&TagB=B.
 	Tagging *string `input:"header,x-oss-tagging"`
 
+	// The total size when using client side encryption, only valid in EncryptionClient
+	CSEDataSize *int64
+
+	// The part size when using client side encryption, only valid in EncryptionClient
+	// CSEPartSize must aligned to the secret iv length
+	CSEPartSize *int64
+
 	RequestCommon
 }
 
@@ -1267,6 +1274,9 @@ type InitiateMultipartUploadResult struct {
 
 	// The encoding type of the object names in the response. Valid value: url
 	EncodingType *string `xml:"EncodingType"`
+
+	// The encryption context for multipart upload when using client side encryption, only valid in EncryptionClient
+	CSEMultiPartContext *EncryptionMultiPartContext
 
 	ResultCommon
 }
@@ -1333,6 +1343,9 @@ type UploadPartRequest struct {
 
 	// Object data.
 	Body io.Reader `input:"body,nop"`
+
+	// The encryption context for multipart upload when using client side encryption, only valid in EncryptionClient
+	CSEMultiPartContext *EncryptionMultiPartContext
 
 	RequestCommon
 }
