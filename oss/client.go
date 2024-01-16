@@ -215,7 +215,7 @@ func resolveFeatureFlags(cfg *Config, o *Options) {
 }
 
 func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, optFns []func(*Options)) (output *OperationOutput, err error) {
-	if c.inner.Log.Level() >= LogInfo {
+	if c.getLogLevel() >= LogInfo {
 		c.inner.Log.Infof("InvokeOperation Start: input[%p], OpName:%s, Bucket:%s, Key:%s",
 			input, input.OpName,
 			ToString(input.Bucket), ToString(input.Key))
@@ -253,7 +253,7 @@ func (c *Client) invokeOperation(ctx context.Context, input *OperationInput, opt
 func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *Options) (output *OperationOutput, err error) {
 	var request *http.Request
 	var response *http.Response
-	if c.inner.Log.Level() >= LogInfo {
+	if c.getLogLevel() >= LogInfo {
 		c.inner.Log.Infof("sendRequest Start: input[%p]", input)
 		defer func() {
 			c.inner.Log.Infof("sendRequest End: input[%p], http.Request[%p], http.Response[%p]", input, request, response)
@@ -422,7 +422,7 @@ func (c *Client) sendHttpRequest(ctx context.Context, signingCtx *signer.Signing
 func (c *Client) sendHttpRequestOnce(ctx context.Context, signingCtx *signer.SigningContext, opts *Options) (
 	response *http.Response, err error,
 ) {
-	if c.inner.Log.Level() > LogInfo {
+	if c.getLogLevel() > LogInfo {
 		c.inner.Log.Infof("sendHttpRequestOnce Start, http.Request[%p]", signingCtx.Request)
 		defer func() {
 			c.inner.Log.Infof("sendHttpRequestOnce End, http.Request[%p], response[%p], err:%v", signingCtx.Request, response, err)
@@ -1182,7 +1182,7 @@ func (c *Client) dumpOperationOutput(output *OperationOutput) string {
 
 // LoggerHTTPReq Print the header information of the http request
 func (c *Client) logHttpPRequet(request *http.Request) {
-	if c.inner.Log.Level() < LogDebug {
+	if c.getLogLevel() < LogDebug {
 		return
 	}
 	var logBuffer bytes.Buffer
@@ -1211,7 +1211,7 @@ func (c *Client) logHttpPRequet(request *http.Request) {
 
 // LoggerHTTPResp Print Response to http request
 func (c *Client) logHttpResponse(request *http.Request, response *http.Response) {
-	if c.inner.Log.Level() < LogDebug {
+	if c.getLogLevel() < LogDebug {
 		return
 	}
 	var logBuffer bytes.Buffer
@@ -1231,6 +1231,13 @@ func (c *Client) logHttpResponse(request *http.Request, response *http.Response)
 		}
 	}
 	c.inner.Log.Debugf("%s", logBuffer.String())
+}
+
+func (c *Client) getLogLevel() int {
+	if c.inner.Log != nil {
+		return c.inner.Log.Level()
+	}
+	return LogOff
 }
 
 // Content-Type

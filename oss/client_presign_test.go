@@ -16,7 +16,8 @@ func TestPresignPresignOptions(t *testing.T) {
 	cfg := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client := NewClient(cfg)
 
@@ -96,7 +97,8 @@ func TestPresignWithToken(t *testing.T) {
 	cfg := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk", "token")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client := NewClient(cfg)
 
@@ -120,7 +122,8 @@ func TestPresignWithToken(t *testing.T) {
 	cfgV4 := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk", "token")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").WithSignatureVersion(SignatureVersionV4)
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV4)
 
 	client = NewClient(cfgV4)
 
@@ -149,7 +152,8 @@ func TestPresignWithHeader(t *testing.T) {
 	cfg := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client := NewClient(cfg)
 
@@ -178,7 +182,8 @@ func TestPresignWithHeader(t *testing.T) {
 	cfgV4 := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").WithSignatureVersion(SignatureVersionV4)
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV4)
 
 	client = NewClient(cfgV4)
 	request = &GetObjectRequest{
@@ -210,7 +215,8 @@ func TestPresignWithQuery(t *testing.T) {
 	cfg := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client := NewClient(cfg)
 
@@ -239,7 +245,8 @@ func TestPresignWithQuery(t *testing.T) {
 	cfgV4 := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").WithSignatureVersion(SignatureVersionV4)
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV4)
 
 	client = NewClient(cfgV4)
 
@@ -271,7 +278,8 @@ func TestPresignOperationInput(t *testing.T) {
 	cfg := LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client := NewClient(cfg)
 
@@ -300,7 +308,8 @@ func TestPresignOperationInput(t *testing.T) {
 	cfg = LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewStaticCredentialsProvider("ak", "sk", "token")).
 		WithRegion("cn-hangzhou").
-		WithEndpoint("oss-cn-hangzhou.aliyuncs.com")
+		WithEndpoint("oss-cn-hangzhou.aliyuncs.com").
+		WithSignatureVersion(SignatureVersionV1)
 
 	client = NewClient(cfg)
 
