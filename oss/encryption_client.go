@@ -116,8 +116,14 @@ func (e *EncryptionClient) ListParts(ctx context.Context, request *ListPartsRequ
 	return e.client.ListParts(ctx, request, optFns...)
 }
 
+// NewDownloader creates a new Downloader instance to download objects.
 func (c *EncryptionClient) NewDownloader(optFns ...func(*DownloaderOptions)) *Downloader {
 	return NewDownloader(c, optFns...)
+}
+
+// OpenFile opens the named file for reading.
+func (c *EncryptionClient) OpenFile(ctx context.Context, bucket string, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
+	return NewReadOnlyFile(ctx, c, bucket, key, optFns...)
 }
 
 func (e *EncryptionClient) getObjectSecurely(ctx context.Context, request *GetObjectRequest, optFns ...func(*Options)) (*GetObjectResult, error) {
@@ -201,10 +207,6 @@ func (e *EncryptionClient) getObjectSecurely(ctx context.Context, request *GetOb
 
 	if discardCount > 0 && err == nil {
 		//rewrite ContentRange & ContentRange
-		if result.ContentLength > 0 {
-			result.ContentLength -= discardCount
-			result.Headers.Set(HTTPHeaderContentLength, fmt.Sprint(result.ContentLength))
-		}
 		if result.ContentRange != nil {
 			if from, to, total, cerr := ParseContentRange(*result.ContentRange); cerr == nil {
 				from += discardCount
@@ -212,6 +214,12 @@ func (e *EncryptionClient) getObjectSecurely(ctx context.Context, request *GetOb
 				result.ContentRange = Ptr(value)
 				result.Headers.Set(HTTPHeaderContentRange, value)
 			}
+		} else {
+			result.Headers.Set(HTTPHeaderContentRange, fmt.Sprintf("bytes %v-/*", discardCount))
+		}
+		if result.ContentLength > 0 {
+			result.ContentLength -= discardCount
+			result.Headers.Set(HTTPHeaderContentLength, fmt.Sprint(result.ContentLength))
 		}
 		result.Body = &DiscardReadCloser{
 			RC:      result.Body,

@@ -254,11 +254,14 @@ func parseOffsetAndSizeFromHeaders(headers http.Header) (offset, size int64) {
 	if slash < 0 {
 		return 0, -1
 	}
-	ret, err = strconv.ParseInt(contentRange[slash+1:], 10, 64)
-	if err != nil {
-		return 0, -1
+	tsize := contentRange[slash+1:]
+	if tsize != "*" {
+		ret, err = strconv.ParseInt(contentRange[slash+1:], 10, 64)
+		if err != nil {
+			return 0, -1
+		}
+		size = ret
 	}
-	size = ret
 
 	return offset, size
 }

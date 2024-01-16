@@ -34,7 +34,7 @@ type OpenOptions struct {
 }
 
 type ReadOnlyFile struct {
-	client  *Client
+	client  OpenFileAPIClient
 	context context.Context
 
 	// object info
@@ -70,7 +70,7 @@ type ReadOnlyFile struct {
 
 // OpenFile opens the named file for reading.
 // If successful, methods on the returned file can be used for reading.
-func (c *Client) OpenFile(ctx context.Context, bucket string, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
+func NewReadOnlyFile(ctx context.Context, c OpenFileAPIClient, bucket string, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
 	options := OpenOptions{
 		Offset:            0,
 		EnablePrefetch:    false,
@@ -480,7 +480,7 @@ type AppendOptions struct {
 }
 
 type AppendOnlyFile struct {
-	client  *Client
+	client  AppendFileAPIClient
 	context context.Context
 
 	// object info
@@ -498,7 +498,7 @@ type AppendOnlyFile struct {
 
 // AppendFile opens or creates the named file for appending.
 // If successful, methods on the returned file can be used for appending.
-func (c *Client) AppendFile(ctx context.Context, bucket string, key string, optFns ...func(*AppendOptions)) (*AppendOnlyFile, error) {
+func NewAppendFile(ctx context.Context, c AppendFileAPIClient, bucket string, key string, optFns ...func(*AppendOptions)) (*AppendOnlyFile, error) {
 	options := AppendOptions{}
 
 	for _, fn := range optFns {

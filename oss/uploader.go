@@ -12,16 +12,6 @@ import (
 	"sync/atomic"
 )
 
-type UploadAPIClient interface {
-	HeadObject(ctx context.Context, request *HeadObjectRequest, optFns ...func(*Options)) (*HeadObjectResult, error)
-	PutObject(ctx context.Context, request *PutObjectRequest, optFns ...func(*Options)) (*PutObjectResult, error)
-	InitiateMultipartUpload(ctx context.Context, request *InitiateMultipartUploadRequest, optFns ...func(*Options)) (*InitiateMultipartUploadResult, error)
-	UploadPart(ctx context.Context, request *UploadPartRequest, optFns ...func(*Options)) (*UploadPartResult, error)
-	CompleteMultipartUpload(ctx context.Context, request *CompleteMultipartUploadRequest, optFns ...func(*Options)) (*CompleteMultipartUploadResult, error)
-	AbortMultipartUpload(ctx context.Context, request *AbortMultipartUploadRequest, optFns ...func(*Options)) (*AbortMultipartUploadResult, error)
-	ListParts(ctx context.Context, request *ListPartsRequest, optFns ...func(*Options)) (*ListPartsResult, error)
-}
-
 type UploaderOptions struct {
 	PartSize int64
 
@@ -42,6 +32,8 @@ type Uploader struct {
 	featureFlags FeatureFlagsType
 }
 
+// NewUploader creates a new Uploader instance to upload objects.
+// Pass In additional functional options to customize the uploader's behavior.
 func NewUploader(c UploadAPIClient, optFns ...func(*UploaderOptions)) *Uploader {
 	options := UploaderOptions{
 		PartSize:          DefaultUploadPartSize,

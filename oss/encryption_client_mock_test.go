@@ -1190,3 +1190,86 @@ func TestMockEncryptionDownloader(t *testing.T) {
 	io.Copy(hash2, rfile2)
 	assert.Equal(t, fhash.Sum64(), hash2.Sum64())
 }
+
+func TestMockEncryptionOpenFile(t *testing.T) {
+	//length := 123
+	gmtTime := getNowGMT()
+	tracker := &encryptionMockTracker{
+		lastModified: gmtTime,
+	}
+	server := testSetupEncryptionMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	assert.NotNil(t, client)
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "value"}, "", rsaPrivateKeyCompatibility)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	file, err := os.Open("../test/testdata/cpp-enc-example.jpg")
+	assert.Nil(t, err)
+	defer file.Close()
+	result, err := client.PutObject(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+		Body:   file,
+		Metadata: map[string]string{
+			"client-side-encryption-key":      "nyXOp7delQ/MQLjKQMhHLaT0w7u2yQoDLkSnK8MFg/MwYdh4na4/LS8LLbLcM18m8I/ObWUHU775I50sJCpdv+f4e0jLeVRRiDFWe+uo7Puc9j4xHj8YB3QlcIOFQiTxHIB6q+C+RA6lGwqqYVa+n3aV5uWhygyv1MWmESurppg=",
+			"client-side-encryption-start":    "De/S3T8wFjx7QPxAAFl7h7TeI2EsZlfCwox4WhLGng5DK2vNXxULmulMUUpYkdc9umqmDilgSy5Z3Foafw+v4JJThfw68T/9G2gxZLrQTbAlvFPFfPM9Ehk6cY4+8WpY32uN8w5vrHyoSZGr343NxCUGIp6fQ9sSuOLMoJg7hNw=",
+			"client-side-encryption-cek-alg":  "AES/CTR/NoPadding",
+			"client-side-encryption-wrap-alg": "RSA/NONE/PKCS1Padding",
+		},
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, "AES/CTR/NoPadding", tracker.saveHeaders.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, "RSA/NONE/PKCS1Padding", tracker.saveHeaders.Get(OssClientSideEncryptionWrapAlg))
+
+	gResult, err := eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, gResult)
+	gData, err := io.ReadAll(gResult.Body)
+
+	ghash := NewCRC64(0)
+	ghash.Write(gData)
+
+	file1, err := os.Open("../test/testdata/example.jpg")
+	assert.Nil(t, err)
+	defer file1.Close()
+	fData, err := io.ReadAll(file1)
+
+	fhash := NewCRC64(0)
+	fhash.Write(fData)
+
+	assert.Equal(t, fhash.Sum64(), ghash.Sum64())
+
+	//Use ReadOnlyFile
+	f, err := eclient.OpenFile(context.TODO(), "bucket", "key")
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+
+	for i := 1; i < 123; i++ {
+		for len := 345; len < 456; len++ {
+			_, err := f.Seek(int64(i), io.SeekStart)
+			assert.Nil(t, err)
+			gData, err := io.ReadAll(io.LimitReader(f, int64(len)))
+			assert.Nil(t, err)
+			assert.EqualValues(t, fData[i:i+len], gData)
+		}
+	}
+}

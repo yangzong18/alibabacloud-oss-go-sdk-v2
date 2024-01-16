@@ -13,11 +13,6 @@ import (
 	"sync/atomic"
 )
 
-type DownloadAPIClient interface {
-	HeadObject(ctx context.Context, request *HeadObjectRequest, optFns ...func(*Options)) (*HeadObjectResult, error)
-	GetObject(ctx context.Context, request *GetObjectRequest, optFns ...func(*Options)) (*GetObjectResult, error)
-}
-
 type DownloaderOptions struct {
 	PartSize int64
 
@@ -40,6 +35,8 @@ type Downloader struct {
 	featureFlags FeatureFlagsType
 }
 
+// NewDownloader creates a new Downloader instance to downloads objects.
+// Pass in additional functional options  to customize the downloader behavior.
 func NewDownloader(c DownloadAPIClient, optFns ...func(*DownloaderOptions)) *Downloader {
 	options := DownloaderOptions{
 		PartSize:    DefaultUploadPartSize,

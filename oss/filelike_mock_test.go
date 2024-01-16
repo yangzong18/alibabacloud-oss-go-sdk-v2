@@ -112,7 +112,7 @@ func TestMockOpenFile_DirectRead(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key")
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key")
 	assert.Nil(t, err)
 	assert.NotNil(t, f)
 	assert.Equal(t, false, f.enablePrefetch)
@@ -318,7 +318,7 @@ func TestMockOpenFile_PrefetchRead(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.EnablePrefetch = true
 		oo.ChunkSize = 2 * 1024 * 1024
 		oo.PrefetchNum = 3
@@ -532,7 +532,7 @@ func TestMockOpenFile_MixRead(t *testing.T) {
 		WithRetryMaxAttempts(1)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.EnablePrefetch = true
 		oo.ChunkSize = 2 * 1024 * 1024
 		oo.PrefetchNum = 3
@@ -624,7 +624,7 @@ func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key")
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key")
 	assert.Nil(t, err)
 	assert.NotNil(t, f)
 
@@ -645,7 +645,7 @@ func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
 	assert.Nil(t, err)
 
 	// with invalid offset
-	f, err = client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err = NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.Offset = int64(length * 2)
 	})
 	assert.NotNil(t, err)
@@ -660,7 +660,7 @@ func TestMockOpenFile_DirectRead_Fail(t *testing.T) {
 		WithReadWriteTimeout(1 * time.Second)
 
 	client = NewClient(cfg)
-	f, err = client.OpenFile(context.TODO(), "bucket", "key")
+	f, err = NewReadOnlyFile(context.TODO(), client, "bucket", "key")
 	assert.Nil(t, err)
 	assert.NotNil(t, f)
 	setTimeout = true
@@ -699,12 +699,12 @@ func TestMockOpenFile_Constructor(t *testing.T) {
 
 	client := NewClient(cfg)
 	length = -1
-	f, err := client.OpenFile(context.TODO(), "bucket", "key")
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key")
 	assert.NotNil(t, err)
 	assert.Nil(t, f)
 
 	length = 0
-	f, err = client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err = NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.EnablePrefetch = true
 		oo.ChunkSize = -1
 		oo.PrefetchNum = -1
@@ -716,7 +716,7 @@ func TestMockOpenFile_Constructor(t *testing.T) {
 
 	//version Id
 	length = 0
-	f, err = client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err = NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.VersionId = Ptr("123")
 	})
 	assert.Nil(t, err)
@@ -773,7 +773,7 @@ func TestMockOpenFile_DirectRead_FileChange(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key")
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key")
 	assert.Nil(t, err)
 	assert.NotNil(t, f)
 
@@ -838,7 +838,7 @@ func TestMockOpenFile_PrefetchRead_Fail(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.EnablePrefetch = true
 		oo.ChunkSize = 1 * 1024 * 1024
 		oo.PrefetchNum = 3
@@ -908,7 +908,7 @@ func TestMockOpenFile_PrefetchRead_FileChange(t *testing.T) {
 		WithReadWriteTimeout(300 * time.Second)
 
 	client := NewClient(cfg)
-	f, err := client.OpenFile(context.TODO(), "bucket", "key", func(oo *OpenOptions) {
+	f, err := NewReadOnlyFile(context.TODO(), client, "bucket", "key", func(oo *OpenOptions) {
 		oo.EnablePrefetch = true
 		oo.ChunkSize = 1*1024*1024 + 1
 		oo.PrefetchNum = 2
