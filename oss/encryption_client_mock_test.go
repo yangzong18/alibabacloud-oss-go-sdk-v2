@@ -85,6 +85,23 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 		data := tracker.savedata
 		query := r.URL.Query()
 		switch r.Method {
+		case "HEAD":
+			// header
+			w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
+			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(length))
+			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+			w.Header().Set(HTTPHeaderContentType, "text/plain")
+			for k, vv := range tracker.saveHeaders {
+				lk := strings.ToLower(k)
+				if strings.HasPrefix(lk, "x-oss-meta-client-side-encryption-") {
+					w.Header().Set(k, vv[0])
+				}
+			}
+			//status code
+			w.WriteHeader(200)
+
+			//body
+			w.Write(nil)
 		case "PUT":
 			in, err := io.ReadAll(r.Body)
 			assert.Nil(t, err)
@@ -1051,4 +1068,125 @@ func TestEncryptionClientMultiPartErrorTest(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "CSEMultiPartContext's PartSize must be aligned to")
 
+}
+
+func TestMockEncryptionDownloader(t *testing.T) {
+	//length := 123
+	gmtTime := getNowGMT()
+	tracker := &encryptionMockTracker{
+		lastModified: gmtTime,
+	}
+	server := testSetupEncryptionMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	assert.NotNil(t, client)
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "value"}, "", rsaPrivateKeyCompatibility)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	file, err := os.Open("../test/testdata/cpp-enc-example.jpg")
+	assert.Nil(t, err)
+	defer file.Close()
+	result, err := client.PutObject(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+		Body:   file,
+		Metadata: map[string]string{
+			"client-side-encryption-key":      "nyXOp7delQ/MQLjKQMhHLaT0w7u2yQoDLkSnK8MFg/MwYdh4na4/LS8LLbLcM18m8I/ObWUHU775I50sJCpdv+f4e0jLeVRRiDFWe+uo7Puc9j4xHj8YB3QlcIOFQiTxHIB6q+C+RA6lGwqqYVa+n3aV5uWhygyv1MWmESurppg=",
+			"client-side-encryption-start":    "De/S3T8wFjx7QPxAAFl7h7TeI2EsZlfCwox4WhLGng5DK2vNXxULmulMUUpYkdc9umqmDilgSy5Z3Foafw+v4JJThfw68T/9G2gxZLrQTbAlvFPFfPM9Ehk6cY4+8WpY32uN8w5vrHyoSZGr343NxCUGIp6fQ9sSuOLMoJg7hNw=",
+			"client-side-encryption-cek-alg":  "AES/CTR/NoPadding",
+			"client-side-encryption-wrap-alg": "RSA/NONE/PKCS1Padding",
+		},
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, "AES/CTR/NoPadding", tracker.saveHeaders.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, "RSA/NONE/PKCS1Padding", tracker.saveHeaders.Get(OssClientSideEncryptionWrapAlg))
+
+	gResult, err := eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, gResult)
+	gData, err := io.ReadAll(gResult.Body)
+
+	ghash := NewCRC64(0)
+	ghash.Write(gData)
+
+	file1, err := os.Open("../test/testdata/example.jpg")
+	assert.Nil(t, err)
+	defer file1.Close()
+	fData, err := io.ReadAll(file1)
+
+	fhash := NewCRC64(0)
+	fhash.Write(fData)
+
+	assert.Equal(t, fhash.Sum64(), ghash.Sum64())
+
+	//Use Downloader
+	d := eclient.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 256 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+	assert.Equal(t, int64(256*1024), d.options.PartSize)
+	assert.Equal(t, 3, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	dResult, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(len(gData)), dResult.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+
+	io.Copy(hash, rfile)
+	assert.Equal(t, fhash.Sum64(), hash.Sum64())
+
+	// not 16 align partSize
+	d2 := eclient.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 123 * 1024
+	})
+	assert.NotNil(t, d2)
+	assert.NotNil(t, d2.client)
+	assert.Equal(t, int64(123*1024), d2.options.PartSize)
+	assert.Equal(t, 3, d2.options.ParallelNum)
+
+	localFile2 := randStr(8) + "-no-surfix"
+	dResult2, err := d2.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile2)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(len(gData)), dResult2.Written)
+
+	hash2 := NewCRC64(0)
+	rfile2, err := os.Open(localFile2)
+	assert.Nil(t, err)
+	defer func() {
+		rfile2.Close()
+		os.Remove(localFile2)
+	}()
+
+	io.Copy(hash2, rfile2)
+	assert.Equal(t, fhash.Sum64(), hash2.Sum64())
 }

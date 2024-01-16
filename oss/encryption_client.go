@@ -116,6 +116,10 @@ func (e *EncryptionClient) ListParts(ctx context.Context, request *ListPartsRequ
 	return e.client.ListParts(ctx, request, optFns...)
 }
 
+func (c *EncryptionClient) NewDownloader(optFns ...func(*DownloaderOptions)) *Downloader {
+	return NewDownloader(c, optFns...)
+}
+
 func (e *EncryptionClient) getObjectSecurely(ctx context.Context, request *GetObjectRequest, optFns ...func(*Options)) (*GetObjectResult, error) {
 	if request == nil {
 		return nil, NewErrParamNull("request")

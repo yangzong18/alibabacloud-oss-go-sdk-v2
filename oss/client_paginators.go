@@ -273,17 +273,21 @@ func (p *ListBucketsPaginator) NextPage(ctx context.Context, optFns ...func(*Opt
 	return result, nil
 }
 
+type ListPartsAPIClient interface {
+	ListParts(ctx context.Context, request *ListPartsRequest, optFns ...func(*Options)) (*ListPartsResult, error)
+}
+
 // ListPartsPaginator is a paginator for ListParts
 type ListPartsPaginator struct {
 	options     PaginatorOptions
-	client      *Client
+	client      ListPartsAPIClient
 	request     *ListPartsRequest
 	marker      int32
 	firstPage   bool
 	isTruncated bool
 }
 
-func (c *Client) NewListPartsPaginator(request *ListPartsRequest, optFns ...func(*PaginatorOptions)) *ListPartsPaginator {
+func NewListPartsPaginator(c ListPartsAPIClient, request *ListPartsRequest, optFns ...func(*PaginatorOptions)) *ListPartsPaginator {
 	if request == nil {
 		request = &ListPartsRequest{}
 	}
@@ -303,6 +307,10 @@ func (c *Client) NewListPartsPaginator(request *ListPartsRequest, optFns ...func
 		firstPage:   true,
 		isTruncated: false,
 	}
+}
+
+func (c *Client) NewListPartsPaginator(request *ListPartsRequest, optFns ...func(*PaginatorOptions)) *ListPartsPaginator {
+	return NewListPartsPaginator(c, request, optFns...)
 }
 
 // HasNext Returns true if there’s a next page.
