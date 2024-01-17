@@ -32,7 +32,8 @@ type downloaderMockTracker struct {
 	partSize     int32
 	gotMinOffset int64
 
-	rStart int64
+	rStart            int64
+	headReqeustCRCErr bool
 }
 
 func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker) *httptest.Server {
@@ -52,11 +53,19 @@ func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker)
 		switch r.Method {
 		case "HEAD":
 			tracker.gotMinOffset = int64(length)
+			hash := NewCRC64(0)
+			hash.Write(data)
 			// header
 			w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
 			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(length))
 			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
 			w.Header().Set(HTTPHeaderContentType, "text/plain")
+
+			if tracker.headReqeustCRCErr {
+				w.Header().Set(HeaderOssCRC64, "12345")
+			} else {
+				w.Header().Set(HeaderOssCRC64, fmt.Sprint(hash.Sum64()))
+			}
 
 			//status code
 			w.WriteHeader(200)
@@ -1115,4 +1124,64 @@ func TestDownloadedChunksSort(t *testing.T) {
 	assert.Equal(t, int64(10), chunks[1].start)
 	assert.Equal(t, int64(15), chunks[2].start)
 	assert.Equal(t, int64(45), chunks[3].start)
+}
+
+func TestMockDownloaderCRCCheck(t *testing.T) {
+	length := 5*100*1024 + 1234
+	data := []byte(randStr(length))
+	gmtTime := getNowGMT()
+	datasum := func() uint64 {
+		h := NewCRC64(0)
+		h.Write(data)
+		return h.Sum64()
+	}()
+	tracker := &downloaderMockTracker{
+		lastModified:      gmtTime,
+		data:              data,
+		headReqeustCRCErr: true,
+	}
+	server := testSetupDownloaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+	d := NewDownloader(client, func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 100 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.NotNil(t, d.client)
+
+	localFile := randStr(8) + "-no-surfix"
+
+	result, err := d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.NotNil(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "cause: crc is inconsistent")
+	assert.NotEmpty(t, datasum)
+	os.Remove(localFile)
+	assert.NoFileExists(t, localFile)
+
+	// Disable CRC
+	d.featureFlags = d.featureFlags & ^FeatureEnableCRC64CheckDownload
+	result, err = d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+
+	io.Copy(hash, rfile)
+	assert.Equal(t, datasum, hash.Sum64())
 }

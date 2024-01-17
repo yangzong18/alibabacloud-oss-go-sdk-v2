@@ -2,6 +2,7 @@ package oss
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -16,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/aliyun-oss-go-sdk-v2/oss/crypto"
 )
 
 var (
@@ -963,6 +966,18 @@ func TestPutObject(t *testing.T) {
 	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
 	assert.Equal(t, "0015-00000101", serr.EC)
 	assert.NotEmpty(t, serr.RequestID)
+
+	//Body is bigger than Content-Length
+	request = &PutObjectRequest{
+		Bucket:        Ptr(bucketName),
+		Key:           Ptr(objectName),
+		ContentLength: Ptr(int64(len(content) - 10)),
+		Body:          strings.NewReader(content),
+	}
+	result, err = client.PutObject(context.TODO(), request)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), " transport connection broken")
+
 }
 
 func TestGetObject(t *testing.T) {
@@ -4140,5 +4155,182 @@ func TestPaginator(t *testing.T) {
 		_, err = lpPaginator.NextPage(context.TODO())
 		assert.NotNil(t, err)
 		break
+	}
+}
+
+func TestEncryptionClient(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	bucketName := bucketNamePrefix + randLowStr(6)
+	//TODO
+	objectName := objectNamePrefix + randLowStr(6)
+
+	length := 3*100*1024 + 123
+	partSize := int64(200 * 1024)
+	partsNum := length/int(partSize) + 1
+	data := []byte(randStr(length))
+	hashData := NewCRC64(0)
+	hashData.Write(data)
+
+	client := getDefaultClient()
+	assert.NotNil(t, client)
+
+	_, err := client.PutBucket(context.TODO(), &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	})
+	assert.Nil(t, err)
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "value"}, rsaPublicKey, rsaPrivateKey)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	initResult, err := eclient.InitiateMultipartUpload(context.TODO(), &InitiateMultipartUploadRequest{
+		Bucket:      Ptr(bucketName),
+		Key:         Ptr(objectName),
+		CSEPartSize: Ptr(partSize),
+		CSEDataSize: Ptr(int64(length)),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, initResult)
+	assert.NotNil(t, initResult.CSEMultiPartContext)
+	assert.NotNil(t, initResult.CSEMultiPartContext.ContentCipher)
+	assert.Equal(t, partSize, initResult.CSEMultiPartContext.PartSize)
+	assert.Equal(t, int64(length), initResult.CSEMultiPartContext.DataSize)
+
+	var parts UploadParts
+	for i := 0; i < partsNum; i++ {
+		start := i * int(partSize)
+		end := start + int(partSize)
+		end = minInt(end, length)
+		upResult, err := eclient.UploadPart(context.TODO(), &UploadPartRequest{
+			Bucket:              Ptr(bucketName),
+			Key:                 Ptr(objectName),
+			UploadId:            initResult.UploadId,
+			PartNumber:          int32(i + 1),
+			CSEMultiPartContext: initResult.CSEMultiPartContext,
+			//ContentLength:       Ptr(int64(end - start)),
+			Body: bytes.NewReader(data[start:end]),
+		})
+		assert.Nil(t, err)
+		assert.NotNil(t, upResult)
+		parts = append(parts, UploadPart{PartNumber: int32(i + 1), ETag: upResult.ETag})
+	}
+
+	lsResult, err := eclient.ListParts(context.TODO(), &ListPartsRequest{
+		Bucket:   Ptr(bucketName),
+		Key:      Ptr(objectName),
+		UploadId: initResult.UploadId,
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, lsResult)
+
+	sort.Sort(parts)
+	cmResult, err := eclient.CompleteMultipartUpload(context.TODO(), &CompleteMultipartUploadRequest{
+		Bucket:                  Ptr(bucketName),
+		Key:                     Ptr(objectName),
+		UploadId:                initResult.UploadId,
+		CompleteMultipartUpload: &CompleteMultipartUpload{Parts: parts},
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, cmResult)
+
+	// GetObject
+	gResult, err := eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, gResult)
+	gData, err := io.ReadAll(gResult.Body)
+	assert.Nil(t, err)
+	assert.Len(t, gData, length)
+	assert.EqualValues(t, data, gData)
+
+	assert.NotEmpty(t, gResult.Headers.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, gResult.Headers.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, crypto.AesCtrAlgorithm, gResult.Headers.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, crypto.RsaCryptoWrap, gResult.Headers.Get(OssClientSideEncryptionWrapAlg))
+	assert.Equal(t, "{\"tag\":\"value\"}", gResult.Headers.Get(OssClientSideEncryptionMatDesc))
+	assert.Equal(t, fmt.Sprint(partSize), gResult.Headers.Get(OssClientSideEncryptionPartSize))
+	assert.Equal(t, fmt.Sprint(length), gResult.Headers.Get(OssClientSideEncryptionDataSize))
+	assert.Empty(t, gResult.Headers.Get(OssClientSideEncryptionUnencryptedContentLength))
+	assert.Empty(t, gResult.Headers.Get(OssClientSideEncryptionUnencryptedContentMD5))
+
+	// HeadObject
+	hResult, err := eclient.HeadObject(context.TODO(), &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	})
+	assert.NotEmpty(t, hResult.Headers.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, hResult.Headers.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, crypto.AesCtrAlgorithm, hResult.Headers.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, crypto.RsaCryptoWrap, hResult.Headers.Get(OssClientSideEncryptionWrapAlg))
+	assert.Equal(t, "{\"tag\":\"value\"}", hResult.Headers.Get(OssClientSideEncryptionMatDesc))
+	assert.Equal(t, fmt.Sprint(partSize), hResult.Headers.Get(OssClientSideEncryptionPartSize))
+	assert.Equal(t, fmt.Sprint(length), hResult.Headers.Get(OssClientSideEncryptionDataSize))
+	assert.Empty(t, hResult.Headers.Get(OssClientSideEncryptionUnencryptedContentLength))
+	assert.Empty(t, hResult.Headers.Get(OssClientSideEncryptionUnencryptedContentMD5))
+	assert.Equal(t, int64(length), hResult.ContentLength)
+
+	// HeadObject
+	gmResult, err := eclient.GetObjectMeta(context.TODO(), &GetObjectMetaRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	})
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionKey))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionStart))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionCekAlg))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionWrapAlg))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionMatDesc))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionPartSize))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionDataSize))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionUnencryptedContentLength))
+	assert.Empty(t, gmResult.Headers.Get(OssClientSideEncryptionUnencryptedContentMD5))
+	assert.Equal(t, int64(length), gmResult.ContentLength)
+
+	// Downloader with not 16 align partSize
+	d := eclient.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 123 * 1024
+	})
+	assert.NotNil(t, d)
+	assert.Equal(t, int64(123*1024), d.options.PartSize)
+	assert.Equal(t, 3, d.options.ParallelNum)
+
+	localFile := randStr(8) + "-no-surfix"
+	dResult, err := d.DownloadFile(context.TODO(),
+		&GetObjectRequest{
+			Bucket: Ptr(bucketName),
+			Key:    Ptr(objectName)},
+		localFile)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(len(gData)), dResult.Written)
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFile)
+	assert.Nil(t, err)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFile)
+	}()
+	io.Copy(hash, rfile)
+	assert.Equal(t, hash.Sum64(), hashData.Sum64())
+
+	//Use ReadOnlyFile
+	f, err := eclient.OpenFile(context.TODO(), bucketName, objectName)
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	defer func() {
+		f.Close()
+	}()
+	for i := 13; i < 42; i++ {
+		for len := 100*1024 + 123; len < 100*1024+123+17; len++ {
+			_, err := f.Seek(int64(i), io.SeekStart)
+			assert.Nil(t, err)
+			gData, err := io.ReadAll(io.LimitReader(f, int64(len)))
+			assert.Nil(t, err)
+			assert.EqualValues(t, data[i:i+len], gData)
+		}
 	}
 }

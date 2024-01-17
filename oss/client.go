@@ -312,8 +312,13 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	} else {
 		body = input.Body
 	}
-	length := GetReaderLen(body)
-	if length >= 0 && request.Header.Get("Content-Length") == "" {
+	var length int64
+	if clen := request.Header.Get("Content-Length"); clen != "" {
+		length, _ = strconv.ParseInt(clen, 10, 64)
+	} else {
+		length = GetReaderLen(body)
+	}
+	if length >= 0 {
 		request.ContentLength = length
 	}
 	request.Body = TeeReadNopCloser(body, writers...)

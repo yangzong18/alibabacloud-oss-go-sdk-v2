@@ -58,7 +58,7 @@ func NewDownloader(c DownloadAPIClient, optFns ...func(*DownloaderOptions)) *Dow
 	case *Client:
 		u.featureFlags = t.options.FeatureFlags
 	case *EncryptionClient:
-		u.featureFlags = t.Unwrap().options.FeatureFlags
+		u.featureFlags = (t.Unwrap().options.FeatureFlags & ^FeatureEnableCRC64CheckDownload)
 	}
 
 	return u
@@ -78,7 +78,7 @@ func (m *DownloadError) Error() string {
 	if m.Err != nil {
 		extra = fmt.Sprintf(", cause: %s", m.Err.Error())
 	}
-	return fmt.Sprintf("download failed, %s", extra)
+	return fmt.Sprintf("download failed %s", extra)
 }
 
 func (m *DownloadError) Unwrap() error {
@@ -400,8 +400,8 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 			if derr != nil && derr != io.EOF {
 				saveErrFn(derr)
 			} else {
-				// update checkpoint
-				if d.checkpoint != nil {
+				// update tracker info
+				if tracker {
 					cpCh <- dchunk
 				}
 			}
@@ -486,17 +486,17 @@ func (d *downloaderDelegate) download() (*DownloadResult, error) {
 		cpWg.Wait()
 	}
 
+	if err := getErrFn(); err != nil {
+		return nil, d.wrapErr(err)
+	}
+
 	if d.checkCRC {
 		if len(cpChunks) > 0 {
 			sort.Sort(cpChunks)
 		}
 		if derr := checkResponseHeaderCRC64(fmt.Sprint(d.combineCRC(tCRC64, cpChunks)), d.headers); derr != nil {
-			saveErrFn(derr)
+			return nil, d.wrapErr(derr)
 		}
-	}
-
-	if err := getErrFn(); err != nil {
-		return nil, d.wrapErr(err)
 	}
 
 	return &DownloadResult{

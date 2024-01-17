@@ -34,7 +34,7 @@ type EncryptionMultiPartContext struct {
 
 // Valid judge PartCryptoContext is valid or not
 func (ec EncryptionMultiPartContext) Valid() bool {
-	if ec.ContentCipher == nil || ec.PartSize == 0 {
+	if ec.ContentCipher == nil || ec.DataSize == 0 || ec.PartSize == 0 {
 		return false
 	}
 	return true
@@ -310,6 +310,11 @@ func (e *EncryptionClient) uploadPartSecurely(ctx context.Context, request *Uplo
 
 	eRequest := *request
 	eRequest.Body = cryptoReader
+	if eRequest.ContentLength == nil {
+		if blen := GetReaderLen(request.Body); blen > 0 {
+			eRequest.ContentLength = Ptr(blen)
+		}
+	}
 	addUploadPartCryptoHeaders(&eRequest, cseCtx, cc.GetCipherData())
 
 	return e.client.UploadPart(ctx, &eRequest, optFns...)

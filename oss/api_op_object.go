@@ -1344,6 +1344,9 @@ type UploadPartRequest struct {
 	// Object data.
 	Body io.Reader `input:"body,nop"`
 
+	// The size of the data in the HTTP message body. Unit: bytes.
+	ContentLength *int64 `input:"header,Content-Length"`
+
 	// The encryption context for multipart upload when using client side encryption, only valid in EncryptionClient
 	CSEMultiPartContext *EncryptionMultiPartContext
 

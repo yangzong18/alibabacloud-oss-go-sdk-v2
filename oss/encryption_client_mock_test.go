@@ -890,6 +890,7 @@ func TestMockEncryptionMultiPart(t *testing.T) {
 		Bucket:      Ptr("bucket"),
 		Key:         Ptr("key"),
 		CSEPartSize: Ptr(partSize),
+		CSEDataSize: Ptr(int64(length)),
 	})
 	assert.Nil(t, err)
 	assert.NotNil(t, initResult)
@@ -897,7 +898,7 @@ func TestMockEncryptionMultiPart(t *testing.T) {
 	assert.NotNil(t, initResult.CSEMultiPartContext)
 	assert.NotNil(t, initResult.CSEMultiPartContext.ContentCipher)
 	assert.Equal(t, partSize, initResult.CSEMultiPartContext.PartSize)
-	assert.Equal(t, int64(0), initResult.CSEMultiPartContext.DataSize)
+	assert.Equal(t, int64(length), initResult.CSEMultiPartContext.DataSize)
 	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionKey))
 	assert.NotEmpty(t, tracker.saveHeaders.Get(OssClientSideEncryptionStart))
 	assert.Equal(t, crypto.AesCtrAlgorithm, tracker.saveHeaders.Get(OssClientSideEncryptionCekAlg))
@@ -905,7 +906,7 @@ func TestMockEncryptionMultiPart(t *testing.T) {
 	assert.Equal(t, "{\"tag\":\"value\"}", tracker.saveHeaders.Get(OssClientSideEncryptionMatDesc))
 	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionUnencryptedContentLength))
 	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionUnencryptedContentMD5))
-	assert.Empty(t, tracker.saveHeaders.Get(OssClientSideEncryptionDataSize))
+	assert.Equal(t, fmt.Sprint(length), tracker.saveHeaders.Get(OssClientSideEncryptionDataSize))
 	assert.Equal(t, fmt.Sprint(partSize), tracker.saveHeaders.Get(OssClientSideEncryptionPartSize))
 
 	var parts UploadParts
@@ -932,7 +933,7 @@ func TestMockEncryptionMultiPart(t *testing.T) {
 		assert.Equal(t, "{\"tag\":\"value\"}", tracker.saveMPHeaders[i].Get(OssClientSideEncryptionMatDesc))
 		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionUnencryptedContentLength))
 		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionUnencryptedContentMD5))
-		assert.Empty(t, tracker.saveMPHeaders[i].Get(OssClientSideEncryptionDataSize))
+		assert.Equal(t, fmt.Sprint(length), tracker.saveMPHeaders[i].Get(OssClientSideEncryptionDataSize))
 		assert.Equal(t, fmt.Sprint(partSize), tracker.saveMPHeaders[i].Get(OssClientSideEncryptionPartSize))
 	}
 
@@ -1063,6 +1064,19 @@ func TestEncryptionClientMultiPartErrorTest(t *testing.T) {
 		CSEMultiPartContext: &EncryptionMultiPartContext{
 			ContentCipher: &fakeEncryptionContentCipher{},
 			PartSize:      15,
+		},
+	})
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "request.CSEMultiPartContext is invalid")
+
+	_, err = eclient.UploadPart(context.TODO(), &UploadPartRequest{
+		Bucket:     Ptr("bucket"),
+		Key:        Ptr("key"),
+		PartNumber: 1,
+		CSEMultiPartContext: &EncryptionMultiPartContext{
+			ContentCipher: &fakeEncryptionContentCipher{},
+			PartSize:      15,
+			DataSize:      32,
 		},
 	})
 	assert.NotNil(t, err)
