@@ -121,6 +121,11 @@ func (c *EncryptionClient) NewDownloader(optFns ...func(*DownloaderOptions)) *Do
 	return NewDownloader(c, optFns...)
 }
 
+// NewUploader creates a new Uploader instance to upload objects.
+func (c *EncryptionClient) NewUploader(optFns ...func(*UploaderOptions)) *Uploader {
+	return NewUploader(c, optFns...)
+}
+
 // OpenFile opens the named file for reading.
 func (c *EncryptionClient) OpenFile(ctx context.Context, bucket string, key string, optFns ...func(*OpenOptions)) (*ReadOnlyFile, error) {
 	return NewReadOnlyFile(ctx, c, bucket, key, optFns...)
@@ -475,5 +480,28 @@ func getEnvelopeFromHeader(header http.Header) (crypto.Envelope, error) {
 	envelope.CEKAlg = header.Get(OssClientSideEncryptionCekAlg)
 	envelope.UnencryptedMD5 = header.Get(OssClientSideEncryptionUnencryptedContentMD5)
 	envelope.UnencryptedContentLen = header.Get(OssClientSideEncryptionUnencryptedContentLength)
+	return envelope, err
+}
+
+func getEnvelopeFromListParts(result *ListPartsResult) (crypto.Envelope, error) {
+	var envelope crypto.Envelope
+	if result == nil {
+		return envelope, NewErrParamNull("result.*ListPartsResult")
+	}
+	envelope.IV = ToString(result.ClientEncryptionStart)
+	decodedIV, err := base64.StdEncoding.DecodeString(envelope.IV)
+	if err != nil {
+		return envelope, err
+	}
+	envelope.IV = string(decodedIV)
+
+	envelope.CipherKey = ToString(result.ClientEncryptionKey)
+	decodedKey, err := base64.StdEncoding.DecodeString(envelope.CipherKey)
+	if err != nil {
+		return envelope, err
+	}
+	envelope.CipherKey = string(decodedKey)
+	envelope.WrapAlg = ToString(result.ClientEncryptionWrapAlg)
+	envelope.CEKAlg = ToString(result.ClientEncryptionCekAlg)
 	return envelope, err
 }

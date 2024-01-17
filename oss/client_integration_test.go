@@ -4333,4 +4333,47 @@ func TestEncryptionClient(t *testing.T) {
 			assert.EqualValues(t, data[i:i+len], gData)
 		}
 	}
+
+	// Use Uploader
+	lastEtag := hResult.Headers.Get(HTTPHeaderETag)
+	assert.NotEmpty(t, lastEtag)
+	u := eclient.NewUploader()
+	assert.NotNil(t, u)
+	urResult, err := u.UploadFrom(context.TODO(),
+		&PutObjectRequest{
+			Bucket: Ptr(bucketName),
+			Key:    Ptr(objectName),
+		},
+		bytes.NewReader(data),
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 2
+			uo.PartSize = 100 * 1024
+		},
+	)
+	assert.Nil(t, err)
+	assert.NotNil(t, urResult)
+
+	// GetObject again
+	gResult, err = eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, gResult)
+	gData, err = io.ReadAll(gResult.Body)
+	assert.Nil(t, err)
+	assert.Len(t, gData, length)
+	assert.EqualValues(t, data, gData)
+
+	assert.NotEmpty(t, gResult.Headers.Get(OssClientSideEncryptionKey))
+	assert.NotEmpty(t, gResult.Headers.Get(OssClientSideEncryptionStart))
+	assert.Equal(t, crypto.AesCtrAlgorithm, gResult.Headers.Get(OssClientSideEncryptionCekAlg))
+	assert.Equal(t, crypto.RsaCryptoWrap, gResult.Headers.Get(OssClientSideEncryptionWrapAlg))
+	assert.Equal(t, "{\"tag\":\"value\"}", gResult.Headers.Get(OssClientSideEncryptionMatDesc))
+	assert.Equal(t, fmt.Sprint(100*1024), gResult.Headers.Get(OssClientSideEncryptionPartSize))
+	assert.Equal(t, fmt.Sprint(length), gResult.Headers.Get(OssClientSideEncryptionDataSize))
+	assert.Empty(t, gResult.Headers.Get(OssClientSideEncryptionUnencryptedContentLength))
+	assert.Empty(t, gResult.Headers.Get(OssClientSideEncryptionUnencryptedContentMD5))
+
+	assert.NotEqual(t, lastEtag, ToString(gResult.ETag))
 }

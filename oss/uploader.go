@@ -27,9 +27,10 @@ type UploaderOptions struct {
 }
 
 type Uploader struct {
-	options      UploaderOptions
-	client       UploadAPIClient
-	featureFlags FeatureFlagsType
+	options            UploaderOptions
+	client             UploadAPIClient
+	featureFlags       FeatureFlagsType
+	isEncryptionClient bool
 }
 
 // NewUploader creates a new Uploader instance to upload objects.
@@ -46,8 +47,9 @@ func NewUploader(c UploadAPIClient, optFns ...func(*UploaderOptions)) *Uploader 
 	}
 
 	u := &Uploader{
-		client:  c,
-		options: options,
+		client:             c,
+		options:            options,
+		isEncryptionClient: false,
 	}
 
 	//Get Client Feature
@@ -56,6 +58,7 @@ func NewUploader(c UploadAPIClient, optFns ...func(*UploaderOptions)) *Uploader 
 		u.featureFlags = t.options.FeatureFlags
 	case *EncryptionClient:
 		u.featureFlags = t.Unwrap().options.FeatureFlags
+		u.isEncryptionClient = true
 	}
 
 	return u
@@ -160,10 +163,17 @@ type uploaderDelegate struct {
 	// for resume upload
 	uploadId   string
 	partNumber int32
+	cseContext *EncryptionMultiPartContext
 
 	partPool byteSlicePool
 
 	checkpoint *uploadCheckpoint
+}
+
+type uploadIdInfo struct {
+	uploadId   string
+	startNum   int32
+	cseContext *EncryptionMultiPartContext
 }
 
 func (u *Uploader) newDelegate(ctx context.Context, request *PutObjectRequest, optFns ...func(*UploaderOptions)) (*uploaderDelegate, error) {
@@ -265,11 +275,13 @@ func (u *uploaderDelegate) adjustSource() error {
 			checkPartNumber int32  = 1
 			updateCRC64     bool   = ((u.base.featureFlags & FeatureEnableCRC64CheckUpload) > 0)
 			hashCRC64       uint64 = 0
+			page            *ListPartsResult
+			err             error
 		)
 	outerLoop:
 
 		for paginator.HasNext() {
-			page, err := paginator.NextPage(u.context, u.options.ClientOptions...)
+			page, err = paginator.NextPage(u.context, u.options.ClientOptions...)
 			if err != nil {
 				u.uploadId = ""
 				return nil
@@ -293,9 +305,17 @@ func (u *uploaderDelegate) adjustSource() error {
 			u.uploadId = ""
 			return nil
 		}
+
+		cseContext, err := u.resumeCSEContext(page)
+		if err != nil {
+			u.uploadId = ""
+			return nil
+		}
+
 		u.partNumber = partNumber
 		u.readerPos = newOffset
 		u.hashCRC64 = hashCRC64
+		u.cseContext = cseContext
 	}
 	return nil
 }
@@ -338,6 +358,38 @@ func (d *uploaderDelegate) closeReader(file *os.File, err error) error {
 	d.checkpoint = nil
 
 	return err
+}
+
+func (d *uploaderDelegate) resumeCSEContext(result *ListPartsResult) (*EncryptionMultiPartContext, error) {
+	if !d.base.isEncryptionClient {
+		return nil, nil
+	}
+	sc, ok := d.client.(*EncryptionClient)
+	if !ok {
+		return nil, fmt.Errorf("Not EncryptionClient")
+	}
+
+	envelope, err := getEnvelopeFromListParts(result)
+	if err != nil {
+		return nil, err
+	}
+
+	cc, err := sc.defualtCCBuilder.ContentCipherEnv(envelope)
+	if err != nil {
+		return nil, err
+	}
+
+	cseContext := &EncryptionMultiPartContext{
+		ContentCipher: cc,
+		PartSize:      ToInt64(result.ClientEncryptionPartSize),
+		DataSize:      ToInt64(result.ClientEncryptionDataSize),
+	}
+
+	if !cseContext.Valid() {
+		return nil, fmt.Errorf("EncryptionMultiPartContext is invalid")
+	}
+
+	return cseContext, nil
 }
 
 func (u *uploaderDelegate) upload() (*UploadResult, error) {
@@ -459,11 +511,13 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 	)
 
 	// Init the multipart
-	uploadId, startPartNum, err := u.getUploadId()
+	uploadIdInfo, err := u.getUploadId()
 	if err != nil {
 		return nil, u.wrapErr("", err)
 	}
 	//fmt.Printf("getUploadId result: %v, %#v\n", uploadId, err)
+	uploadId := uploadIdInfo.uploadId
+	startPartNum := uploadIdInfo.startNum
 
 	// Update Checkpoint
 	if u.checkpoint != nil {
@@ -497,13 +551,14 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 				upResult, err := u.client.UploadPart(
 					u.context,
 					&UploadPartRequest{
-						Bucket:     u.request.Bucket,
-						Key:        u.request.Key,
-						UploadId:   Ptr(uploadId),
-						PartNumber: data.partNum,
-						Body:       data.body},
+						Bucket:              u.request.Bucket,
+						Key:                 u.request.Key,
+						UploadId:            Ptr(uploadId),
+						PartNumber:          data.partNum,
+						Body:                data.body,
+						CSEMultiPartContext: uploadIdInfo.cseContext,
+					},
 					u.options.ClientOptions...)
-
 				//fmt.Printf("UploadPart result: %#v, %#v\n", upResult, err)
 
 				if err == nil {
@@ -596,9 +651,13 @@ func (u *uploaderDelegate) multiPart() (*UploadResult, error) {
 	}, nil
 }
 
-func (u *uploaderDelegate) getUploadId() (uploadId string, startNum int32, err error) {
+func (u *uploaderDelegate) getUploadId() (info uploadIdInfo, err error) {
 	if u.uploadId != "" {
-		return u.uploadId, u.partNumber, nil
+		return uploadIdInfo{
+			uploadId:   u.uploadId,
+			startNum:   u.partNumber,
+			cseContext: u.cseContext,
+		}, nil
 	}
 
 	// if not exist or fail, create a new upload id
@@ -608,12 +667,21 @@ func (u *uploaderDelegate) getUploadId() (uploadId string, startNum int32, err e
 		request.ContentType = u.getContentType()
 	}
 
-	result, err := u.client.InitiateMultipartUpload(u.context, request, u.options.ClientOptions...)
-	if err != nil {
-		return "", 0, err
+	if u.base.isEncryptionClient {
+		request.CSEPartSize = &u.options.PartSize
+		request.CSEDataSize = &u.totalSize
 	}
 
-	return *result.UploadId, 0, nil
+	result, err := u.client.InitiateMultipartUpload(u.context, request, u.options.ClientOptions...)
+	if err != nil {
+		return info, err
+	}
+
+	return uploadIdInfo{
+		uploadId:   *result.UploadId,
+		startNum:   0,
+		cseContext: result.CSEMultiPartContext,
+	}, nil
 }
 
 func (u *uploaderDelegate) getContentType() *string {

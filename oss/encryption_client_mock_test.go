@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,11 +74,14 @@ NxcSycsQ5br97QfyEsgbMQJANTZ/HyMowmDPIC+n9ExdLSrf4JydARSfntFbPsy1
 )
 
 type encryptionMockTracker struct {
-	lastModified  string
-	savedata      []byte
-	saveHeaders   http.Header
-	saveMPData    [][]byte
-	saveMPHeaders []http.Header
+	lastModified   string
+	savedata       []byte
+	saveHeaders    http.Header
+	saveMPData     [][]byte
+	saveMPHeaders  []http.Header
+	uploadPartErr  []bool
+	checkMPTime    []time.Time
+	listPartsNoCES bool
 }
 
 func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker) *httptest.Server {
@@ -84,6 +89,15 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 		length := len(tracker.savedata)
 		data := tracker.savedata
 		query := r.URL.Query()
+		errData := []byte(
+			`<?xml version="1.0" encoding="UTF-8"?>
+			<Error>
+				<Code>InvalidAccessKeyId</Code>
+				<Message>The OSS Access Key Id you provided does not exist in our records.</Message>
+				<RequestId>65467C42E001B4333337****</RequestId>
+				<SignatureProvided>ak</SignatureProvided>
+				<EC>0002-00000040</EC>
+			</Error>`)
 		switch r.Method {
 		case "HEAD":
 			// header
@@ -119,6 +133,15 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 				num, err := strconv.Atoi(query.Get("partNumber"))
 				assert.Nil(t, err)
 				assert.Equal(t, "uploadId-1234", query.Get("uploadId"))
+
+				if tracker.uploadPartErr != nil && tracker.uploadPartErr[num-1] {
+					w.Header().Set(HTTPHeaderContentType, "application/xml")
+					w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(errData)))
+					w.WriteHeader(403)
+					w.Write(errData)
+					return
+				}
+
 				tracker.saveMPData[num-1] = in
 				tracker.saveMPHeaders[num-1] = r.Header
 
@@ -128,6 +151,10 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 
 				//status code
 				w.WriteHeader(200)
+
+				if tracker.checkMPTime != nil {
+					tracker.checkMPTime[num-1] = time.Now()
+				}
 
 				//body
 				w.Write(nil)
@@ -147,49 +174,89 @@ func testSetupEncryptionMockServer(t *testing.T, tracker *encryptionMockTracker)
 				w.Write(nil)
 			}
 		case "GET":
-			// header
-			var httpRange *HTTPRange
-			if r.Header.Get("Range") != "" {
-				httpRange, _ = ParseRange(r.Header.Get("Range"))
-			}
-
-			offset := int64(0)
-			statusCode := 200
-			sendLen := int64(length)
-			if httpRange != nil {
-				offset = httpRange.Offset
-				sendLen = int64(length) - httpRange.Offset
-				if httpRange.Count > 0 {
-					sendLen = minInt64(httpRange.Count, sendLen)
+			if query.Get("uploadId") == "uploadId-1234" {
+				// ListParts
+				var buf strings.Builder
+				buf.WriteString("<ListPartsResult>")
+				buf.WriteString("  <Bucket>bucket</Bucket>")
+				buf.WriteString("  <Key>key</Key>")
+				buf.WriteString("  <UploadId>uploadId-1234</UploadId>")
+				buf.WriteString("  <IsTruncated>false</IsTruncated>")
+				for i, d := range tracker.saveMPData {
+					if d != nil {
+						buf.WriteString("  <Part>")
+						buf.WriteString(fmt.Sprintf("    <PartNumber>%v</PartNumber>", i+1))
+						buf.WriteString("    <LastModified>2012-02-23T07:01:34.000Z</LastModified>")
+						buf.WriteString("    <ETag>etag</ETag>")
+						buf.WriteString(fmt.Sprintf("    <Size>%v</Size>", len(d)))
+						hash := NewCRC64(0)
+						hash.Write(d)
+						buf.WriteString(fmt.Sprintf("    <HashCrc64ecma>%v</HashCrc64ecma>", fmt.Sprint(hash.Sum64())))
+						buf.WriteString("  </Part>")
+					}
 				}
-				cr := httpContentRange{
-					Offset: httpRange.Offset,
-					Count:  sendLen,
-					Total:  int64(length),
+				if !tracker.listPartsNoCES {
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionKey>%v</ClientEncryptionKey>", tracker.saveHeaders.Get(OssClientSideEncryptionKey)))
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionStart>%v</ClientEncryptionStart>", tracker.saveHeaders.Get(OssClientSideEncryptionStart)))
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionCekAlg>%v</ClientEncryptionCekAlg>", tracker.saveHeaders.Get(OssClientSideEncryptionCekAlg)))
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionWrapAlg>%v</ClientEncryptionWrapAlg>", tracker.saveHeaders.Get(OssClientSideEncryptionWrapAlg)))
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionDataSize>%v</ClientEncryptionDataSize>", tracker.saveHeaders.Get(OssClientSideEncryptionDataSize)))
+					buf.WriteString(fmt.Sprintf("  <ClientEncryptionPartSize>%v</ClientEncryptionPartSize>", tracker.saveHeaders.Get(OssClientSideEncryptionPartSize)))
 				}
-				w.Header().Set("Content-Range", ToString(cr.FormatHTTPContentRange()))
-				statusCode = 206
-			}
 
-			w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(sendLen))
-			w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
-			w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
-			w.Header().Set(HTTPHeaderContentType, "text/plain")
-			for k, vv := range tracker.saveHeaders {
-				lk := strings.ToLower(k)
-				if strings.HasPrefix(lk, "x-oss-meta-client-side-encryption-") {
-					w.Header().Set(k, vv[0])
+				buf.WriteString("</ListPartsResult>")
+
+				data := buf.String()
+				w.Header().Set(HTTPHeaderContentType, "application/xml")
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(len(data)))
+				w.WriteHeader(200)
+				w.Write([]byte(data))
+
+			} else {
+				// GetObject
+				// header
+				var httpRange *HTTPRange
+				if r.Header.Get("Range") != "" {
+					httpRange, _ = ParseRange(r.Header.Get("Range"))
 				}
+
+				offset := int64(0)
+				statusCode := 200
+				sendLen := int64(length)
+				if httpRange != nil {
+					offset = httpRange.Offset
+					sendLen = int64(length) - httpRange.Offset
+					if httpRange.Count > 0 {
+						sendLen = minInt64(httpRange.Count, sendLen)
+					}
+					cr := httpContentRange{
+						Offset: httpRange.Offset,
+						Count:  sendLen,
+						Total:  int64(length),
+					}
+					w.Header().Set("Content-Range", ToString(cr.FormatHTTPContentRange()))
+					statusCode = 206
+				}
+
+				w.Header().Set(HTTPHeaderContentLength, fmt.Sprint(sendLen))
+				w.Header().Set(HTTPHeaderLastModified, tracker.lastModified)
+				w.Header().Set(HTTPHeaderETag, "fba9dede5f27731c9771645a3986****")
+				w.Header().Set(HTTPHeaderContentType, "text/plain")
+				for k, vv := range tracker.saveHeaders {
+					lk := strings.ToLower(k)
+					if strings.HasPrefix(lk, "x-oss-meta-client-side-encryption-") {
+						w.Header().Set(k, vv[0])
+					}
+				}
+
+				//status code
+				w.WriteHeader(statusCode)
+
+				//body
+				sendData := data[int(offset):int(offset+sendLen)]
+				//fmt.Printf("sendData offset%d, len:%d, total:%d\n", offset, len(sendData), length)
+				w.Write(sendData)
 			}
-
-			//status code
-			w.WriteHeader(statusCode)
-
-			//body
-			sendData := data[int(offset):int(offset+sendLen)]
-			//fmt.Printf("sendData offset%d, len:%d, total:%d\n", offset, len(sendData), length)
-			w.Write(sendData)
-
 		case "POST":
 			//url := r.URL.String()
 			//strings.Contains(url, "/bucket/key?uploads")
@@ -1286,4 +1353,253 @@ func TestMockEncryptionOpenFile(t *testing.T) {
 			assert.EqualValues(t, fData[i:i+len], gData)
 		}
 	}
+}
+
+func TestMockEncryptionUploaderWithCheckpoint(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	gmtTime := getNowGMT()
+	tracker := &encryptionMockTracker{
+		lastModified:  gmtTime,
+		saveMPData:    make([][]byte, partsNum),
+		saveMPHeaders: make([]http.Header, partsNum),
+		uploadPartErr: make([]bool, partsNum),
+		checkMPTime:   make([]time.Time, partsNum),
+	}
+
+	data := []byte(randStr(length))
+	hash := NewCRC64(0)
+	hash.Write(data)
+	dataCrc64ecma := fmt.Sprint(hash.Sum64())
+
+	localFile := "upload-file-with-cp-no-surfix"
+	absPath, _ := filepath.Abs(localFile)
+	hashmd5 := md5.New()
+	hashmd5.Write([]byte(absPath))
+	srcHash := hex.EncodeToString(hashmd5.Sum(nil))
+	cpFile := srcHash + "-d36fc07f5d963b319b1b48e20a9b8ae9.ucp"
+
+	createFileFromByte(t, localFile, data)
+	defer func() {
+		os.Remove(localFile)
+	}()
+
+	server := testSetupEncryptionMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	mc, err := crypto.CreateMasterRsa(map[string]string{"tag": "value"}, rsaPublicKey, rsaPrivateKey)
+	assert.Nil(t, err)
+	eclient, err := NewEncryptionClient(client, mc)
+	assert.Nil(t, err)
+
+	u := eclient.NewUploader(func(uo *UploaderOptions) {
+		uo.ParallelNum = 5
+		uo.PartSize = partSize
+		uo.CheckpointDir = "."
+		uo.EnableCheckpoint = true
+	})
+	assert.Equal(t, 5, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+
+	// Case 1, fail in part number 4
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.checkMPTime = make([]time.Time, partsNum)
+	tracker.uploadPartErr[3] = true
+	os.Remove(cpFile)
+
+	result, err := u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.Nil(t, result)
+	var uerr *UploadError
+	errors.As(err, &uerr)
+	assert.NotNil(t, uerr)
+	assert.Equal(t, "uploadId-1234", uerr.UploadId)
+	assert.Equal(t, "oss://bucket/key", uerr.Path)
+
+	var serr *ServiceError
+	errors.As(err, &serr)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "InvalidAccessKeyId", serr.Code)
+
+	assert.NotNil(t, tracker.saveMPData[0])
+	assert.NotNil(t, tracker.saveMPData[1])
+	assert.NotNil(t, tracker.saveMPData[2])
+	assert.Nil(t, tracker.saveMPData[3])
+	assert.NotNil(t, tracker.saveMPData[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	time.Sleep(2 * time.Second)
+	retryTime := time.Now()
+	tracker.uploadPartErr[3] = false
+
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkMPTime[0].Before(retryTime))
+	assert.True(t, tracker.checkMPTime[1].Before(retryTime))
+	assert.True(t, tracker.checkMPTime[2].Before(retryTime))
+	assert.True(t, tracker.checkMPTime[3].After(retryTime))
+	assert.True(t, tracker.checkMPTime[4].After(retryTime))
+	assert.True(t, tracker.checkMPTime[5].After(retryTime))
+
+	mr := NewMultiBytesReader(tracker.saveMPData)
+	all, err := io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall := NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma := fmt.Sprint(hashall.Sum64())
+	assert.NotEqual(t, dataCrc64ecma, allCrc64ecma)
+	assert.NoFileExists(t, cpFile)
+
+	gresult, err := eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	hashGet := NewCRC64(0)
+	io.Copy(hashGet, gresult.Body)
+	assert.Equal(t, dataCrc64ecma, fmt.Sprint(hashGet.Sum64()))
+
+	// Case 2, fail in part number 1
+	tracker.saveMPData = make([][]byte, partsNum)
+	tracker.checkMPTime = make([]time.Time, partsNum)
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.uploadPartErr[0] = true
+	os.Remove(cpFile)
+
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.Nil(t, tracker.saveMPData[0])
+	assert.NotNil(t, tracker.saveMPData[1])
+	assert.NotNil(t, tracker.saveMPData[2])
+	assert.NotNil(t, tracker.saveMPData[3])
+	assert.NotNil(t, tracker.saveMPData[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	time.Sleep(2 * time.Second)
+	retryTime = time.Now()
+	tracker.uploadPartErr[0] = false
+
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkMPTime[0].After(retryTime))
+	assert.True(t, tracker.checkMPTime[1].After(retryTime))
+	assert.True(t, tracker.checkMPTime[2].After(retryTime))
+	assert.True(t, tracker.checkMPTime[3].After(retryTime))
+	assert.True(t, tracker.checkMPTime[4].After(retryTime))
+	assert.True(t, tracker.checkMPTime[5].After(retryTime))
+
+	mr = NewMultiBytesReader(tracker.saveMPData)
+	all, err = io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall = NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma = fmt.Sprint(hashall.Sum64())
+	assert.NotEqual(t, dataCrc64ecma, allCrc64ecma)
+	assert.NoFileExists(t, cpFile)
+
+	gresult, err = eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	hashGet = NewCRC64(0)
+	io.Copy(hashGet, gresult.Body)
+	assert.Equal(t, dataCrc64ecma, fmt.Sprint(hashGet.Sum64()))
+
+	// Case 3, list Parts returns empty ces context
+	tracker.saveMPData = make([][]byte, partsNum)
+	tracker.checkMPTime = make([]time.Time, partsNum)
+	tracker.uploadPartErr = make([]bool, partsNum)
+	tracker.uploadPartErr[3] = true
+	os.Remove(cpFile)
+
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.NotNil(t, err)
+	assert.NotNil(t, tracker.saveMPData[0])
+	assert.NotNil(t, tracker.saveMPData[1])
+	assert.NotNil(t, tracker.saveMPData[2])
+	assert.Nil(t, tracker.saveMPData[3])
+	assert.NotNil(t, tracker.saveMPData[4])
+
+	assert.FileExists(t, cpFile)
+
+	//retry
+	time.Sleep(2 * time.Second)
+	retryTime = time.Now()
+	tracker.uploadPartErr[3] = false
+	tracker.listPartsNoCES = true
+
+	result, err = u.UploadFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	}, localFile)
+
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	assert.True(t, tracker.checkMPTime[0].After(retryTime))
+	assert.True(t, tracker.checkMPTime[1].After(retryTime))
+	assert.True(t, tracker.checkMPTime[2].After(retryTime))
+	assert.True(t, tracker.checkMPTime[3].After(retryTime))
+	assert.True(t, tracker.checkMPTime[4].After(retryTime))
+	assert.True(t, tracker.checkMPTime[5].After(retryTime))
+
+	mr = NewMultiBytesReader(tracker.saveMPData)
+	all, err = io.ReadAll(mr)
+	assert.Nil(t, err)
+
+	hashall = NewCRC64(0)
+	hashall.Write(all)
+	allCrc64ecma = fmt.Sprint(hashall.Sum64())
+	assert.NotEqual(t, dataCrc64ecma, allCrc64ecma)
+	assert.NoFileExists(t, cpFile)
+
+	gresult, err = eclient.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr("bucket"),
+		Key:    Ptr("key"),
+	})
+	assert.Nil(t, err)
+	hashGet = NewCRC64(0)
+	io.Copy(hashGet, gresult.Body)
+	assert.Equal(t, dataCrc64ecma, fmt.Sprint(hashGet.Sum64()))
 }

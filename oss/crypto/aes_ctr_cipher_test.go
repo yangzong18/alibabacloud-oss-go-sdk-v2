@@ -39,4 +39,7 @@ func TestContentCipherCDError(t *testing.T) {
 	v := contentProvider.(aesCtrCipherBuilder)
 	_, err := v.contentCipherCD(cd)
 	assert.NotNil(t, err)
+
+	_, err = contentProvider.ContentCipherEnv(Envelope{})
+	assert.NotNil(t, err)
 }

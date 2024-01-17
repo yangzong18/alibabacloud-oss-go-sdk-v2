@@ -1847,6 +1847,32 @@ type ListPartsResult struct {
 	// The storage class of the object.
 	StorageClass *string `xml:"StorageClass"`
 
+	// The encrypted data key.
+	// The encrypted data key is a string encrypted by a customer master key and encoded in Base64.
+	// Only available in client-side encryption
+	ClientEncryptionKey *string `xml:"ClientEncryptionKey"`
+
+	// The initial value that is randomly generated for data encryption.
+	// The initial value is is a string encrypted by a customer master key and encoded in Base64.
+	// Only available in client-side encryption
+	ClientEncryptionStart *string `xml:"ClientEncryptionStart"`
+
+	// The algorithm used to encrypt data.
+	// Only available in client-side encryption
+	ClientEncryptionCekAlg *string `xml:"ClientEncryptionCekAlg"`
+
+	// The algorithm used to encrypt the data key.
+	// Only available in client-side encryption
+	ClientEncryptionWrapAlg *string `xml:"ClientEncryptionWrapAlg"`
+
+	// The total size of the data to encrypt for multipart upload when init_multipart is called.
+	// Only available in client-side encryption
+	ClientEncryptionDataSize *int64 `xml:"ClientEncryptionDataSize"`
+
+	// The size of each part to encrypt for multipart upload when init_multipart is called.
+	// Only available in client-side encryption
+	ClientEncryptionPartSize *int64 `xml:"ClientEncryptionPartSize"`
+
 	Parts []Part `xml:"Part"`
 
 	ResultCommon
