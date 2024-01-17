@@ -466,7 +466,7 @@ func readFill(r io.Reader, buf []byte) (n int, err error) {
 	return n, err
 }
 
-// A Reader implements the io.Reader, io.Seeker interfaces by reading from multi byte slice.
+// MultiBytesReader A Reader implements the io.Reader, io.Seeker interfaces by reading from multi byte slice.
 type MultiBytesReader struct {
 	s    [][]byte
 	i    int64 // current reading index

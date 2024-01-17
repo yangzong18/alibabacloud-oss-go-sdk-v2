@@ -12,7 +12,7 @@ type hashCRC64 struct {
 	tab  *crc64.Table
 }
 
-// NewCRC creates a new hash.Hash64 computing the CRC64 checksum
+// NewCRC64 NewCRC creates a new hash.Hash64 computing the CRC64 checksum
 // using the polynomial represented by the Table.
 func NewCRC64(init uint64) hash.Hash64 {
 	return &hashCRC64{

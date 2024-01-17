@@ -3172,7 +3172,7 @@ func TestMockPutObject_Progress(t *testing.T) {
 		client := NewClient(cfg)
 		assert.NotNil(t, c)
 		n := int64(0)
-		c.Request.ProgressFn = func(transferred, total int64) {
+		c.Request.ProgressFn = func(increment,transferred, total int64) {
 			n = transferred
 			//fmt.Printf("got transferred:%v, total:%v\n", transferred, total)
 		}
@@ -3245,7 +3245,7 @@ func TestMockPutObject_DisableCRC64(t *testing.T) {
 			})
 		assert.NotNil(t, c)
 		n := int64(0)
-		c.Request.ProgressFn = func(transferred, total int64) {
+		c.Request.ProgressFn = func(increment,transferred, total int64) {
 			n = transferred
 		}
 		output, err := client.PutObject(context.TODO(), c.Request)
@@ -3256,7 +3256,7 @@ func TestMockPutObject_DisableCRC64(t *testing.T) {
 		client = NewClient(cfg)
 		assert.NotNil(t, c)
 		n = int64(0)
-		c.Request.ProgressFn = func(transferred, total int64) {
+		c.Request.ProgressFn = func(increment,transferred,total int64) {
 			n = transferred
 		}
 		c.Request.Body = strings.NewReader("hi oss")
@@ -4368,6 +4368,74 @@ func TestMockAppendObject_DisableDetectMimeType(t *testing.T) {
 
 		output, err := client.AppendObject(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockAppendObjectWithProgressCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *AppendObjectRequest
+	CheckOutputFn  func(t *testing.T, o *AppendObjectResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"Content-Type":               "application/xml",
+			"x-oss-request-id":           "534B371674E88A4D8906****",
+			"Date":                       "Fri, 24 Feb 2017 03:15:40 GMT",
+			"x-oss-next-append-position": "1717",
+			"x-oss-hash-crc64ecma":       "1474161709526656****",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			requestBody, err := io.ReadAll(r.Body)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.NewReader("hi oss,append object"), strings.NewReader(string(requestBody)))
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?append&position=0", strUrl)
+			assert.Equal(t, "application/octet-stream", r.Header.Get(HTTPHeaderContentType))
+		},
+		&AppendObjectRequest{
+			Bucket:   Ptr("bucket"),
+			Key:      Ptr("object"),
+			Position: Ptr(int64(0)),
+			Body:     strings.NewReader("hi oss,append object"),
+		},
+		func(t *testing.T, o *AppendObjectResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, o.NextPosition, int64(1717))
+			assert.Equal(t, *o.HashCRC64, "1474161709526656****")
+			assert.Nil(t, o.VersionId)
+		},
+	},
+}
+
+func TestMockAppendObject_Progress(t *testing.T) {
+	for _, c := range testMockAppendObjectWithProgressCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+		n := int64(0)
+		c.Request.ProgressFn = func(increment, transferred, total int64) {
+			n = transferred
+		}
+		output, err := client.AppendObject(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+		assert.Equal(t, int64(len("hi oss,append object")), n)
 	}
 }
 
@@ -6926,6 +6994,77 @@ func TestMockUploadPart_Success(t *testing.T) {
 
 		output, err := client.UploadPart(context.TODO(), c.Request)
 		c.CheckOutputFn(t, output, err)
+	}
+}
+
+var testMockUploadPartWithProgressCases = []struct {
+	StatusCode     int
+	Headers        map[string]string
+	Body           []byte
+	CheckRequestFn func(t *testing.T, r *http.Request)
+	Request        *UploadPartRequest
+	CheckOutputFn  func(t *testing.T, o *UploadPartResult, err error)
+}{
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id":     "534B371674E88A4D8906****",
+			"Date":                 "Fri, 24 Feb 2017 03:15:40 GMT",
+			"ETag":                 "\"7265F4D211B56873A381D321F586****\"",
+			"Content-MD5":          "1B2M2Y8AsgTpgAmY7Ph****",
+			"x-oss-hash-crc64ecma": "6571598172666981661",
+		},
+		nil,
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/object?partNumber=1&uploadId=0004B9895DBBB6EC9", strUrl)
+			body, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(body), "upload part 1")
+			assert.Equal(t, "bce8f3d48247c5d555bb5697bf277b35", r.Header.Get("Content-MD5"))
+		},
+		&UploadPartRequest{
+			Bucket:     Ptr("bucket"),
+			Key:        Ptr("object"),
+			UploadId:   Ptr("0004B9895DBBB6EC9"),
+			PartNumber: int32(1),
+			Body:       strings.NewReader("upload part 1"),
+			ContentMD5: Ptr("bce8f3d48247c5d555bb5697bf277b35"),
+		},
+		func(t *testing.T, o *UploadPartResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ETag, "\"7265F4D211B56873A381D321F586****\"")
+			assert.Equal(t, *o.ContentMD5, "1B2M2Y8AsgTpgAmY7Ph****")
+			assert.Equal(t, *o.HashCRC64, "6571598172666981661")
+		},
+	},
+}
+
+func TestMockUploadPart_Progress(t *testing.T) {
+	for _, c := range testMockUploadPartWithProgressCases {
+		server := testSetupMockServer(t, c.StatusCode, c.Headers, c.Body, c.CheckRequestFn)
+		defer server.Close()
+		assert.NotNil(t, server)
+
+		cfg := LoadDefaultConfig().
+			WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+			WithRegion("cn-hangzhou").
+			WithEndpoint(server.URL)
+
+		client := NewClient(cfg)
+		assert.NotNil(t, c)
+		n := int64(0)
+		c.Request.ProgressFn = func(increment, transferred, total int64) {
+			n = transferred
+			//fmt.Printf("got transferred:%v, total:%v\n", transferred, total)
+		}
+		output, err := client.UploadPart(context.TODO(), c.Request)
+		c.CheckOutputFn(t, output, err)
+		assert.Equal(t, int64(len("upload part 1")), n)
+
 	}
 }
 

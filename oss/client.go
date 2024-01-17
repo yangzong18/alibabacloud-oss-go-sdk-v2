@@ -266,13 +266,12 @@ func (c *Client) sendRequest(ctx context.Context, input *OperationInput, opts *O
 	}
 
 	var writers []io.Writer
-	// tracker in OpertionMetaData
+	// tracker in OperationMetaData
 	for _, w := range input.OpMetadata.Values(OpMetaKeyRequestBodyTracker) {
 		if ww, ok := w.(io.Writer); ok {
 			writers = append(writers, ww)
 		}
 	}
-
 	// host & path
 	host, path := buildURL(input, opts)
 	strUrl := fmt.Sprintf("%s://%s%s", opts.Endpoint.Scheme, host, path)
@@ -1088,6 +1087,16 @@ func addProgress(request any, input *OperationInput) error {
 	var w io.Writer
 	switch req := request.(type) {
 	case *PutObjectRequest:
+		if req.ProgressFn == nil {
+			return nil
+		}
+		w = NewProgress(req.ProgressFn, GetReaderLen(input.Body))
+	case *AppendObjectRequest:
+		if req.ProgressFn == nil {
+			return nil
+		}
+		w = NewProgress(req.ProgressFn, GetReaderLen(input.Body))
+	case *UploadPartRequest:
 		if req.ProgressFn == nil {
 			return nil
 		}

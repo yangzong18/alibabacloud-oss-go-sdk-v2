@@ -577,6 +577,9 @@ type AppendObjectRequest struct {
 	// Specify the initial value of CRC64. If not set, the crc check is ignored.
 	InitHashCRC64 *string
 
+	// Progress callback function
+	ProgressFn ProgressFunc
+
 	RequestCommon
 }
 
@@ -624,6 +627,7 @@ func (c *Client) AppendObject(ctx context.Context, request *AppendObjectRequest,
 	}
 
 	marshalFns := []func(any, *OperationInput) error{
+		addProgress,
 		c.updateContentType,
 	}
 
@@ -1344,6 +1348,9 @@ type UploadPartRequest struct {
 	// Object data.
 	Body io.Reader `input:"body,nop"`
 
+	// Progress callback function
+	ProgressFn ProgressFunc
+
 	// The size of the data in the HTTP message body. Unit: bytes.
 	ContentLength *int64 `input:"header,Content-Length"`
 
@@ -1381,6 +1388,7 @@ func (c *Client) UploadPart(ctx context.Context, request *UploadPartRequest, opt
 	}
 
 	marshalFns := []func(any, *OperationInput) error{
+		addProgress,
 		c.addCrcCheck,
 	}
 

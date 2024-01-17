@@ -18,11 +18,11 @@ const (
 	CheckpointMagic = "92611BED-89E2-46B6-89E5-72F273D4B0A3"
 )
 
-// ----- download chcekpoint  -----
+// ----- download checkpoint  -----
 type downloadCheckpoint struct {
 	CpDirPath  string // checkpoint dir full path
 	CpFilePath string // checkpoint file full path
-	VerifyData bool   // verify donwloaded data in FilePath
+	VerifyData bool   // verify downloaded data in FilePath
 	Loaded     bool   // If Info.Data.DownloadInfo is loaded from checkpoint
 
 	Info struct { //checkpoint data

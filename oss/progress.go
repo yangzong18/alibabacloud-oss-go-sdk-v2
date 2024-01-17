@@ -2,7 +2,7 @@ package oss
 
 import "io"
 
-type ProgressFunc func(transferred int64, total int64)
+type ProgressFunc func(increment, transferred, total int64)
 
 type progressTracker struct {
 	pr       ProgressFunc
@@ -11,7 +11,7 @@ type progressTracker struct {
 	total    int64
 }
 
-// NewRequestProgress creates a tracker with progress reporting
+// NewProgress NewRequestProgress creates a tracker with progress reporting
 func NewProgress(pr ProgressFunc, total int64) io.Writer {
 	return &progressTracker{
 		pr:       pr,
@@ -27,7 +27,7 @@ func (p *progressTracker) Write(b []byte) (n int, err error) {
 
 	// Invokes the user's callback method to report progress
 	if p.written > p.lwritten {
-		p.pr(p.written, p.total)
+		p.pr(int64(n), p.written, p.total)
 	}
 
 	return
