@@ -691,15 +691,7 @@ func TestGetBucketLocation(t *testing.T) {
 	}
 	info, err := client.GetBucketLocation(context.TODO(), getRequest)
 	assert.Nil(t, err)
-
-	endpoint := endpoint_
-	if strings.HasPrefix(endpoint_, "http://") {
-		endpoint = endpoint_[len("http://"):]
-	} else if strings.HasPrefix(endpoint_, "https://") {
-		endpoint = endpoint_[len("https://"):]
-	}
-	endpoint = strings.TrimSuffix(endpoint, ".aliyuncs.com")
-	assert.Equal(t, *info.LocationConstraint, endpoint)
+	assert.Equal(t, *info.LocationConstraint, fmt.Sprintf("oss-%v", region_))
 	delRequest := &DeleteBucketRequest{
 		Bucket: Ptr(bucketName),
 	}
@@ -4204,14 +4196,18 @@ func TestEncryptionClient(t *testing.T) {
 		start := i * int(partSize)
 		end := start + int(partSize)
 		end = minInt(end, length)
+		var contentLength *int64 = nil
+		if i%2 == 0 {
+			contentLength = Ptr(int64(end - start))
+		}
 		upResult, err := eclient.UploadPart(context.TODO(), &UploadPartRequest{
 			Bucket:              Ptr(bucketName),
 			Key:                 Ptr(objectName),
 			UploadId:            initResult.UploadId,
 			PartNumber:          int32(i + 1),
 			CSEMultiPartContext: initResult.CSEMultiPartContext,
-			//ContentLength:       Ptr(int64(end - start)),
-			Body: bytes.NewReader(data[start:end]),
+			ContentLength:       contentLength,
+			Body:                bytes.NewReader(data[start:end]),
 		})
 		assert.Nil(t, err)
 		assert.NotNil(t, upResult)
@@ -4316,7 +4312,6 @@ func TestEncryptionClient(t *testing.T) {
 	}()
 	io.Copy(hash, rfile)
 	assert.Equal(t, hash.Sum64(), hashData.Sum64())
-
 	//Use ReadOnlyFile
 	f, err := eclient.OpenFile(context.TODO(), bucketName, objectName)
 	assert.Nil(t, err)
@@ -4333,6 +4328,7 @@ func TestEncryptionClient(t *testing.T) {
 			assert.EqualValues(t, data[i:i+len], gData)
 		}
 	}
+	time.Sleep(2 * time.Second)
 
 	// Use Uploader
 	lastEtag := hResult.Headers.Get(HTTPHeaderETag)
@@ -4350,7 +4346,9 @@ func TestEncryptionClient(t *testing.T) {
 			uo.PartSize = 100 * 1024
 		},
 	)
-	assert.Nil(t, err)
+	if !assert.Nil(t, err) {
+		fmt.Printf("%s", err.Error())
+	}
 	assert.NotNil(t, urResult)
 
 	// GetObject again

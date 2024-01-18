@@ -364,6 +364,9 @@ func (f *ReadOnlyFile) readDirect(offset int64, buf []byte) (bytesRead int, err 
 		}
 
 		if err = f.checkResultValid(offset, result.Headers); err != nil {
+			if result != nil {
+				result.Body.Close()
+			}
 			return bytesRead, err
 		}
 

@@ -36,7 +36,6 @@ func (p *progressTracker) Write(b []byte) (n int, err error) {
 func (p *progressTracker) Reset() {
 	p.lwritten = p.written
 	p.written = 0
-	io.MultiReader()
 }
 
 var _ RequestBodyTracker = (*progressTracker)(nil)

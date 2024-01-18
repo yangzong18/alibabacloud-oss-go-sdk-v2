@@ -310,6 +310,9 @@ func (a *AsyncRangeReader) init(buffers int) {
 					if err != nil {
 						b.buf = b.buf[0:0]
 						b.err = err
+						if output != nil && output.Body != nil {
+							output.Body.Close()
+						}
 						//fmt.Printf("call getFunc fail, err:%v\n", err)
 						a.ready <- b
 						return
@@ -684,6 +687,9 @@ func (r *RangeReader) read(p []byte) (int, error) {
 			}
 		}
 		if err != nil {
+			if output != nil && output.Body != nil {
+				output.Body.Close()
+			}
 			return 0, err
 		}
 		body := output.Body

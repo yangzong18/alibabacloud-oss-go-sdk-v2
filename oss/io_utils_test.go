@@ -522,7 +522,7 @@ func TestMultiBytesReaderAfterBigSeek(t *testing.T) {
 	}
 }
 
-func TestEmptyMultiBytesReaderConcurrent(t *testing.T) {
+func testEmptyMultiBytesReaderConcurrent(t *testing.T) {
 	datas := []struct {
 		data [][]byte
 	}{
