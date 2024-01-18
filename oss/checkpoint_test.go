@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,7 +150,7 @@ func TestDownloadCheckpointInvalidCpPath(t *testing.T) {
 	//dump fail
 	err := cp.dump()
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+	assert.True(t, strings.Contains(err.Error(), "The system cannot find the path specified") || strings.Contains(err.Error(), "no such file or directory"))
 
 	//load fail
 	err = cp.load()
@@ -361,7 +362,7 @@ func TestUploadCheckpointInvalidCpPath(t *testing.T) {
 	//dump fail
 	err := cp.dump()
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+	assert.True(t, strings.Contains(err.Error(), "The system cannot find the path specified") || strings.Contains(err.Error(), "no such file or directory"))
 
 	//load fail
 	err = cp.load()

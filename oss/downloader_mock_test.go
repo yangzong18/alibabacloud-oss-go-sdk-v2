@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +36,8 @@ type downloaderMockTracker struct {
 
 	rStart            int64
 	headReqeustCRCErr bool
+
+	mu sync.Mutex
 }
 
 func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker) *httptest.Server {
@@ -87,7 +91,9 @@ func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker)
 				sendLen = int64(length) - httpRange.Offset
 				if httpRange.Count > 0 {
 					sendLen = minInt64(httpRange.Count, sendLen)
+					tracker.mu.Lock()
 					tracker.maxRangeCount = maxInt64(httpRange.Count, tracker.maxRangeCount)
+					tracker.mu.Unlock()
 				}
 				cr := httpContentRange{
 					Offset: httpRange.Offset,
@@ -98,7 +104,9 @@ func testSetupDownloaderMockServer(t *testing.T, tracker *downloaderMockTracker)
 				statusCode = 206
 			}
 
+			tracker.mu.Lock()
 			tracker.gotMinOffset = minInt64(tracker.gotMinOffset, offset)
+			tracker.mu.Unlock()
 
 			if tracker.failPartNum > 0 && (int64(tracker.partSize*tracker.failPartNum)+tracker.rStart) == offset {
 				w.Header().Set(HTTPHeaderContentType, "application/xml")
@@ -1079,7 +1087,7 @@ func TestMockDownloaderDownloadWithError(t *testing.T) {
 	localFile := "./no-exist-folder/file-no-surfix"
 	_, err = d.DownloadFile(context.TODO(), &GetObjectRequest{Bucket: Ptr("bucket"), Key: Ptr("key")}, localFile)
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "The system cannot find the path specified")
+	assert.True(t, strings.Contains(err.Error(), "The system cannot find the path specified") || strings.Contains(err.Error(), "no such file or directory"))
 
 	// Range is invalid
 	localFile = randStr(8) + "-no-surfix"
