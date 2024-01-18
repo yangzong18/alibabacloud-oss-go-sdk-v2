@@ -250,6 +250,9 @@ type GetObjectRequest struct {
 	// Specify the speed limit value. The speed limit value ranges from 245760 to 838860800, with a unit of bit/s.
 	TrafficLimit int64 `input:"header,x-oss-traffic-limit"`
 
+	// Progress callback function
+	ProgressFn ProgressFunc
+
 	RequestCommon
 }
 
@@ -1526,6 +1529,9 @@ type CompleteMultipartUploadRequest struct {
 
 	// The container that stores the content of the CompleteMultipartUpload
 	CompleteMultipartUpload *CompleteMultipartUpload `input:"body,CompleteMultipartUpload,xml"`
+
+	// The access control list (ACL) of the object.
+	Acl ObjectACLType `input:"header,x-oss-object-acl"`
 
 	// A callback parameter is a Base64-encoded string that contains multiple fields in the JSON format.
 	Callback *string `input:"header,x-oss-callback"`

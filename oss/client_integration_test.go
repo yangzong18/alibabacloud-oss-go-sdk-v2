@@ -91,6 +91,16 @@ func getClientUseStsToken(region, endpoint string) *Client {
 	return NewClient(cfg)
 }
 
+func getClientWithCredentialsProvider(region, endpoint string, cred credentials.CredentialsProvider) *Client {
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(cred).
+		WithRegion(region).
+		WithEndpoint(endpoint).
+		WithSignatureVersion(getSignatrueVersion())
+
+	return NewClient(cfg)
+}
+
 func getKmsID(region string) string {
 	if id, ok := kmdIdMap_[region]; ok {
 		return id
@@ -1340,6 +1350,10 @@ func TestDeleteObject(t *testing.T) {
 	_, err = client.PutObject(context.TODO(), request)
 	assert.Nil(t, err)
 
+	exist, err := client.IsObjectExist(context.TODO(), bucketName, objectName)
+	assert.Nil(t, err)
+	assert.True(t, exist)
+
 	delRequest := &DeleteObjectRequest{
 		Bucket: Ptr(bucketName),
 		Key:    Ptr(objectName),
@@ -1352,6 +1366,10 @@ func TestDeleteObject(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Nil(t, result.VersionId)
 	assert.False(t, result.DeleteMarker)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketName, objectName)
+	assert.Nil(t, err)
+	assert.False(t, exist)
 
 	objectNameNotExist := objectNamePrefix + randLowStr(6) + "-not-exist"
 	delRequest = &DeleteObjectRequest{
@@ -1366,6 +1384,10 @@ func TestDeleteObject(t *testing.T) {
 	assert.NotEmpty(t, result.Headers.Get("Date"))
 	assert.Nil(t, result.VersionId)
 	assert.False(t, result.DeleteMarker)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketName, objectNameNotExist)
+	assert.Nil(t, err)
+	assert.False(t, exist)
 
 	delRequest = &DeleteObjectRequest{
 		Bucket:    Ptr(bucketName),
@@ -4374,4 +4396,265 @@ func TestEncryptionClient(t *testing.T) {
 	assert.Empty(t, gResult.Headers.Get(OssClientSideEncryptionUnencryptedContentMD5))
 
 	assert.NotEqual(t, lastEtag, ToString(gResult.ETag))
+}
+
+func TestClientExtension(t *testing.T) {
+	after := before(t)
+	defer after(t)
+
+	//TODO
+	bucketName := bucketNamePrefix + randLowStr(6)
+	objectName := objectNamePrefix + randLowStr(6)
+	bucketNameNoExist := bucketName + "-no-exist"
+	objectNameNoExist := objectName + "-no-exist"
+
+	client := getDefaultClient()
+	assert.NotNil(t, client)
+
+	noPermClient := getClientWithCredentialsProvider(region_, endpoint_,
+		credentials.NewStaticCredentialsProvider("ak", "sk"))
+	assert.NotNil(t, noPermClient)
+
+	errorClient := getClientWithCredentialsProvider("", "",
+		credentials.NewStaticCredentialsProvider("ak", "sk"))
+	assert.NotNil(t, errorClient)
+
+	_, err := client.PutBucket(context.TODO(), &PutBucketRequest{
+		Bucket: Ptr(bucketName),
+	})
+	assert.Nil(t, err)
+
+	_, err = client.PutObject(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectName),
+	})
+	assert.Nil(t, err)
+
+	// IsBucketExist
+	exist, err := client.IsBucketExist(context.TODO(), bucketName)
+	assert.Nil(t, err)
+	assert.True(t, exist)
+
+	exist, err = client.IsBucketExist(context.TODO(), bucketNameNoExist)
+	assert.Nil(t, err)
+	assert.False(t, exist)
+
+	exist, err = noPermClient.IsBucketExist(context.TODO(), bucketName)
+	assert.Nil(t, err)
+	assert.True(t, exist)
+
+	exist, err = noPermClient.IsBucketExist(context.TODO(), bucketNameNoExist)
+	assert.Nil(t, err)
+	assert.False(t, exist)
+
+	exist, err = errorClient.IsBucketExist(context.TODO(), bucketName)
+	assert.NotNil(t, err)
+	var serr *ServiceError
+	assert.False(t, errors.As(err, &serr))
+
+	// IsObjectExist
+	exist, err = client.IsObjectExist(context.TODO(), bucketName, objectName)
+	assert.Nil(t, err)
+	assert.True(t, exist)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketName, objectNameNoExist)
+	assert.Nil(t, err)
+	assert.False(t, exist)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketNameNoExist, objectName)
+	assert.NotNil(t, err)
+	assert.False(t, exist)
+	errors.As(err, &serr)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketNameNoExist, objectNameNoExist)
+	assert.NotNil(t, err)
+	assert.False(t, exist)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+
+	exist, err = noPermClient.IsObjectExist(context.TODO(), bucketName, objectName)
+	assert.NotNil(t, err)
+	assert.False(t, exist)
+	errors.As(err, &serr)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "InvalidAccessKeyId", serr.Code)
+
+	exist, err = noPermClient.IsObjectExist(context.TODO(), bucketNameNoExist, objectName)
+	assert.NotNil(t, err)
+	assert.False(t, exist)
+	errors.As(err, &serr)
+	assert.NotNil(t, serr)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+
+	exist, err = errorClient.IsObjectExist(context.TODO(), bucketName, objectName)
+	assert.NotNil(t, err)
+	assert.False(t, exist)
+	assert.False(t, errors.As(err, &serr))
+
+	//PutObjectFromFile
+	objectNameFromFile := objectName + "-from-file"
+	var localFile = randStr(8) + ".txt"
+	length := 1234
+	content := randStr(length)
+	createFile(t, localFile, content)
+	defer func() { os.Remove(localFile) }()
+
+	result, err := client.PutObjectFromFile(context.TODO(), &PutObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameFromFile),
+	}, localFile)
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+
+	gResult, err := client.GetObject(context.TODO(), &GetObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameFromFile),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	data, err := io.ReadAll(gResult.Body)
+	assert.Nil(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, content, string(data))
+
+	// Use Uploader, set meta and acl
+	objectNameBig := objectName + "-big"
+	bigLength := 5*100*1024 + 1234
+	bigContent := randStr(bigLength)
+	bigHash := NewCRC64(0)
+	bigHash.Write([]byte(bigContent))
+	u := client.NewUploader()
+	assert.NotNil(t, u)
+	urResult, err := u.UploadFrom(context.TODO(),
+		&PutObjectRequest{
+			Bucket: Ptr(bucketName),
+			Key:    Ptr(objectNameBig),
+			Metadata: map[string]string{
+				"author": "test",
+				"magic":  "123",
+			},
+			Acl: ObjectACLPublicRead,
+		},
+		bytes.NewReader([]byte(bigContent)),
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 3
+			uo.PartSize = 100 * 1024
+		},
+	)
+	assert.Nil(t, err)
+	assert.NotNil(t, urResult)
+
+	exist, err = client.IsObjectExist(context.TODO(), bucketName, objectNameBig)
+	assert.Nil(t, err)
+	assert.True(t, exist)
+
+	hResult, err := client.HeadObject(context.TODO(), &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameBig),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, hResult)
+	assert.Contains(t, hResult.Headers.Get(HTTPHeaderETag), "-6")
+	assert.Equal(t, "Multipart", hResult.Headers.Get(HeaderOssObjectType))
+	assert.Equal(t, "test", hResult.Headers.Get("x-oss-meta-author"))
+	assert.Equal(t, "123", hResult.Headers.Get("x-oss-meta-magic"))
+
+	aclResult, err := client.GetObjectAcl(context.TODO(), &GetObjectAclRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameBig),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, hResult)
+	assert.Equal(t, "public-read", ToString(aclResult.ACL))
+
+	// Downloader with not align partSize
+	d := client.NewDownloader(func(do *DownloaderOptions) {
+		do.ParallelNum = 3
+		do.PartSize = 100*1024 + 123
+	})
+	assert.NotNil(t, d)
+	assert.Equal(t, int64(100*1024+123), d.options.PartSize)
+	assert.Equal(t, 3, d.options.ParallelNum)
+	localFileBig := randStr(8) + "-downloader"
+	dResult, err := d.DownloadFile(context.TODO(),
+		&GetObjectRequest{
+			Bucket: Ptr(bucketName),
+			Key:    Ptr(objectNameBig)},
+		localFileBig)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(bigLength), dResult.Written)
+
+	hash := NewCRC64(0)
+	rfile, err := os.Open(localFileBig)
+	assert.Nil(t, err)
+	defer func() {
+		rfile.Close()
+		os.Remove(localFileBig)
+	}()
+	io.Copy(hash, rfile)
+	assert.Equal(t, bigHash.Sum64(), hash.Sum64())
+
+	//Use ReadOnlyFile
+	f, err := client.OpenFile(context.TODO(), bucketName, objectNameBig)
+	assert.Nil(t, err)
+	assert.NotNil(t, f)
+	defer func() {
+		f.Close()
+	}()
+	for i := 13; i < 42; i++ {
+		for len := 100*1024 + 123; len < 100*1024+123+17; len++ {
+			_, err := f.Seek(int64(i), io.SeekStart)
+			assert.Nil(t, err)
+			gData, err := io.ReadAll(io.LimitReader(f, int64(len)))
+			assert.Nil(t, err)
+			assert.EqualValues(t, []byte(bigContent)[i:i+len], gData)
+		}
+	}
+
+	// AppenableFile
+	objectNameAppend := objectName + "-append"
+	dataa1 := []byte("helle world")
+	dataa2 := []byte(randStr(12345))
+	dataa3 := []byte(randStr(100*1024*5 + 13))
+	var localFileData3 = randStr(8) + ".txt"
+	createFile(t, localFileData3, string(dataa3))
+
+	af, err := client.AppendFile(context.TODO(), bucketName, objectNameAppend)
+	n, err := af.Write(dataa1)
+	assert.Nil(t, err)
+	assert.Equal(t, len(dataa1), n)
+
+	hResult, err = client.HeadObject(context.TODO(), &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameAppend),
+	})
+	assert.Nil(t, err)
+	assert.NotNil(t, hResult)
+	assert.Equal(t, int64(n), hResult.ContentLength)
+	nl, err := af.WriteFrom(bytes.NewReader(dataa2))
+	assert.Equal(t, int64(len(dataa2)), nl)
+
+	filedataa3, err := os.Open(localFileData3)
+	assert.Nil(t, err)
+	nl, err = io.Copy(af, filedataa3)
+	assert.Nil(t, err)
+	assert.Equal(t, int64(len(dataa3)), nl)
+	defer func() {
+		filedataa3.Close()
+		os.Remove(localFileData3)
+	}()
+
+	af.Close()
+	hashA := NewCRC64(0)
+	hashA.Write(dataa1)
+	hashA.Write(dataa2)
+	hashA.Write(dataa3)
+	hResult, err = client.HeadObject(context.TODO(), &HeadObjectRequest{
+		Bucket: Ptr(bucketName),
+		Key:    Ptr(objectNameAppend),
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, fmt.Sprint(hashA.Sum64()), ToString(hResult.HashCRC64))
 }

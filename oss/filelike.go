@@ -632,6 +632,7 @@ func (f *AppendOnlyFile) writeFrom(r io.Reader) (n int64, err error) {
 	var result *AppendObjectResult
 	if result, err = f.client.AppendObject(f.context, request); err == nil {
 		f.offset = result.NextPosition
+		f.hashCRC64 = result.HashCRC64
 	} else {
 		var serr *ServiceError
 		if errors.As(err, &serr) && serr.Code == "PositionNotEqualToLength" {

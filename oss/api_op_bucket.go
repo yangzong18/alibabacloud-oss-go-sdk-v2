@@ -770,6 +770,7 @@ type PutBucketAclRequest struct {
 
 	// The access control list (ACL) of the object.
 	Acl BucketACLType `input:"header,x-oss-acl,required"`
+
 	RequestCommon
 }
 
