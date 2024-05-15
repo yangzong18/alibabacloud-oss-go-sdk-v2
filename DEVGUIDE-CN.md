@@ -1946,7 +1946,9 @@ V2 版本使用 传输管理器 'Uploader'，'Downloader' 和 'Copier' 分别 �
 
 V2 版本 使用 EncryptionClient 来提供 客户端加密功能，同时也对API 接口做了精简，采用了 和 Client 一样的接口命名规则 和 调用方式。
 
-另外，该版本 移除了 使用KMS托管用户主密钥 的 参考实现，仅保留 基于 RSA 自主管理的主密钥 的参考实现。
+另外，该版本 仅保留 基于 RSA 自主管理的主密钥 的参考实现。
+
+对于 KSM 的实现，可以参考[sample/crypto/kms.go](sample/crypto/kms.go)。
 
 关于客户端加密的详细使用说明，请参考[客户端加密](#客户端加密)。
 
