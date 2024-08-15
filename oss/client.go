@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"hash"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -902,6 +903,37 @@ func unmarshalBodyXml(result any, output *OperationOutput) error {
 	}
 
 	if len(body) > 0 {
+		val := reflect.ValueOf(result)
+		switch val.Kind() {
+		case reflect.Pointer, reflect.Interface:
+			if val.IsNil() {
+				return nil
+			}
+			val = val.Elem()
+		}
+		if val.Kind() != reflect.Struct || output == nil {
+			return nil
+		}
+		t := val.Type()
+		for k := 0; k < t.NumField(); k++ {
+			if tag, ok := t.Field(k).Tag.Lookup("output"); ok {
+				tokens := strings.Split(tag, ",")
+				if len(tokens) < 3 {
+					continue
+				}
+				if tokens[0] == "body" && tokens[2] == "xml" {
+					var b bytes.Buffer
+					if err = xml.NewEncoder(&b).EncodeElement(
+						body,
+						xml.StartElement{Name: xml.Name{Local: tokens[1]}}); err != nil {
+						return &SerializationError{
+							Err: err,
+						}
+					}
+					body = []byte(html.UnescapeString(b.String()))
+				}
+			}
+		}
 		if err = xml.Unmarshal(body, result); err != nil {
 			err = &DeserializationError{
 				Err:      err,
