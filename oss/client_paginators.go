@@ -3,6 +3,7 @@ package oss
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 type PaginatorOptions struct {
@@ -65,7 +66,11 @@ func (p *ListObjectsPaginator) NextPage(ctx context.Context, optFns ...func(*Opt
 
 	result, err := p.client.ListObjects(ctx, &request, optFns...)
 	if err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "Error returned by Service") {
+			return nil, err
+		} else {
+			return nil, fmt.Errorf("%v, Marker:%v", err, ToString(p.marker))
+		}
 	}
 
 	p.firstPage = false
@@ -130,7 +135,11 @@ func (p *ListObjectsV2Paginator) NextPage(ctx context.Context, optFns ...func(*O
 
 	result, err := p.client.ListObjectsV2(ctx, &request, optFns...)
 	if err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "Error returned by Service") {
+			return nil, err
+		} else {
+			return nil, fmt.Errorf("%v, ContinuationToken:%v", err, ToString(p.continueToken))
+		}
 	}
 
 	p.firstPage = false
