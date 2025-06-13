@@ -388,7 +388,7 @@ func TestMockUploadSequential(t *testing.T) {
 func TestMockUploadSequentialWithTeeReader(t *testing.T) {
 	partSize := int64(10 * 1024 * 1024)
 	length := 20 * 1024 * 1024
-	partsNum := length/int(partSize) + 1
+	partsNum := length / int(partSize)
 	tracker := &uploaderMockTracker{
 		partNum:       partsNum,
 		saveDate:      make([][]byte, partsNum),
@@ -442,6 +442,18 @@ func TestMockUploadSequentialWithTeeReader(t *testing.T) {
 	hashall.Write(all)
 	allCrc64ecma := fmt.Sprint(hashall.Sum64())
 	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	index := 1
+	ctime := tracker.checkTime[index]
+	for i, t := range tracker.checkTime {
+		if t.After(ctime) {
+			index = i
+			ctime = t
+		}
+	}
+	assert.Equal(t, partsNum-1, index)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
 }
 
 func TestMockUploadParallel(t *testing.T) {
@@ -525,7 +537,7 @@ func TestMockUploadParallel(t *testing.T) {
 func TestMockUploadParallelWithTeeReader(t *testing.T) {
 	partSize := int64(10 * 1024 * 1024)
 	length := 40 * 1024 * 1024
-	partsNum := length/int(partSize) + 1
+	partsNum := length / int(partSize)
 	tracker := &uploaderMockTracker{
 		partNum:       partsNum,
 		saveDate:      make([][]byte, partsNum),
@@ -587,6 +599,18 @@ func TestMockUploadParallelWithTeeReader(t *testing.T) {
 	hashall.Write(all)
 	allCrc64ecma := fmt.Sprint(hashall.Sum64())
 	assert.Equal(t, dataCrc64ecma, allCrc64ecma)
+
+	index := 3
+	ctime := tracker.checkTime[index]
+	for i, t := range tracker.checkTime {
+		if t.After(ctime) {
+			index = i
+			ctime = t
+		}
+	}
+	assert.Equal(t, 0, index)
+	assert.Equal(t, int32(0), atomic.LoadInt32(&tracker.putObjectCnt))
+	assert.Equal(t, int32(partsNum), atomic.LoadInt32(&tracker.uploadPartCnt))
 }
 
 func TestMockUploadArgmentCheck(t *testing.T) {
