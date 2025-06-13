@@ -2186,3 +2186,60 @@ func TestMockUploaderUploadFileEnableCheckpointUseCpProgress(t *testing.T) {
 	assert.NoFileExists(t, cpFile)
 	assert.Equal(t, int64(length), inc)
 }
+
+func TestMockUploadWithMixedError(t *testing.T) {
+	partSize := int64(100 * 1024)
+	length := 5*100*1024 + 123
+	partsNum := length/int(partSize) + 1
+	tracker := &uploaderMockTracker{
+		partNum:       partsNum,
+		saveDate:      make([][]byte, partsNum),
+		checkTime:     make([]time.Time, partsNum),
+		timeout:       make([]time.Duration, partsNum),
+		uploadPartErr: make([]bool, partsNum),
+	}
+	tracker.uploadPartErr[1] = true
+
+	data := []byte(randStr(length))
+
+	server := testSetupUploaderMockServer(t, tracker)
+	defer server.Close()
+	assert.NotNil(t, server)
+
+	cfg := LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewAnonymousCredentialsProvider()).
+		WithRegion("cn-hangzhou").
+		WithEndpoint(server.URL).
+		WithReadWriteTimeout(300 * time.Second)
+
+	client := NewClient(cfg)
+
+	u := NewUploader(client,
+		func(uo *UploaderOptions) {
+			uo.ParallelNum = 1
+			uo.PartSize = partSize
+		},
+	)
+	assert.Equal(t, 1, u.options.ParallelNum)
+	assert.Equal(t, partSize, u.options.PartSize)
+
+	tracker.timeout[0] = 2 * time.Second
+	ctx, cancfg := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancfg()
+
+	pReader := io.TeeReader(bytes.NewReader(data), io.Discard)
+
+	_, err := u.UploadFrom(
+		ctx,
+		&PutObjectRequest{
+			Bucket: Ptr("bucket"),
+			Key:    Ptr("key")},
+		pReader)
+	assert.NotNil(t, err)
+	var uerr *UploadError
+	errors.As(err, &uerr)
+	assert.NotNil(t, uerr)
+	assert.Equal(t, "uploadId-1234", uerr.UploadId)
+	assert.Equal(t, "oss://bucket/key", uerr.Path)
+	assert.Contains(t, uerr.Error(), "context deadline exceeded")
+}
