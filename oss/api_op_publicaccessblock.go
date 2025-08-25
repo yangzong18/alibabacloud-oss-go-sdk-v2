@@ -8,7 +8,7 @@ import (
 
 type PublicAccessBlockConfiguration struct {
 	// Specifies whether to enable Block Public Access.true: enables Block Public Access.false (default): disables Block Public Access.
-	BlockPublicAccess *bool `xml:"BlockPublicAccess"`
+	BlockPublicAccess *bool `xml:"BlockPublicAccess" json:"BlockPublicAccess,omitempty"`
 }
 
 type GetPublicAccessBlockRequest struct {
@@ -17,7 +17,7 @@ type GetPublicAccessBlockRequest struct {
 
 type GetPublicAccessBlockResult struct {
 	// The container in which the Block Public Access configurations are stored.
-	PublicAccessBlockConfiguration *PublicAccessBlockConfiguration `output:"body,PublicAccessBlockConfiguration,xml"`
+	PublicAccessBlockConfiguration *PublicAccessBlockConfiguration `output:"body,PublicAccessBlockConfiguration,xml|json"`
 
 	ResultCommon
 }
@@ -31,9 +31,6 @@ func (c *Client) GetPublicAccessBlock(ctx context.Context, request *GetPublicAcc
 	input := &OperationInput{
 		OpName: "GetPublicAccessBlock",
 		Method: "GET",
-		Headers: map[string]string{
-			HTTPHeaderContentType: contentTypeXML,
-		},
 		Parameters: map[string]string{
 			"publicAccessBlock": "",
 		},
@@ -50,7 +47,7 @@ func (c *Client) GetPublicAccessBlock(ctx context.Context, request *GetPublicAcc
 
 	result := &GetPublicAccessBlockResult{}
 
-	if err = c.unmarshalOutput(result, output, unmarshalBodyXmlMix); err != nil {
+	if err = c.unmarshalOutput(result, output, unmarshalBodyXmlOrJson); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 
@@ -59,7 +56,7 @@ func (c *Client) GetPublicAccessBlock(ctx context.Context, request *GetPublicAcc
 
 type PutPublicAccessBlockRequest struct {
 	// Request body.
-	PublicAccessBlockConfiguration *PublicAccessBlockConfiguration `input:"body,PublicAccessBlockConfiguration,xml,required"`
+	PublicAccessBlockConfiguration *PublicAccessBlockConfiguration `input:"body,PublicAccessBlockConfiguration,xml|json,required"`
 
 	RequestCommon
 }
@@ -78,7 +75,12 @@ func (c *Client) PutPublicAccessBlock(ctx context.Context, request *PutPublicAcc
 		OpName: "PutPublicAccessBlock",
 		Method: "PUT",
 		Headers: map[string]string{
-			HTTPHeaderContentType: contentTypeXML,
+			HTTPHeaderContentType: func() string {
+				if request.Headers != nil && request.Headers[HTTPHeaderContentType] != "" {
+					return request.Headers[HTTPHeaderContentType]
+				}
+				return contentTypeXML
+			}(),
 		},
 		Parameters: map[string]string{
 			"publicAccessBlock": "",
@@ -96,7 +98,7 @@ func (c *Client) PutPublicAccessBlock(ctx context.Context, request *PutPublicAcc
 
 	result := &PutPublicAccessBlockResult{}
 
-	if err = c.unmarshalOutput(result, output, unmarshalBodyXmlMix); err != nil {
+	if err = c.unmarshalOutput(result, output, discardBody); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 
@@ -120,9 +122,6 @@ func (c *Client) DeletePublicAccessBlock(ctx context.Context, request *DeletePub
 	input := &OperationInput{
 		OpName: "DeletePublicAccessBlock",
 		Method: "DELETE",
-		Headers: map[string]string{
-			HTTPHeaderContentType: contentTypeXML,
-		},
 		Parameters: map[string]string{
 			"publicAccessBlock": "",
 		},
@@ -139,7 +138,7 @@ func (c *Client) DeletePublicAccessBlock(ctx context.Context, request *DeletePub
 
 	result := &DeletePublicAccessBlockResult{}
 
-	if err = c.unmarshalOutput(result, output, unmarshalBodyXmlMix); err != nil {
+	if err = c.unmarshalOutput(result, output, discardBody); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 

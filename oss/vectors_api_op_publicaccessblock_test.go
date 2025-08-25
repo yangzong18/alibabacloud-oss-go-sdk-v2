@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMarshalInput_PutPublicAccessBlock(t *testing.T) {
+func TestMarshalInput_PutPublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var request *PutPublicAccessBlockRequest
@@ -18,6 +18,10 @@ func TestMarshalInput_PutPublicAccessBlock(t *testing.T) {
 	var err error
 
 	request = &PutPublicAccessBlockRequest{}
+	if request.Headers == nil {
+		request.Headers = make(map[string]string)
+	}
+	request.Headers[HTTPHeaderContentType] = contentTypeJSON
 	input = &OperationInput{
 		OpName: "PutPublicAccessBlock",
 		Method: "PUT",
@@ -43,6 +47,10 @@ func TestMarshalInput_PutPublicAccessBlock(t *testing.T) {
 			Ptr(true),
 		},
 	}
+	if request.Headers == nil {
+		request.Headers = make(map[string]string)
+	}
+	request.Headers[HTTPHeaderContentType] = contentTypeJSON
 	input = &OperationInput{
 		OpName: "PutPublicAccessBlock",
 		Method: "PUT",
@@ -62,10 +70,10 @@ func TestMarshalInput_PutPublicAccessBlock(t *testing.T) {
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Nil(t, err)
 	body, _ := io.ReadAll(input.Body)
-	assert.Equal(t, string(body), "<PublicAccessBlockConfiguration><BlockPublicAccess>true</BlockPublicAccess></PublicAccessBlockConfiguration>")
+	assert.Equal(t, string(body), "{\"PublicAccessBlockConfiguration\":{\"BlockPublicAccess\":true}}")
 }
 
-func TestUnmarshalOutput_PutPublicAccessBlock(t *testing.T) {
+func TestUnmarshalOutput_PutPublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var output *OperationOutput
@@ -84,22 +92,23 @@ func TestUnmarshalOutput_PutPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 
-	body := `<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>NoSuchBucket</Code>
-  <Message>The specified bucket does not exist.</Message>
-  <RequestId>5C3D9175B6FC201293AD****</RequestId>
-  <HostId>test.oss-cn-hangzhou.aliyuncs.com</HostId>
-  <BucketName>test</BucketName>
-  <EC>0015-00000101</EC>
-</Error>`
+	body := `{
+  "Error": {
+    "Code": "NoSuchBucket",
+    "Message": "The specified bucket does not exist.",
+    "RequestId": "5C3D9175B6FC201293AD****",
+    "HostId": "test.oss-cn-hangzhou.aliyuncs.com",
+    "BucketName": "test",
+    "EC": "0015-00000101"
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 404,
 		Status:     "NoSuchBucket",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &PutPublicAccessBlockResult{}
@@ -108,13 +117,13 @@ func TestUnmarshalOutput_PutPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 	output = &OperationOutput{
 		StatusCode: 400,
 		Status:     "InvalidArgument",
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &PutPublicAccessBlockResult{}
@@ -123,22 +132,23 @@ func TestUnmarshalOutput_PutPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 400)
 	assert.Equal(t, result.Status, "InvalidArgument")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 
-	body = `<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>AccessDenied</Code>
-  <Message>AccessDenied</Message>
-  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
-  <HostId>test.oss.aliyuncs.com</HostId>
-</Error>`
+	body = `{
+  "Error": {
+    "Code": "AccessDenied",
+    "Message": "AccessDenied",
+    "RequestId": "568D5566F2D0F89F5C0E****",
+    "HostId": "test.oss.aliyuncs.com"
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 403,
 		Status:     "AccessDenied",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &PutPublicAccessBlockResult{}
@@ -147,10 +157,10 @@ func TestUnmarshalOutput_PutPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 }
 
-func TestMarshalInput_GetPublicAccessBlock(t *testing.T) {
+func TestMarshalInput_GetPublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var request *GetPublicAccessBlockRequest
@@ -170,22 +180,23 @@ func TestMarshalInput_GetPublicAccessBlock(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestUnmarshalOutput_GetPublicAccessBlock(t *testing.T) {
+func TestUnmarshalOutput_GetPublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var output *OperationOutput
 	var err error
-	body := `<?xml version="1.0" encoding="UTF-8"?>
-			<PublicAccessBlockConfiguration>
-			  <BlockPublicAccess>true</BlockPublicAccess>
-			</PublicAccessBlockConfiguration>`
+	body := `{
+  "PublicAccessBlockConfiguration": {
+    "BlockPublicAccess": true
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result := &GetPublicAccessBlockResult{}
@@ -194,14 +205,14 @@ func TestUnmarshalOutput_GetPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 	assert.True(t, *result.PublicAccessBlockConfiguration.BlockPublicAccess)
 	output = &OperationOutput{
 		StatusCode: 404,
 		Status:     "NoSuchBucket",
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &GetPublicAccessBlockResult{}
@@ -210,13 +221,13 @@ func TestUnmarshalOutput_GetPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 	output = &OperationOutput{
 		StatusCode: 400,
 		Status:     "InvalidArgument",
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &GetPublicAccessBlockResult{}
@@ -225,22 +236,23 @@ func TestUnmarshalOutput_GetPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 400)
 	assert.Equal(t, result.Status, "InvalidArgument")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 
-	body = `<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>AccessDenied</Code>
-  <Message>AccessDenied</Message>
-  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
-  <HostId>test.oss.aliyuncs.com</HostId>
-</Error>`
+	body = `{
+  "Error": {
+    "Code": "AccessDenied",
+    "Message": "AccessDenied",
+    "RequestId": "568D5566F2D0F89F5C0E****",
+    "HostId": "test.oss.aliyuncs.com"
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 403,
 		Status:     "AccessDenied",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &GetPublicAccessBlockResult{}
@@ -249,10 +261,10 @@ func TestUnmarshalOutput_GetPublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 }
 
-func TestMarshalInput_DeletePublicAccessBlock(t *testing.T) {
+func TestMarshalInput_DeletePublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var request *DeletePublicAccessBlockRequest
@@ -272,7 +284,7 @@ func TestMarshalInput_DeletePublicAccessBlock(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func TestUnmarshalOutput_DeletePublicAccessBlock(t *testing.T) {
+func TestUnmarshalOutput_DeletePublicAccessBlock_ForVectorBucket(t *testing.T) {
 	c := Client{}
 	assert.NotNil(t, c)
 	var output *OperationOutput
@@ -291,22 +303,23 @@ func TestUnmarshalOutput_DeletePublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.Status, "No Content")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 
-	body := `<?xml version="1.0" encoding="UTF-8"?>
-		<Error>
-		<Code>NoSuchBucket</Code>
-		<Message>The specified bucket does not exist.</Message>
-		<RequestId>66C2FF09FDF07830343C72EC</RequestId>
-		<HostId>bucket.oss-cn-hangzhou.aliyuncs.com</HostId>
-		<BucketName>bucket</BucketName>
-		<EC>0015-00000101</EC>
-	</Error>`
+	body := `{
+  "Error": {
+    "Code": "NoSuchBucket",
+    "Message": "The specified bucket does not exist.",
+    "RequestId": "66C2FF09FDF07830343C72EC",
+    "HostId": "bucket.oss-cn-hangzhou.aliyuncs.com",
+    "BucketName": "bucket",
+    "EC": "0015-00000101"
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 404,
 		Status:     "NoSuchBucket",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &DeletePublicAccessBlockResult{}
@@ -315,14 +328,14 @@ func TestUnmarshalOutput_DeletePublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "NoSuchBucket")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 
 	output = &OperationOutput{
 		StatusCode: 400,
 		Status:     "InvalidArgument",
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &DeletePublicAccessBlockResult{}
@@ -331,22 +344,23 @@ func TestUnmarshalOutput_DeletePublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 400)
 	assert.Equal(t, result.Status, "InvalidArgument")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 
-	body = `<?xml version="1.0" encoding="UTF-8"?>
-<Error>
-  <Code>AccessDenied</Code>
-  <Message>AccessDenied</Message>
-  <RequestId>568D5566F2D0F89F5C0E****</RequestId>
-  <HostId>test.oss.aliyuncs.com</HostId>
-</Error>`
+	body = `{
+  "Error": {
+    "Code": "AccessDenied",
+    "Message": "AccessDenied",
+    "RequestId": "568D5566F2D0F89F5C0E****",
+    "HostId": "test.oss.aliyuncs.com"
+  }
+}`
 	output = &OperationOutput{
 		StatusCode: 403,
 		Status:     "AccessDenied",
 		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
-			"Content-Type":     {"application/xml"},
+			"Content-Type":     {"application/json"},
 		},
 	}
 	result = &DeletePublicAccessBlockResult{}
@@ -355,5 +369,5 @@ func TestUnmarshalOutput_DeletePublicAccessBlock(t *testing.T) {
 	assert.Equal(t, result.StatusCode, 403)
 	assert.Equal(t, result.Status, "AccessDenied")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
-	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/json")
 }
