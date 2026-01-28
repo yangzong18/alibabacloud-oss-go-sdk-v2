@@ -1056,7 +1056,7 @@ func TestPutBucketAcl(t *testing.T) {
 		PublicAccessBlockConfiguration: &PublicAccessBlockConfiguration{
 			BlockPublicAccess: Ptr(false),
 		},
-	})	
+	})
 	request := &PutBucketAclRequest{
 		Bucket: Ptr(bucketName),
 		Acl:    BucketACLPublicRead,
@@ -4914,7 +4914,7 @@ func TestClientExtension(t *testing.T) {
 	assert.NotNil(t, d2)
 	assert.Equal(t, int64(100*1024+123), d.options.PartSize)
 	assert.Equal(t, 3, d2.options.ParallelNum)
-	assert.Equal(t, 16 * 1024, d2.options.WriteBufferSize)
+	assert.Equal(t, 16*1024, d2.options.WriteBufferSize)
 	localFileBig2 := randStr(8) + "-downloader-2"
 	dResult2, err := d2.DownloadFile(context.TODO(),
 		&GetObjectRequest{
@@ -8305,6 +8305,20 @@ func TestCname(t *testing.T) {
 	assert.NotNil(t, createResult.CnameToken)
 	time.Sleep(1 * time.Second)
 
+	createResult, err = client.CreateCnameToken(context.TODO(), &CreateCnameTokenRequest{
+		Bucket: Ptr(bucketName),
+		BucketCnameConfiguration: &BucketCnameConfiguration{
+			Cname: &Cname{
+				Domain: Ptr("example1.com"),
+			},
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 200, createResult.StatusCode)
+	assert.NotEmpty(t, createResult.Headers.Get("X-Oss-Request-Id"))
+	assert.NotNil(t, createResult.CnameToken)
+	time.Sleep(1 * time.Second)
+
 	getResult, err := client.GetCnameToken(context.TODO(), &GetCnameTokenRequest{
 		Bucket: Ptr(bucketName),
 		Cname:  Ptr("example.com"),
@@ -8328,6 +8342,19 @@ func TestCname(t *testing.T) {
 		Bucket: Ptr(bucketName),
 		BucketCnameConfiguration: &BucketCnameConfiguration{
 			Domain: Ptr("example.com"),
+		},
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, 200, delResult.StatusCode)
+	assert.NotEmpty(t, delResult.Headers.Get("X-Oss-Request-Id"))
+	time.Sleep(1 * time.Second)
+
+	delResult, err = client.DeleteCname(context.TODO(), &DeleteCnameRequest{
+		Bucket: Ptr(bucketName),
+		BucketCnameConfiguration: &BucketCnameConfiguration{
+			Cname: &Cname{
+				Domain: Ptr("example1.com"),
+			},
 		},
 	})
 	assert.Nil(t, err)
