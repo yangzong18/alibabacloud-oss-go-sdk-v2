@@ -6829,7 +6829,9 @@ var testMockRestoreObjectSuccessCases = []struct {
 			Key:    Ptr("object"),
 			RestoreRequest: &RestoreRequest{
 				Days: int32(2),
-				Tier: Ptr("Standard"),
+				JobParameters: &JobParameters{
+					Tier: Ptr("Standard"),
+				},
 			},
 		},
 		func(t *testing.T, o *RestoreObjectResult, err error) {
@@ -6859,7 +6861,9 @@ var testMockRestoreObjectSuccessCases = []struct {
 			Key:    Ptr("object"),
 			RestoreRequest: &RestoreRequest{
 				Days: int32(2),
-				Tier: Ptr("Standard"),
+				JobParameters: &JobParameters{
+					Tier: Ptr("Standard"),
+				},
 			},
 			RequestPayer: Ptr("requester"),
 		},
@@ -18338,7 +18342,7 @@ var testMockPutBucketWebsiteSuccessCases = []struct {
 								MirrorCheckMd5:        Ptr(false),
 								MirrorHeaders: &MirrorHeaders{
 									PassAll: Ptr(true),
-									Passes:  []string{"myheader-key1", "myheader-key2"},
+									Passes:   []string{"myheader-key1", "myheader-key2"},
 									Removes: []string{"myheader-key3", "myheader-key4"},
 									Sets: []MirrorHeadersSet{
 										{
@@ -27889,6 +27893,35 @@ var testMockPutCnameSuccessCases = []struct {
 			urlStr := sortQuery(r)
 			assert.Equal(t, "/bucket/?cname&comp=add", urlStr)
 			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain></Cname></BucketCnameConfiguration>")
+		},
+		&PutCnameRequest{
+			Bucket: Ptr("bucket"),
+			BucketCnameConfiguration: &BucketCnameConfiguration{
+				Cname: &Cname{
+					Domain: Ptr("example.com"),
+				},
+			},
+		},
+		func(t *testing.T, o *PutCnameResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?cname&comp=add", urlStr)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain><CertificateConfiguration><CertId>493****-cn-hangzhou</CertId><Certificate>-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----</Certificate><PrivateKey>-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----</PrivateKey><PreviousCertId>493****-cn-hangzhou</PreviousCertId><Force>true</Force></CertificateConfiguration></Cname></BucketCnameConfiguration>")
 		},
 		&PutCnameRequest{
@@ -27923,6 +27956,42 @@ var testMockPutCnameSuccessCases = []struct {
 			urlStr := sortQuery(r)
 			assert.Equal(t, "/bucket/?cname&comp=add", urlStr)
 			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain><CertificateConfiguration><CertId>493****-cn-hangzhou</CertId><Certificate>-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----</Certificate><PrivateKey>-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----</PrivateKey><PreviousCertId>493****-cn-hangzhou</PreviousCertId><Force>true</Force></CertificateConfiguration></Cname></BucketCnameConfiguration>")
+		},
+		&PutCnameRequest{
+			Bucket: Ptr("bucket"),
+			BucketCnameConfiguration: &BucketCnameConfiguration{
+				Cname: &Cname{
+					Domain: Ptr("example.com"),
+					CertificateConfiguration: &CertificateConfiguration{
+						CertId:         Ptr("493****-cn-hangzhou"),
+						Certificate:    Ptr("-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----"),
+						PrivateKey:     Ptr("-----BEGIN CERTIFICATE----- MIIDhDCCAmwCCQCFs8ixARsyrDANBgkqhkiG9w0BAQsFADCBgzELMAkGA1UEBhMC **** -----END CERTIFICATE-----"),
+						PreviousCertId: Ptr("493****-cn-hangzhou"),
+						Force:          Ptr(true),
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutCnameResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?cname&comp=add", urlStr)
+			data, _ := io.ReadAll(r.Body)
 			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain><CertificateConfiguration><DeleteCertificate>true</DeleteCertificate></CertificateConfiguration></Cname></BucketCnameConfiguration>")
 		},
 		&PutCnameRequest{
@@ -27931,6 +28000,38 @@ var testMockPutCnameSuccessCases = []struct {
 				Domain: Ptr("example.com"),
 				CertificateConfiguration: &CertificateConfiguration{
 					DeleteCertificate: Ptr(true),
+				},
+			},
+		},
+		func(t *testing.T, o *PutCnameResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?cname&comp=add", urlStr)
+			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain><CertificateConfiguration><DeleteCertificate>true</DeleteCertificate></CertificateConfiguration></Cname></BucketCnameConfiguration>")
+		},
+		&PutCnameRequest{
+			Bucket: Ptr("bucket"),
+			BucketCnameConfiguration: &BucketCnameConfiguration{
+				Cname: &Cname{
+					Domain: Ptr("example.com"),
+					CertificateConfiguration: &CertificateConfiguration{
+						DeleteCertificate: Ptr(true),
+					},
 				},
 			},
 		},
@@ -28104,6 +28205,44 @@ var testMockCreateCnameTokenSuccessCases = []struct {
 			Bucket: Ptr("bucket"),
 			BucketCnameConfiguration: &BucketCnameConfiguration{
 				Domain: Ptr("example.com"),
+			},
+		},
+		func(t *testing.T, o *CreateCnameTokenResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.CnameToken.Bucket, "bucket")
+			assert.Equal(t, *o.CnameToken.Cname, "example.com")
+			assert.Equal(t, *o.CnameToken.Token, "be1d49d863dea9ffeff3df7d6455****")
+			assert.Equal(t, *o.CnameToken.ExpireTime, "Wed, 23 Feb 2022 21:16:37 GMT")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<CnameToken>
+  <Bucket>bucket</Bucket>
+  <Cname>example.com</Cname>;
+  <Token>be1d49d863dea9ffeff3df7d6455****</Token>
+  <ExpireTime>Wed, 23 Feb 2022 21:16:37 GMT</ExpireTime>
+</CnameToken>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?cname&comp=token", urlStr)
+			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain></Cname></BucketCnameConfiguration>")
+		},
+		&CreateCnameTokenRequest{
+			Bucket: Ptr("bucket"),
+			BucketCnameConfiguration: &BucketCnameConfiguration{
+				Cname: &Cname{
+					Domain: Ptr("example.com"),
+				},
 			},
 		},
 		func(t *testing.T, o *CreateCnameTokenResult, err error) {
@@ -28751,6 +28890,36 @@ var testMockDeleteCnameSuccessCases = []struct {
 			Bucket: Ptr("bucket"),
 			BucketCnameConfiguration: &BucketCnameConfiguration{
 				Domain: Ptr("example.com"),
+			},
+		},
+		func(t *testing.T, o *DeleteCnameResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+			"Content-Type":     "application/xml",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?cname&comp=delete", urlStr)
+			body, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(body), "<BucketCnameConfiguration><Cname><Domain>example.com</Domain></Cname></BucketCnameConfiguration>")
+		},
+		&DeleteCnameRequest{
+			Bucket: Ptr("bucket"),
+			BucketCnameConfiguration: &BucketCnameConfiguration{
+				Cname: &Cname{
+					Domain: Ptr("example.com"),
+				},
 			},
 		},
 		func(t *testing.T, o *DeleteCnameResult, err error) {
@@ -32315,15 +32484,22 @@ var testMockCreateAccessPointForObjectProcessErrorCases = []struct {
 			CreateAccessPointForObjectProcessConfiguration: &CreateAccessPointForObjectProcessConfiguration{
 				AccessPointName: Ptr("ap-01"),
 				ObjectProcessConfiguration: &ObjectProcessConfiguration{
-					AllowedFeatures: []string{"GetObject-Range"},
-					TransformationConfigurations: []TransformationConfiguration{
-						{
-							Actions: &AccessPointActions{
-								[]string{"GetObject"},
-							},
-							ContentTransformation: &ContentTransformation{
-								FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
-								FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+					AllowedFeatures: &AllowedFeatures{
+						[]*string{Ptr("GetObject-Range")},
+					},
+					TransformationConfigurations: &TransformationConfigurations{
+						TransformationConfiguration: []*TransformationConfiguration{
+
+							{
+								Actions: &AccessPointActions{
+									[]string{"GetObject"},
+								},
+								ContentTransformation: &ContentTransformation{
+									&FunctionCompute{
+										FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
+										FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+									},
+								},
 							},
 						},
 					},

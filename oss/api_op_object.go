@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash"
 	"io"
@@ -1208,8 +1209,14 @@ type RestoreRequest struct {
 	// The duration within which the restored object remains in the restored state.
 	Days int32 `xml:"Days"`
 
+	Tier *string `xml:"-"`
+
+	JobParameters *JobParameters `xml:"JobParameters"`
+}
+
+type JobParameters struct {
 	// The restoration priority of Cold Archive or Deep Cold Archive objects. Valid values:Expedited,Standard,Bulk
-	Tier *string `xml:"JobParameters>Tier"`
+	Tier *string `xml:"Tier"`
 }
 
 type RestoreObjectResult struct {
@@ -1241,6 +1248,17 @@ func (c *Client) RestoreObject(ctx context.Context, request *RestoreObjectReques
 		Parameters: map[string]string{
 			"restore": "",
 		},
+	}
+
+	if request.RestoreRequest != nil {
+		if request.RestoreRequest.Tier != nil && (request.RestoreRequest.JobParameters != nil && request.RestoreRequest.JobParameters.Tier != nil) {
+			return nil, errors.New("JobParameters.Tier and Tier cannot be used simultaneously")
+		}
+		if request.RestoreRequest.Tier != nil && request.RestoreRequest.JobParameters == nil {
+			request.RestoreRequest.JobParameters = &JobParameters{
+				Tier: request.RestoreRequest.Tier,
+			}
+		}
 	}
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
@@ -2527,7 +2545,7 @@ type AsyncProcessObjectRequest struct {
 	Key *string `input:"path,key,required"`
 
 	// Image async processing parameters
-	AsyncProcess *string `input:"x-oss-async-process,nop,required"`
+	AsyncProcess *string `input:"x-async-oss-process,nop,required"`
 
 	// To indicate that the requester is aware that the request and data download will incur costs
 	RequestPayer *string `input:"header,x-oss-request-payer"`
