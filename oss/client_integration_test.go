@@ -1056,7 +1056,7 @@ func TestPutBucketAcl(t *testing.T) {
 		PublicAccessBlockConfiguration: &PublicAccessBlockConfiguration{
 			BlockPublicAccess: Ptr(false),
 		},
-	})
+	})	
 	request := &PutBucketAclRequest{
 		Bucket: Ptr(bucketName),
 		Acl:    BucketACLPublicRead,
@@ -4914,7 +4914,7 @@ func TestClientExtension(t *testing.T) {
 	assert.NotNil(t, d2)
 	assert.Equal(t, int64(100*1024+123), d.options.PartSize)
 	assert.Equal(t, 3, d2.options.ParallelNum)
-	assert.Equal(t, 16*1024, d2.options.WriteBufferSize)
+	assert.Equal(t, 16 * 1024, d2.options.WriteBufferSize)
 	localFileBig2 := randStr(8) + "-downloader-2"
 	dResult2, err := d2.DownloadFile(context.TODO(),
 		&GetObjectRequest{
@@ -8537,6 +8537,7 @@ func TestMetaQuery(t *testing.T) {
 			Query:       Ptr("Overlook the snow-covered forest"),
 			MediaType:   Ptr("image"),
 			MediaTypes:  &MetaQueryMediaTypes{MediaType: []*string{Ptr("image")}},
+			MediaTypes:  &MetaQueryMediaTypes{MediaType: []*string{Ptr("image"), Ptr("video")}},
 			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
 		},
 	}

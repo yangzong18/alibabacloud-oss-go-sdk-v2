@@ -18342,7 +18342,7 @@ var testMockPutBucketWebsiteSuccessCases = []struct {
 								MirrorCheckMd5:        Ptr(false),
 								MirrorHeaders: &MirrorHeaders{
 									PassAll: Ptr(true),
-									Passes:  []string{"myheader-key1", "myheader-key2"},
+									Passes:   []string{"myheader-key1", "myheader-key2"},
 									Removes: []string{"myheader-key3", "myheader-key4"},
 									Sets: []MirrorHeadersSet{
 										{

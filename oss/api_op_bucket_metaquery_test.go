@@ -457,7 +457,52 @@ func TestMarshalInput_DoMetaQuery(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
+<<<<<<< HEAD
 
+=======
+	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery", "comp"})
+	if request.MetaQuery != nil {
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
+			err = errors.New("MediaType and MediaTypes cannot be used simultaneously")
+		}
+
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes == nil {
+			request.MetaQuery.MediaTypes = &MetaQueryMediaTypes{
+				[]*string{request.MetaQuery.MediaType},
+			}
+		}
+	}
+	assert.Nil(t, err)
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["mode"], "semantic")
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
+
+	request = &DoMetaQueryRequest{
+		Bucket: Ptr("bucket"),
+		Mode:   Ptr("semantic"),
+		MetaQuery: &MetaQuery{
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaType:   Ptr("image"),
+			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
+		},
+	}
+	input = &OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"comp":      "query",
+			"metaQuery": "",
+		},
+		Bucket: request.Bucket,
+	}
+>>>>>>> 68d458687445747e9b2fd30016d3031f0b1a55a8
 	if request.MetaQuery != nil {
 		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
 			err = errors.New("MediaType and MediaTypes cannot be used simultaneously")
