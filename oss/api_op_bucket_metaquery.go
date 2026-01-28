@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"errors"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/signer"
 )
@@ -321,6 +322,10 @@ type MetaQuery struct {
 	// The pagination token used to obtain information in the next request. The object information is returned in alphabetical order starting from the value of NextToken.
 	NextToken *string `xml:"NextToken"`
 
+	// The type of multimedia that you want to query. Valid values: image, video, audio, document
+	// Deprecated: MediaType is deprecated, Use MediaTypes instead.
+	MediaType *string `xml:"-"`
+
 	// The container that stores the type of multimedia.
 	MediaTypes *MetaQueryMediaTypes `xml:"MediaTypes"`
 
@@ -330,7 +335,7 @@ type MetaQuery struct {
 
 type MetaQueryMediaTypes struct {
 	// The type of multimedia that you want to query. Valid values: image, video, audio, document
-	MediaTypes []string `xml:"MediaType"`
+	MediaType []*string `xml:"MediaType"`
 }
 
 type MetaQueryStatus struct {
@@ -497,7 +502,17 @@ func (c *Client) DoMetaQuery(ctx context.Context, request *DoMetaQueryRequest, o
 		Bucket: request.Bucket,
 	}
 	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery", "comp"})
+	if request.MetaQuery != nil {
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
+			return nil, errors.New("MediaType and MediaTypes cannot be used simultaneously")
+		}
 
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes == nil {
+			request.MetaQuery.MediaTypes = &MetaQueryMediaTypes{
+				[]*string{request.MetaQuery.MediaType},
+			}
+		}
+	}
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
 		return nil, err
 	}

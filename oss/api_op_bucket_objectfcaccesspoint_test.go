@@ -81,15 +81,21 @@ func TestMarshalInput_CreateAccessPointForObjectProcess(t *testing.T) {
 		CreateAccessPointForObjectProcessConfiguration: &CreateAccessPointForObjectProcessConfiguration{
 			AccessPointName: Ptr("ap-01"),
 			ObjectProcessConfiguration: &ObjectProcessConfiguration{
-				AllowedFeatures: []string{"GetObject-Range"},
-				TransformationConfigurations: []TransformationConfiguration{
-					{
-						Actions: &AccessPointActions{
-							[]string{"GetObject"},
-						},
-						ContentTransformation: &ContentTransformation{
-							FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
-							FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+				AllowedFeatures: &AllowedFeatures{
+					[]*string{Ptr("GetObject-Range")},
+				},
+				TransformationConfigurations: &TransformationConfigurations{
+					TransformationConfiguration: []*TransformationConfiguration{
+						{
+							Actions: &AccessPointActions{
+								[]string{"GetObject"},
+							},
+							ContentTransformation: &ContentTransformation{
+								&FunctionCompute{
+									FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
+									FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+								},
+							},
 						},
 					},
 				},
@@ -1173,15 +1179,21 @@ func TestMarshalInput_PutAccessPointConfigForObjectProcess(t *testing.T) {
 		AccessPointForObjectProcessName: Ptr("ap-01"),
 		PutAccessPointConfigForObjectProcessConfiguration: &PutAccessPointConfigForObjectProcessConfiguration{
 			ObjectProcessConfiguration: &ObjectProcessConfiguration{
-				AllowedFeatures: []string{"GetObject-Range"},
-				TransformationConfigurations: []TransformationConfiguration{
-					{
-						Actions: &AccessPointActions{
-							[]string{"GetObject"},
-						},
-						ContentTransformation: &ContentTransformation{
-							FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
-							FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+				AllowedFeatures: &AllowedFeatures{
+					[]*string{Ptr("GetObject-Range")},
+				},
+				TransformationConfigurations: &TransformationConfigurations{
+					TransformationConfiguration: []*TransformationConfiguration{
+						{
+							Actions: &AccessPointActions{
+								[]string{"GetObject"},
+							},
+							ContentTransformation: &ContentTransformation{
+								&FunctionCompute{
+									FunctionArn:           Ptr("acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01"),
+									FunctionAssumeRoleArn: Ptr("acs:ram::111933544165****:role/aliyunfcdefaultrole"),
+								},
+							},
 						},
 					},
 				},
@@ -1393,9 +1405,9 @@ func TestUnmarshalOutput_GetAccessPointConfigForObjectProcess(t *testing.T) {
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
 	assert.True(t, *result.PublicAccessBlockConfiguration.BlockPublicAccess)
-	assert.Equal(t, result.ObjectProcessConfiguration.TransformationConfigurations[0].Actions.Actions[0], "getobject")
-	assert.Equal(t, *result.ObjectProcessConfiguration.TransformationConfigurations[0].ContentTransformation.FunctionAssumeRoleArn, "acs:ram::111933544165****:role/aliyunfcdefaultrole")
-	assert.Equal(t, *result.ObjectProcessConfiguration.TransformationConfigurations[0].ContentTransformation.FunctionArn, "acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01")
+	assert.Equal(t, result.ObjectProcessConfiguration.TransformationConfigurations.TransformationConfiguration[0].Actions.Actions[0], "getobject")
+	assert.Equal(t, *result.ObjectProcessConfiguration.TransformationConfigurations.TransformationConfiguration[0].ContentTransformation.FunctionCompute.FunctionAssumeRoleArn, "acs:ram::111933544165****:role/aliyunfcdefaultrole")
+	assert.Equal(t, *result.ObjectProcessConfiguration.TransformationConfigurations.TransformationConfiguration[0].ContentTransformation.FunctionCompute.FunctionArn, "acs:fc:cn-qingdao:111933544165****:services/test-oss-fc.LATEST/functions/fc-01")
 	body = `<?xml version="1.0" encoding="UTF-8"?>
 		<Error>
 		<Code>NoSuchBucket</Code>

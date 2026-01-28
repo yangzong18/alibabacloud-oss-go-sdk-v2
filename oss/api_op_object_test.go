@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/signer"
 	"io"
@@ -2359,6 +2360,43 @@ func TestMarshalInput_RestoreObject(t *testing.T) {
 	assert.Contains(t, err.Error(), "missing required field")
 
 	request = &RestoreObjectRequest{
+		Bucket:       Ptr("oss-bucket"),
+		Key:          Ptr("oss-key"),
+		RequestPayer: Ptr("requester"),
+		RestoreRequest: &RestoreRequest{
+			Days: int32(2),
+			Tier: Ptr("Standard"),
+			JobParameters: &JobParameters{
+				Tier: Ptr("Standard"),
+			},
+		},
+	}
+	input = &OperationInput{
+		OpName: "RestoreObject",
+		Method: "POST",
+		Bucket: request.Bucket,
+		Key:    request.Key,
+		Parameters: map[string]string{
+			"restore": "",
+		},
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+	}
+	if request.RestoreRequest != nil {
+		if request.RestoreRequest.Tier != nil && (request.RestoreRequest.JobParameters != nil && request.RestoreRequest.JobParameters.Tier != nil) {
+			err = errors.New("JobParameters.Tier and Tier cannot be used simultaneously")
+		}
+		if request.RestoreRequest.Tier != nil && request.RestoreRequest.JobParameters == nil {
+			request.RestoreRequest.JobParameters = &JobParameters{
+				Tier: request.RestoreRequest.Tier,
+			}
+		}
+	}
+	assert.NotNil(t, err)
+	assert.Equal(t, err.Error(), "JobParameters.Tier and Tier cannot be used simultaneously")
+
+	request = &RestoreObjectRequest{
 		Bucket: Ptr("oss-bucket"),
 		Key:    Ptr("oss-key"),
 	}
@@ -2425,6 +2463,17 @@ func TestMarshalInput_RestoreObject(t *testing.T) {
 			HTTPHeaderContentType: contentTypeXML,
 		},
 	}
+	if request.RestoreRequest != nil {
+		if request.RestoreRequest.Tier != nil && (request.RestoreRequest.JobParameters != nil && request.RestoreRequest.JobParameters.Tier != nil) {
+			err = errors.New("JobParameters.Tier and Tier cannot be used simultaneously")
+		}
+		if request.RestoreRequest.Tier != nil && request.RestoreRequest.JobParameters == nil {
+			request.RestoreRequest.JobParameters = &JobParameters{
+				Tier: request.RestoreRequest.Tier,
+			}
+		}
+	}
+	assert.Nil(t, err)
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-key")
@@ -2440,7 +2489,9 @@ func TestMarshalInput_RestoreObject(t *testing.T) {
 		RequestPayer: Ptr("requester"),
 		RestoreRequest: &RestoreRequest{
 			Days: int32(2),
-			Tier: Ptr("Standard"),
+			JobParameters: &JobParameters{
+				Tier: Ptr("Standard"),
+			},
 		},
 	}
 	input = &OperationInput{
@@ -2455,6 +2506,17 @@ func TestMarshalInput_RestoreObject(t *testing.T) {
 			HTTPHeaderContentType: contentTypeXML,
 		},
 	}
+	if request.RestoreRequest != nil {
+		if request.RestoreRequest.Tier != nil && (request.RestoreRequest.JobParameters != nil && request.RestoreRequest.JobParameters.Tier != nil) {
+			err = errors.New("JobParameters.Tier and Tier cannot be used simultaneously")
+		}
+		if request.RestoreRequest.Tier != nil && request.RestoreRequest.JobParameters == nil {
+			request.RestoreRequest.JobParameters = &JobParameters{
+				Tier: request.RestoreRequest.Tier,
+			}
+		}
+	}
+	assert.Nil(t, err)
 	err = c.marshalInput(request, input, updateContentMd5)
 	assert.Equal(t, *input.Bucket, "oss-bucket")
 	assert.Equal(t, *input.Key, "oss-key")

@@ -2,6 +2,7 @@ package oss
 
 import (
 	"bytes"
+	"errors"
 	"html"
 	"io"
 	"net/http"
@@ -391,17 +392,167 @@ func TestMarshalInput_DoMetaQuery(t *testing.T) {
 	assert.Nil(t, err)
 	body, _ := io.ReadAll(input.Body)
 	assert.Equal(t, html.UnescapeString(string(body)), "<MetaQuery><MaxResults>5</MaxResults><Query>{\"Field\": \"Size\",\"Value\": \"1048576\",\"Operation\": \"gt\"}</Query><Sort>Size</Sort><Order>asc</Order><Aggregations><Aggregation><Field>Size</Field><Operation>sum</Operation></Aggregation><Aggregation><Field>Size</Field><Operation>max</Operation></Aggregation></Aggregations><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken></MetaQuery>")
+	request = &DoMetaQueryRequest{
+		Bucket: Ptr("bucket"),
+		Mode:   Ptr("semantic"),
+		MetaQuery: &MetaQuery{
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaType:   Ptr("image"),
+			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
+		},
+	}
+	input = &OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"comp":      "query",
+			"metaQuery": "",
+		},
+		Bucket: request.Bucket,
+	}
+	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery", "comp"})
+	if request.MetaQuery != nil {
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
+			err = errors.New("MediaType and MediaTypes cannot be used simultaneously")
+		}
+
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes == nil {
+			request.MetaQuery.MediaTypes = &MetaQueryMediaTypes{
+				[]*string{request.MetaQuery.MediaType},
+			}
+		}
+	}
+	assert.Nil(t, err)
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["mode"], "semantic")
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
 
 	request = &DoMetaQueryRequest{
 		Bucket: Ptr("bucket"),
 		Mode:   Ptr("semantic"),
 		MetaQuery: &MetaQuery{
-			NextToken:  Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
-			MaxResults: Ptr(int64(99)),
-			Query:      Ptr(`Overlook the snow-covered forest`),
-			MediaTypes: &MetaQueryMediaTypes{
-				MediaTypes: []string{"image"},
-			},
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaType:   Ptr("image"),
+			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
+		},
+	}
+	input = &OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"comp":      "query",
+			"metaQuery": "",
+		},
+		Bucket: request.Bucket,
+	}
+
+	if request.MetaQuery != nil {
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
+			err = errors.New("MediaType and MediaTypes cannot be used simultaneously")
+		}
+
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes == nil {
+			request.MetaQuery.MediaTypes = &MetaQueryMediaTypes{
+				[]*string{request.MetaQuery.MediaType},
+			}
+		}
+	}
+	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery", "comp"})
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["mode"], "semantic")
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
+
+	request = &DoMetaQueryRequest{
+		Bucket: Ptr("bucket"),
+		Mode:   Ptr("semantic"),
+		MetaQuery: &MetaQuery{
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaType:   Ptr("image"),
+			MediaTypes:  &MetaQueryMediaTypes{MediaType: []*string{Ptr("image")}},
+			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
+		},
+	}
+	input = &OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"comp":      "query",
+			"metaQuery": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if request.MetaQuery != nil {
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes != nil {
+			err = errors.New("MediaType and MediaTypes cannot be used simultaneously")
+		}
+
+		if request.MetaQuery.MediaType != nil && request.MetaQuery.MediaTypes == nil {
+			request.MetaQuery.MediaTypes = &MetaQueryMediaTypes{
+				[]*string{request.MetaQuery.MediaType},
+			}
+		}
+	}
+	assert.NotNil(t, err)
+	assert.Equal(t, "MediaType and MediaTypes cannot be used simultaneously", err.Error())
+
+	request = &DoMetaQueryRequest{
+		Bucket: Ptr("bucket"),
+		Mode:   Ptr("semantic"),
+		MetaQuery: &MetaQuery{
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaTypes:  &MetaQueryMediaTypes{MediaType: []*string{Ptr("image")}},
+			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
+		},
+	}
+	input = &OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			HTTPHeaderContentType: contentTypeXML,
+		},
+		Parameters: map[string]string{
+			"comp":      "query",
+			"metaQuery": "",
+		},
+		Bucket: request.Bucket,
+	}
+	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery", "comp"})
+
+	err = c.marshalInput(request, input, updateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, input.Parameters["mode"], "semantic")
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
+
+	request = &DoMetaQueryRequest{
+		Bucket: Ptr("bucket"),
+		Mode:   Ptr("semantic"),
+		MetaQuery: &MetaQuery{
+			NextToken:   Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  Ptr(int64(99)),
+			Query:       Ptr(`Overlook the snow-covered forest`),
+			MediaTypes:  &MetaQueryMediaTypes{MediaType: []*string{Ptr("image"), Ptr("video")}},
 			SimpleQuery: Ptr(`{"Operation":"gt", "Field": "Size", "Value": "30"}`),
 		},
 	}
@@ -422,7 +573,7 @@ func TestMarshalInput_DoMetaQuery(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, input.Parameters["mode"], "semantic")
 	body, _ = io.ReadAll(input.Body)
-	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
+	assert.Equal(t, html.UnescapeString(string(body)), `<MetaQuery><MaxResults>99</MaxResults><Query>Overlook the snow-covered forest</Query><NextToken>MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****</NextToken><MediaTypes><MediaType>image</MediaType><MediaType>video</MediaType></MediaTypes><SimpleQuery>{"Operation":"gt", "Field": "Size", "Value": "30"}</SimpleQuery></MetaQuery>`)
 }
 
 func TestUnmarshalOutput_DoMetaQuery(t *testing.T) {
