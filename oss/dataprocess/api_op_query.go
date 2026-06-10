@@ -243,7 +243,7 @@ type Insights struct {
 
 // AggregationGroup represents a group of aggregation results
 type AggregationGroup struct {
-	XMLName xml.Name `xml:"Group"`
+	XMLName xml.Name `xml:"AggregationGroup"`
 	Value   *string  `xml:"Value,omitempty"`
 	Count   *int64   `xml:"Count,omitempty"`
 }
@@ -254,7 +254,7 @@ type Aggregation struct {
 	Operation         *string            `xml:"Operation,omitempty"`
 	Field             *string            `xml:"Field,omitempty"`
 	Value             *string            `xml:"Value,omitempty"`
-	AggregationGroups []AggregationGroup `xml:"Groups>Group,omitempty"`
+	AggregationGroups []AggregationGroup `xml:"Groups>AggregationGroup,omitempty"`
 }
 
 // CroppingSuggestion represents an image cropping suggestion
@@ -289,7 +289,6 @@ type SimpleQueryRequest struct {
 
 // SimpleQueryResult defines the result for SimpleQuery operation
 type SimpleQueryResult struct {
-	XMLName      xml.Name      `xml:"SimpleQueryResponse"`
 	Files        []File        `xml:"Files>File,omitempty"`
 	NextToken    *string       `xml:"NextToken,omitempty"`
 	MaxResults   *int32        `xml:"MaxResults,omitempty"`
@@ -449,11 +448,8 @@ type File struct {
 
 // SemanticQueryResult defines the result for SemanticQuery operation
 type SemanticQueryResult struct {
-	XMLName    xml.Name `xml:"SemanticQueryResponse"`
-	Files      []File   `xml:"Files>File,omitempty"`
-	NextToken  *string  `xml:"NextToken,omitempty"`
-	MaxResults *int32   `xml:"MaxResults,omitempty"`
-	TotalCount *int64   `xml:"TotalCount,omitempty"`
+	Files []File `xml:"Files>File,omitempty"`
+
 	oss.ResultCommon
 }
 
@@ -499,4 +495,341 @@ func (c *Client) SemanticQuery(ctx context.Context, request *SemanticQueryReques
 	}
 
 	return result, nil
+}
+
+type OpenMetaQueryRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	Mode *string `input:"query,mode,required"`
+
+	Role *string `input:"query,role"`
+
+	MetaQuery *OpenMetaQuery `input:"body,MetaQuery,xml"`
+
+	oss.RequestCommon
+}
+
+type OpenMetaQuery struct {
+	WorkflowParameters *WorkflowParameters `xml:"WorkflowParameters,omitempty"`
+
+	Filters *Filters `xml:"Filters,omitempty"`
+
+	NotificationAttributes *NotificationAttributes `xml:"NotificationAttributes>NotificationAttribute,omitempty"`
+
+	DatasetConfig *DatasetConfig `xml:"DatasetConfig,omitempty"`
+
+	IndexOptions *IndexOptions `xml:"IndexOptions,omitempty"`
+
+	RouteRule *RouteRule `xml:"RouteRule,omitempty"`
+}
+
+type Filters struct {
+	Filter []string `xml:"Filter,omitempty"`
+}
+
+type NotificationAttributes struct {
+	Notifications *Notifications `xml:"Notifications,omitempty"`
+	WithFields    *WithFields    `xml:"WithFields,omitempty"`
+}
+
+type Notifications struct {
+	Notification []Notification `xml:"Notification,omitempty"`
+}
+
+type WithFields struct {
+	WithField []string `xml:"WithField,omitempty"`
+}
+
+type Notification struct {
+	MNS *string `xml:"MNS,omitempty"`
+}
+
+type IndexOptions struct {
+	IgnoreObjectDelete *bool         `xml:"IgnoreObjectDelete,omitempty"`
+	IgnoreEvents       *IgnoreEvents `xml:"IgnoreEvents,omitempty"`
+}
+
+type IgnoreEvents struct {
+	IgnoreEvent []string `xml:"IgnoreEvent,omitempty"`
+}
+
+type RouteRule struct {
+	Type              *string `xml:"Type,omitempty"`
+	AutoCreateDataset *bool   `xml:"AutoCreateDataset,omitempty"`
+	OSSTagKey         *string `xml:"OSSTagKey,omitempty"`
+}
+
+type OpenMetaQueryResult struct {
+	oss.ResultCommon
+}
+
+// OpenMetaQuery Enables metadata management for a bucket. After you enable the metadata management feature for a bucket, Object Storage Service (OSS) creates a metadata index library for the bucket and creates metadata indexes for all objects in the bucket. After the metadata index library is created, OSS continues to perform quasi-real-time scans on incremental objects in the bucket and creates metadata indexes for the incremental objects.
+func (c *Client) OpenMetaQuery(ctx context.Context, request *OpenMetaQueryRequest, optFns ...func(*oss.Options)) (*OpenMetaQueryResult, error) {
+	var err error
+	if request == nil {
+		request = &OpenMetaQueryRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "OpenMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "openMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.client.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &OpenMetaQueryResult{}
+
+	if err = c.client.UnmarshalOutput(result, output); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type GetMetaQueryStatusRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	oss.RequestCommon
+}
+
+type GetMetaQueryStatusResult struct {
+	State                  *string                 `xml:"State,omitempty"`
+	Phase                  *string                 `xml:"Phase,omitempty"`
+	CreateTime             *string                 `xml:"CreateTime,omitempty"`
+	UpdateTime             *string                 `xml:"UpdateTime,omitempty"`
+	MetaQueryMode          *string                 `xml:"MetaQueryMode,omitempty"`
+	WorkflowParameters     *WorkflowParameters     `xml:"WorkflowParameters,omitempty"`
+	Filters                *Filters                `xml:"Filters,omitempty"`
+	IndexOptions           *IndexOptions           `xml:"IndexOptions,omitempty"`
+	RouteRule              *RouteRule              `xml:"RouteRule,omitempty"`
+	NotificationAttributes *NotificationAttributes `xml:"NotificationAttributes,omitempty"`
+	DatasetConfig          *DatasetConfig          `xml:"DatasetConfig,omitempty"`
+
+	oss.ResultCommon
+}
+
+// GetMetaQueryStatus Queries the information about the metadata index library of a bucket.
+func (c *Client) GetMetaQueryStatus(ctx context.Context, request *GetMetaQueryStatusRequest, optFns ...func(*oss.Options)) (*GetMetaQueryStatusResult, error) {
+	var err error
+	if request == nil {
+		request = &GetMetaQueryStatusRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "GetMetaQueryStatus",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "getMetaQueryStatus",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.client.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &GetMetaQueryStatusResult{}
+
+	if err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	}); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type DoMetaQueryRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	Mode *string `input:"query,mode,required"`
+
+	// The request body schema.
+	MetaQuery *DoMetaQuery `input:"body,MetaQuery,xml,required"`
+
+	oss.RequestCommon
+}
+
+type DoMetaQuery struct {
+	// The maximum number of objects to return. Valid values: 0 to 100. If this parameter is not set or is set to 0, up to 100 objects are returned.
+	MaxResults *int64 `xml:"MaxResults"`
+
+	// The query conditions. A query condition includes the following elements:*   Operation: the operator. Valid values: eq (equal to), gt (greater than), gte (greater than or equal to), lt (less than), lte (less than or equal to), match (fuzzy query), prefix (prefix query), and (AND), or (OR), and not (NOT).*   Field: the field name.*   Value: the field value.*   SubQueries: the subquery conditions. Options that are included in this element are the same as those of simple query. You need to set subquery conditions only when Operation is set to and, or, or not.
+	Query *string `xml:"Query"`
+
+	// The field based on which the results are sorted.
+	Sort *string `xml:"Sort"`
+
+	// The sort order.
+	Order *MetaQueryOrderType `xml:"Order"`
+
+	// The container that stores the information about aggregate operations.
+	Aggregations *MetaQueryAggregations `xml:"Aggregations"`
+
+	// The pagination token used to obtain information in the next request. The object information is returned in alphabetical order starting from the value of NextToken.
+	NextToken *string `xml:"NextToken"`
+
+	// The container that stores the type of multimedia.
+	MediaTypes *MetaQueryMediaTypes `xml:"MediaTypes"`
+
+	//The query conditions
+	SimpleQuery *string `xml:"SimpleQuery"`
+
+	WithoutTotalHits *string `xml:"WithoutTotalHits"`
+
+	SourceURI *string `xml:"SourceURI"`
+
+	SmartClusterIds *SmartClusterIds `xml:"SmartClusterIds"`
+}
+
+type SmartClusterIds struct {
+	SmartClusterId []string `xml:"SmartClusterId"`
+}
+
+type MetaQueryMediaTypes struct {
+	// The type of multimedia that you want to query. Valid values: image, video, audio, document
+	MediaTypes []string `xml:"MediaType"`
+}
+
+type MetaQueryAggregations struct {
+	// The container that stores the information about a single aggregate operation.
+	Aggregations []Aggregation `xml:"Aggregation"`
+}
+
+type MetaQueryGroups struct {
+	// The grouped aggregations.
+	Groups []MetaQueryGroup `xml:"Group"`
+}
+
+type MetaQueryGroup struct {
+	// The value for the grouped aggregation.
+	Value *string `xml:"Value"`
+
+	// The number of results in the grouped aggregation.
+	Count *int64 `xml:"Count"`
+}
+
+type DoMetaQueryResult struct {
+	// The token that is used for the next query when the total number of objects exceeds the value of MaxResults.The value of NextToken is used to return the unreturned results in the next query.This parameter has a value only when not all objects are returned.
+	NextToken *string `xml:"NextToken"`
+
+	TotalHits *int64 `xml:"TotalHits"`
+
+	// The list of file information.
+	Files []File `xml:"Files>File"`
+
+	// The list of file information.
+	Aggregations []Aggregation `xml:"Aggregations>Aggregation"`
+
+	oss.ResultCommon
+}
+
+// DoMetaQuery Queries the objects in a bucket that meet the specified conditions by using the data indexing feature. The information about the objects is listed based on the specified fields and sorting methods.
+func (c *Client) DoMetaQuery(ctx context.Context, request *DoMetaQueryRequest, optFns ...func(*oss.Options)) (*DoMetaQueryResult, error) {
+	var err error
+	if request == nil {
+		request = &DoMetaQueryRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.client.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &DoMetaQueryResult{}
+
+	if err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	}); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+	return result, err
+}
+
+type CloseMetaQueryRequest struct {
+	// The name of the bucket.
+	Bucket *string `input:"host,bucket,required"`
+
+	oss.RequestCommon
+}
+
+type CloseMetaQueryResult struct {
+	oss.ResultCommon
+}
+
+// CloseMetaQuery Disables the metadata management feature for an Object Storage Service (OSS) bucket. After the metadata management feature is disabled for a bucket, OSS automatically deletes the metadata index library of the bucket and you cannot perform metadata indexing.
+func (c *Client) CloseMetaQuery(ctx context.Context, request *CloseMetaQueryRequest, optFns ...func(*oss.Options)) (*CloseMetaQueryResult, error) {
+	var err error
+	if request == nil {
+		request = &CloseMetaQueryRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "CloseMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "closeMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+	output, err := c.client.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &CloseMetaQueryResult{}
+
+	if err = c.client.UnmarshalOutput(result, output); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
 }

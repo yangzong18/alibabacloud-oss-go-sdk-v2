@@ -45,19 +45,14 @@ func main() {
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SimpleQueryRequest{
-		Bucket:           oss.Ptr(bucketName),
-		DatasetName:      oss.Ptr(datasetName),
-		Query:            oss.Ptr("{\"Field\": \"Size\",\"Value\": \"10\",\"Operation\": \"gt\"}"),
-		MaxResults:       oss.Ptr(int32(10)),
-		Sort:             oss.Ptr("Size"),
-		Order:            oss.Ptr("asc"),
-		WithFields:       oss.Ptr(`["Filename","Size"]`),
-		WithoutTotalHits: oss.Ptr(true),
+	request := &dataprocess.DeleteFileMetaRequest{
+		Bucket:      oss.Ptr(bucketName),
+		DatasetName: oss.Ptr(datasetName),
+		Uri:         oss.Ptr("oss://" + bucketName + "/test.txt"),
 	}
-	result, err := client.SimpleQuery(context.TODO(), request)
+	result, err := client.DeleteFileMeta(context.TODO(), request)
 	if err != nil {
-		log.Fatalf("failed to simple query %v", err)
+		log.Fatalf("failed to delete file meta %v", err)
 	}
-	log.Printf("simple query result:%#v\n", result)
+	log.Printf("delete file meta result:%#v\n", result)
 }

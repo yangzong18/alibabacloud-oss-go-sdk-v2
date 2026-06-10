@@ -11,15 +11,13 @@ import (
 )
 
 var (
-	region      string
-	bucketName  string
-	datasetName string
+	region     string
+	bucketName string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&bucketName, "bucket", "", "The name of the bucket.")
-	flag.StringVar(&datasetName, "dataset", "", "The name of the dataset.")
 }
 
 func main() {
@@ -34,30 +32,24 @@ func main() {
 		log.Fatalf("invalid parameters, region required")
 	}
 
-	if len(datasetName) == 0 {
-		flag.PrintDefaults()
-		log.Fatalf("invalid parameters, dataset name required")
-	}
-
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SimpleQueryRequest{
-		Bucket:           oss.Ptr(bucketName),
-		DatasetName:      oss.Ptr(datasetName),
-		Query:            oss.Ptr("{\"Field\": \"Size\",\"Value\": \"10\",\"Operation\": \"gt\"}"),
-		MaxResults:       oss.Ptr(int32(10)),
-		Sort:             oss.Ptr("Size"),
-		Order:            oss.Ptr("asc"),
-		WithFields:       oss.Ptr(`["Filename","Size"]`),
-		WithoutTotalHits: oss.Ptr(true),
+	request := &dataprocess.OpenMetaQueryRequest{
+		Bucket: oss.Ptr(bucketName),
+		Mode:   oss.Ptr("basic"),
+		MetaQuery: &dataprocess.OpenMetaQuery{
+			Filters: &dataprocess.Filters{
+				Filter: []string{"Size > 1024"},
+			},
+		},
 	}
-	result, err := client.SimpleQuery(context.TODO(), request)
+	result, err := client.OpenMetaQuery(context.TODO(), request)
 	if err != nil {
-		log.Fatalf("failed to simple query %v", err)
+		log.Fatalf("failed to open meta query %v", err)
 	}
-	log.Printf("simple query result:%#v\n", result)
+	log.Printf("open meta query result:%#v\n", result)
 }

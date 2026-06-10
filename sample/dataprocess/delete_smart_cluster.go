@@ -14,12 +14,14 @@ var (
 	region      string
 	bucketName  string
 	datasetName string
+	objectId    string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&bucketName, "bucket", "", "The name of the bucket.")
 	flag.StringVar(&datasetName, "dataset", "", "The name of the dataset.")
+	flag.StringVar(&objectId, "objectId", "", "The id of the object.")
 }
 
 func main() {
@@ -39,25 +41,24 @@ func main() {
 		log.Fatalf("invalid parameters, dataset name required")
 	}
 
+	if len(objectId) == 0 {
+		flag.PrintDefaults()
+		log.Fatalf("invalid parameters, object id required")
+	}
+
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SimpleQueryRequest{
-		Bucket:           oss.Ptr(bucketName),
-		DatasetName:      oss.Ptr(datasetName),
-		Query:            oss.Ptr("{\"Field\": \"Size\",\"Value\": \"10\",\"Operation\": \"gt\"}"),
-		MaxResults:       oss.Ptr(int32(10)),
-		Sort:             oss.Ptr("Size"),
-		Order:            oss.Ptr("asc"),
-		WithFields:       oss.Ptr(`["Filename","Size"]`),
-		WithoutTotalHits: oss.Ptr(true),
-	}
-	result, err := client.SimpleQuery(context.TODO(), request)
+	result, err := client.DeleteSmartCluster(context.TODO(), &dataprocess.DeleteSmartClusterRequest{
+		Bucket:      oss.Ptr(bucketName),
+		DatasetName: oss.Ptr(datasetName),
+		ObjectId:    oss.Ptr(objectId),
+	})
 	if err != nil {
-		log.Fatalf("failed to simple query %v", err)
+		log.Fatalf("failed to delete smart cluster %v", err)
 	}
-	log.Printf("simple query result:%#v\n", result)
+	log.Printf("delete smart cluster result:%#v\n", result)
 }

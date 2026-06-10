@@ -3,28 +3,27 @@ package dataprocess
 import (
 	"context"
 	"encoding/xml"
+
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 )
 
 // Dataset represents a dataset in OSS Data Process
 type Dataset struct {
-	XMLName                  xml.Name            `xml:"Dataset"`
-	BindCount                *int64              `xml:"BindCount,omitempty"`
-	CreateTime               *string             `xml:"CreateTime,omitempty"`
-	DatasetMaxBindCount      *int64              `xml:"DatasetMaxBindCount,omitempty"`
-	DatasetMaxEntityCount    *int64              `xml:"DatasetMaxEntityCount,omitempty"`
-	DatasetMaxFileCount      *int64              `xml:"DatasetMaxFileCount,omitempty"`
-	DatasetMaxRelationCount  *int64              `xml:"DatasetMaxRelationCount,omitempty"`
-	DatasetMaxTotalFileSize  *int64              `xml:"DatasetMaxTotalFileSize,omitempty"`
-	DatasetName              *string             `xml:"DatasetName,omitempty"`
-	Description              *string             `xml:"Description,omitempty"`
-	FileCount                *int64              `xml:"FileCount,omitempty"`
-	TemplateId               *string             `xml:"TemplateId,omitempty"`
-	TotalFileSize            *int64              `xml:"TotalFileSize,omitempty"`
-	UpdateTime               *string             `xml:"UpdateTime,omitempty"`
-	WorkflowParameters       *WorkflowParameters `xml:"WorkflowParameters,omitempty"`
-	WorkflowParametersString *string             `xml:"WorkflowParametersString,omitempty"`
-	DatasetConfig            *DatasetConfig      `xml:"DatasetConfig,omitempty"`
+	XMLName                 xml.Name            `xml:"Dataset"`
+	BindCount               *int64              `xml:"BindCount,omitempty"`
+	CreateTime              *string             `xml:"CreateTime,omitempty"`
+	DatasetMaxBindCount     *int64              `xml:"DatasetMaxBindCount,omitempty"`
+	DatasetMaxEntityCount   *int64              `xml:"DatasetMaxEntityCount,omitempty"`
+	DatasetMaxFileCount     *int64              `xml:"DatasetMaxFileCount,omitempty"`
+	DatasetMaxRelationCount *int64              `xml:"DatasetMaxRelationCount,omitempty"`
+	DatasetMaxTotalFileSize *int64              `xml:"DatasetMaxTotalFileSize,omitempty"`
+	DatasetName             *string             `xml:"DatasetName,omitempty"`
+	Description             *string             `xml:"Description,omitempty"`
+	FileCount               *int64              `xml:"FileCount,omitempty"`
+	TotalFileSize           *int64              `xml:"TotalFileSize,omitempty"`
+	UpdateTime              *string             `xml:"UpdateTime,omitempty"`
+	WorkflowParameters      *WorkflowParameters `xml:"WorkflowParameters,omitempty"`
+	DatasetConfig           *DatasetConfig      `xml:"DatasetConfig,omitempty"`
 }
 
 // WorkflowParameters represents the workflow parameters configuration
@@ -43,20 +42,92 @@ type WorkflowParameter struct {
 
 // DatasetConfig represents the dataset configuration
 type DatasetConfig struct {
-	XMLName  xml.Name        `xml:"DatasetConfig"`
-	Insights *InsightsConfig `xml:"Insights,omitempty"`
+	XMLName      xml.Name        `xml:"DatasetConfig"`
+	Insights     *InsightsConfig `xml:"Insights,omitempty"`
+	SmartCluster *SmartCluster   `xml:"SmartCluster,omitempty"`
+	ReverseImage *ReverseImage   `xml:"ReverseImage,omitempty"`
+}
+
+type SmartCluster struct {
+	Figure *SmartClusterFigure `xml:"Figure,omitempty"`
+}
+
+type SmartClusterFigure struct {
+	AutoGenerate    *bool    `xml:"AutoGenerate,omitempty"`
+	AutoClustering  *bool    `xml:"AutoClustering,omitempty"`
+	MinEntityCount  *int64   `xml:"MinEntityCount,omitempty"`
+	EnabledFeatures []string `xml:"EnabledFeatures,omitempty"`
+}
+
+type ReverseImage struct {
+	Image *Enable `xml:"Image,omitempty"`
+	Video *Enable `xml:"Video,omitempty"`
+}
+
+// Enable is a generic configuration model containing a single Enable field.
+type Enable struct {
+	Enable *bool `xml:"Enable"`
 }
 
 // InsightsConfig represents the insights configuration
 type InsightsConfig struct {
-	XMLName     xml.Name `xml:"Insights"`
-	EnableLabel *bool    `xml:"EnableLabel,omitempty"`
-	EnableOCR   *bool    `xml:"EnableOCR,omitempty"`
-	EnableFace  *bool    `xml:"EnableFace,omitempty"`
-	EnableImage *bool    `xml:"EnableImage,omitempty"`
-	EnableVideo *bool    `xml:"EnableVideo,omitempty"`
-	EnableAudio *bool    `xml:"EnableAudio,omitempty"`
-	Language    *string  `xml:"Language,omitempty"`
+	XMLName     xml.Name       `xml:"Insights"`
+	EnableLabel *bool          `xml:"EnableLabel,omitempty"`
+	EnableOCR   *bool          `xml:"EnableOCR,omitempty"`
+	EnableFace  *bool          `xml:"EnableFace,omitempty"`
+	EnableImage *bool          `xml:"EnableImage,omitempty"`
+	EnableVideo *bool          `xml:"EnableVideo,omitempty"`
+	EnableAudio *bool          `xml:"EnableAudio,omitempty"`
+	Language    *string        `xml:"Language,omitempty"`
+	Image       *InsightsImage `xml:"Image,omitempty"`
+	Video       *InsightsVideo `xml:"Video,omitempty"`
+}
+
+type InsightsImage struct {
+	Caption *InsightsImageCaption `xml:"Caption,omitempty"`
+}
+
+type InsightsVideo struct {
+	Caption     *InsightsVideoCaption `xml:"Caption,omitempty"`
+	Label       *InsightsVideoLabel   `xml:"Label,omitempty"`
+	MultiStream *Enable               `xml:"MultiStream,omitempty"`
+}
+
+type InsightsImageCaption struct {
+	Enable *bool   `xml:"Enable,omitempty"`
+	Prompt *string `xml:"Prompt,omitempty"`
+}
+
+type InsightsVideoCaption struct {
+	Enable          *bool   `xml:"Enable,omitempty"`
+	Prompt          *string `xml:"Prompt,omitempty"`
+	PersonReference *Enable `xml:"PersonReference,omitempty"`
+}
+
+type InsightsVideoLabel struct {
+	System      *InsightsVideoSystem      `xml:"System,omitempty"`
+	UserDefined *InsightsVideoUserDefined `xml:"UserDefined,omitempty"`
+	Highlight   *InsightsVideoHighlight   `xml:"Highlight,omitempty"`
+}
+
+type InsightsVideoSystem struct {
+	Enable *bool `xml:"Enable,omitempty"`
+}
+
+type InsightsVideoUserDefined struct {
+	Enable *bool       `xml:"Enable,omitempty"`
+	Mode   *string     `xml:"Mode,omitempty"`
+	Labels []LabelItem `xml:"Labels>Label,omitempty"`
+}
+
+type LabelItem struct {
+	Name        *string `xml:"Name,omitempty"`
+	Description *string `xml:"Description,omitempty"`
+}
+
+type InsightsVideoHighlight struct {
+	Enable *bool       `xml:"Enable,omitempty"`
+	Labels []LabelItem `xml:"Labels>Label,omitempty"`
 }
 
 // CreateDatasetRequest defines the request for creating a dataset
@@ -64,8 +135,6 @@ type CreateDatasetRequest struct {
 	Bucket             *string `input:"host,bucket,required"`
 	DatasetName        *string `input:"query,datasetName,required"`
 	Description        *string `input:"query,description"`
-	TemplateId         *string `input:"query,templateId"`
-	ClusterType        *string `input:"query,clusterType"`
 	WorkflowParameters *string `input:"query,workflowParameters"`
 	DatasetConfig      *string `input:"query,datasetConfig"`
 	oss.RequestCommon
@@ -186,7 +255,6 @@ type UpdateDatasetRequest struct {
 	Bucket             *string `input:"host,bucket,required"`
 	DatasetName        *string `input:"query,datasetName,required"`
 	Description        *string `input:"query,description"`
-	TemplateId         *string `input:"query,templateId"`
 	WorkflowParameters *string `input:"query,workflowParameters"`
 	DatasetConfig      *string `input:"query,datasetConfig"`
 	oss.RequestCommon
@@ -354,3 +422,5 @@ func (c *Client) ListDatasets(ctx context.Context, request *ListDatasetsRequest,
 
 	return result, nil
 }
+
+
