@@ -2,17 +2,26 @@ name: Check Sample Code Compilation
 
 on:
   push:
+    branches:
+      - master
+      - 'dev-*'
     paths:
       - 'sample/**'
       - 'oss/**'
       - 'go.mod'
       - 'go.sum'
   pull_request:
+    branches:
+      - master
     paths:
       - 'sample/**'
       - 'oss/**'
       - 'go.mod'
       - 'go.sum'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-samples:
