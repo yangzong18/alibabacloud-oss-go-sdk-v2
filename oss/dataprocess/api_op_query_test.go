@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/signer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -51,7 +50,6 @@ func TestMarshalInput_SimpleQuery(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
 	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field, DatasetName.")
@@ -121,7 +119,7 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
 	var output *oss.OperationOutput
 	var err error
 	body := `<?xml version="1.0" encoding="UTF-8"?>
-<SimpleQueryResponse>
+<MetaQuery>
   <NextToken>MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx****</NextToken>
   <TotalHits>150</TotalHits>
   <Files>
@@ -141,18 +139,18 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <Group>
+        <AggregationGroup>
           <Value>document</Value>
           <Count>80</Count>
-        </Group>
-        <Group>
+        </AggregationGroup>
+        <AggregationGroup>
           <Value>image</Value>
           <Count>70</Count>
-        </Group>
+        </AggregationGroup>
       </Groups>
     </Aggregation>
   </Aggregations>
-</SimpleQueryResponse>`
+</MetaQuery>`
 	output = &oss.OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
@@ -195,7 +193,7 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
 	assert.Equal(t, *result.Aggregations[0].AggregationGroups[1].Count, int64(70))
 
 	body = `<?xml version="1.0" encoding="UTF-8"?>
-<SimpleQueryResponse>
+<MetaQuery>
   <NextToken>MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx****</NextToken>
   <TotalHits>258</TotalHits>
   <Files>
@@ -229,18 +227,18 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <Group>
+        <AggregationGroup>
           <Value>image</Value>
           <Count>200</Count>
-        </Group>
-        <Group>
+        </AggregationGroup>
+        <AggregationGroup>
           <Value>video</Value>
           <Count>58</Count>
-        </Group>
+        </AggregationGroup>
       </Groups>
     </Aggregation>
   </Aggregations>
-</SimpleQueryResponse>
+</MetaQuery>
 `
 	output = &oss.OperationOutput{
 		StatusCode: 200,
@@ -358,7 +356,6 @@ func TestMarshalInput_SemanticQuery(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
 	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "missing required field, DatasetName.")
@@ -424,7 +421,7 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 	var output *oss.OperationOutput
 	var err error
 	body := `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
-<SemanticQueryResponse>
+<MetaQuery>
 <Files>
       <File>
           <Addresses/>
@@ -516,7 +513,7 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
           <VideoWidth>1920</VideoWidth>
       </File>
   </Files>
-</SemanticQueryResponse>`
+</MetaQuery>`
 	output = &oss.OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
@@ -610,7 +607,7 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 	assert.Equal(t, *result.Files[0].VideoStreams[0].TimeBase, "1/90000")
 
 	body = `<?xml version="1.0" encoding="UTF-8"?>
-<SemanticQueryResponse>
+<MetaQuery>
     <Files>
         <File>
             <Addresses/>
@@ -716,7 +713,7 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
             <VideoWidth>640</VideoWidth>
         </File>
     </Files>
-</SemanticQueryResponse>`
+</MetaQuery>`
 	output = &oss.OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
@@ -829,6 +826,899 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 		defer output.Body.Close()
 		return xml.NewDecoder(output.Body).Decode(result)
 	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "Bad Request")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_OpenMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *OpenMetaQueryRequest
+	var input *oss.OperationInput
+	var err error
+
+	request = &OpenMetaQueryRequest{}
+	input = &oss.OperationInput{
+		OpName: "OpenMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "openMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket.")
+
+	request = &OpenMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+	}
+	input = &oss.OperationInput{
+		OpName: "OpenMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "openMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Mode.")
+
+	request = &OpenMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Mode:   oss.Ptr("basic"),
+		Role:   oss.Ptr("my-role"),
+		MetaQuery: &OpenMetaQuery{
+			Filters: &Filters{
+				Filter: []string{
+					"Size > 0",
+					"ContentType = 'image/jpeg'",
+				},
+			},
+		},
+	}
+	input = &oss.OperationInput{
+		OpName: "OpenMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "openMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["mode"], "basic")
+	assert.Equal(t, input.Parameters["role"], "my-role")
+	body, _ := io.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<MetaQuery><Filters><Filter>Size &gt; 0</Filter><Filter>ContentType = &#39;image/jpeg&#39;</Filter></Filters></MetaQuery>")
+
+	request = &OpenMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Role:   oss.Ptr("AliyunMetaQueryDefaultRole"),
+		Mode:   oss.Ptr("semantic"),
+		MetaQuery: &OpenMetaQuery{
+			WorkflowParameters: &WorkflowParameters{
+				WorkflowParameter: []WorkflowParameter{
+					{
+						Name:  oss.Ptr("ImageInsightEnable"),
+						Value: oss.Ptr("True"),
+					},
+					{
+						Name:  oss.Ptr("VideoInsightEnable"),
+						Value: oss.Ptr("True"),
+					},
+				},
+			},
+			NotificationAttributes: &NotificationAttributes{
+				Notifications: &Notifications{
+					Notification: []Notification{
+						{
+							MNS: oss.Ptr("imm-index-notification"),
+						},
+					},
+				},
+				WithFields: &WithFields{
+					[]string{
+						"Insights",
+						"Labels",
+					},
+				},
+			},
+			IndexOptions: &IndexOptions{
+				IgnoreObjectDelete: oss.Ptr(true),
+			},
+			RouteRule: &RouteRule{
+				Type:              oss.Ptr("OSSTag"),
+				AutoCreateDataset: oss.Ptr(true),
+				OSSTagKey:         oss.Ptr("routing-dataset"),
+			},
+			DatasetConfig: &DatasetConfig{
+				Insights: &InsightsConfig{
+					Language: oss.Ptr("en"),
+				},
+			},
+		},
+	}
+	input = &oss.OperationInput{
+		OpName: "OpenMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "openMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["mode"], "semantic")
+	assert.Equal(t, input.Parameters["role"], "AliyunMetaQueryDefaultRole")
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<MetaQuery><WorkflowParameters><WorkflowParameter><Name>ImageInsightEnable</Name><Value>True</Value></WorkflowParameter><WorkflowParameter><Name>VideoInsightEnable</Name><Value>True</Value></WorkflowParameter></WorkflowParameters><NotificationAttributes><NotificationAttribute><Notifications><Notification><MNS>imm-index-notification</MNS></Notification></Notifications><WithFields><WithField>Insights</WithField><WithField>Labels</WithField></WithFields></NotificationAttribute></NotificationAttributes><DatasetConfig><Insights><Language>en</Language></Insights></DatasetConfig><IndexOptions><IgnoreObjectDelete>true</IgnoreObjectDelete></IndexOptions><RouteRule><Type>OSSTag</Type><AutoCreateDataset>true</AutoCreateDataset><OSSTagKey>routing-dataset</OSSTagKey></RouteRule></MetaQuery>")
+}
+
+func TestUnmarshalOutput_OpenMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *oss.OperationOutput
+	var err error
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &OpenMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &OpenMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+
+	output = &oss.OperationOutput{
+		StatusCode: 400,
+		Status:     "Bad Request",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &OpenMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "Bad Request")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_GetMetaQueryStatus(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *GetMetaQueryStatusRequest
+	var input *oss.OperationInput
+	var err error
+
+	request = &GetMetaQueryStatusRequest{}
+	input = &oss.OperationInput{
+		OpName: "GetMetaQueryStatus",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "getMetaQueryStatus",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket.")
+
+	request = &GetMetaQueryStatusRequest{
+		Bucket: oss.Ptr("bucket"),
+	}
+	input = &oss.OperationInput{
+		OpName: "GetMetaQueryStatus",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "getMetaQueryStatus",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, "bucket", *input.Bucket)
+	assert.Equal(t, "getMetaQueryStatus", input.Parameters["action"])
+}
+
+func TestUnmarshalOutput_GetMetaQueryStatus(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *oss.OperationOutput
+	var err error
+	body := `<?xml version="1.0" encoding="UTF-8"?>
+<MetaQueryStatus>
+  <State>Running</State>
+  <Phase>IncrementalScanning</Phase>
+  <CreateTime>2026-05-20T08:00:00.000+08:00</CreateTime>
+  <UpdateTime>2026-05-20T08:30:00.000+08:00</UpdateTime>
+  <MetaQueryMode>semantic</MetaQueryMode>
+  <WorkflowParameters>
+    <WorkflowParameter>
+      <Name>ImageInsightEnable</Name>
+      <Value>True</Value>
+    </WorkflowParameter>
+  </WorkflowParameters>
+  <Filters>
+    <Filter>Size > 1024,FileModifiedTime > 2025-06-03T09:20:47.999Z</Filter>
+    <Filter>Filename prefix (YWEvYmIv)</Filter>
+  </Filters>
+  <IndexOptions>
+    <IgnoreObjectDelete>True</IgnoreObjectDelete>
+  </IndexOptions>
+  <RouteRule>
+    <Type>OSSTag</Type>
+    <AutoCreateDataset>True</AutoCreateDataset>
+    <OSSTagKey>routing-dataset</OSSTagKey>
+  </RouteRule>
+  <NotificationAttributes>
+    <Notifications>
+      <Notification>
+        <MNS>imm-index-notification</MNS>
+      </Notification>
+    </Notifications>
+    <WithFields>
+      <WithField>Insights</WithField>
+    </WithFields>
+  </NotificationAttributes>
+  <DatasetConfig>
+    <Insights>
+      <Language>en</Language>
+    </Insights>
+  </DatasetConfig>
+</MetaQueryStatus>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &GetMetaQueryStatusResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.State, "Running")
+	assert.Equal(t, *result.Phase, "IncrementalScanning")
+	assert.Equal(t, *result.CreateTime, "2026-05-20T08:00:00.000+08:00")
+	assert.Equal(t, *result.UpdateTime, "2026-05-20T08:30:00.000+08:00")
+	assert.Equal(t, *result.MetaQueryMode, "semantic")
+	assert.Equal(t, *result.WorkflowParameters.WorkflowParameter[0].Name, "ImageInsightEnable")
+	assert.Equal(t, *result.WorkflowParameters.WorkflowParameter[0].Value, "True")
+	assert.Equal(t, result.Filters.Filter[0], "Size > 1024,FileModifiedTime > 2025-06-03T09:20:47.999Z")
+	assert.Equal(t, result.Filters.Filter[1], "Filename prefix (YWEvYmIv)")
+	assert.Equal(t, *result.IndexOptions.IgnoreObjectDelete, true)
+	assert.Equal(t, *result.RouteRule.Type, "OSSTag")
+	assert.Equal(t, *result.RouteRule.AutoCreateDataset, true)
+	assert.Equal(t, *result.RouteRule.OSSTagKey, "routing-dataset")
+	assert.Equal(t, *result.NotificationAttributes.Notifications.Notification[0].MNS, "imm-index-notification")
+	assert.Equal(t, result.NotificationAttributes.WithFields.WithField[0], "Insights")
+	assert.Equal(t, *result.DatasetConfig.Insights.Language, "en")
+
+	body = `<MetaQueryStatus>
+    <State>Running</State>
+    <Phase>IncrementalScanning</Phase>
+    <CreateTime>2026-06-05T10:49:57.109295646+08:00</CreateTime>
+    <UpdateTime>2026-06-05T10:49:59.411578836+08:00</UpdateTime>
+    <MetaQueryMode>basic</MetaQueryMode>
+    <RouteRule>
+        <Type>default</Type>
+        <AutoCreateDataset>True</AutoCreateDataset>
+    </RouteRule>
+    <WorkflowParameters>
+    </WorkflowParameters>
+    <Filters>
+    </Filters>
+    <DatasetConfig>
+        <ReverseImage>
+            <Video>
+                <Enable>false</Enable>
+            </Video>
+            <Image>
+                <Enable>false</Enable>
+            </Image>
+        </ReverseImage>
+        <Insights>
+            <Language>zh-Hans</Language>
+            <Image>
+                <Caption>
+                    <Enable>false</Enable>
+                    <Prompt>
+                    </Prompt>
+                </Caption>
+            </Image>
+            <Video>
+                <Caption>
+                    <Enable>false</Enable>
+                    <Prompt>
+                    </Prompt>
+                    <PersonReference>
+                        <Enable>false</Enable>
+                    </PersonReference>
+                </Caption>
+                <Label>
+                    <System>
+                        <Enable>false</Enable>
+                    </System>
+                    <UserDefined>
+                        <Enable>false</Enable>
+                        <Labels>
+                        </Labels>
+                    </UserDefined>
+                    <Highlight>
+                        <Enable>false</Enable>
+                        <Labels>
+                        </Labels>
+                    </Highlight>
+                </Label>
+                <MultiStream>
+                    <Enable>false</Enable>
+                </MultiStream>
+            </Video>
+        </Insights>
+        <SmartCluster>
+            <Figure>
+                <AutoGenerate>false</AutoGenerate>
+                <AutoClustering>false</AutoClustering>
+                <MinEntityCount>3</MinEntityCount>
+                <EnabledFeatures>face</EnabledFeatures>
+            </Figure>
+        </SmartCluster>
+    </DatasetConfig>
+</MetaQueryStatus>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &GetMetaQueryStatusResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.State, "Running")
+	assert.Equal(t, *result.Phase, "IncrementalScanning")
+	assert.Equal(t, *result.CreateTime, "2026-06-05T10:49:57.109295646+08:00")
+	assert.Equal(t, *result.UpdateTime, "2026-06-05T10:49:59.411578836+08:00")
+	assert.Equal(t, *result.MetaQueryMode, "basic")
+	assert.Equal(t, *result.RouteRule.Type, "default")
+	assert.Equal(t, *result.RouteRule.AutoCreateDataset, true)
+	assert.Equal(t, *result.DatasetConfig.ReverseImage.Video.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.ReverseImage.Image.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Language, "zh-Hans")
+	assert.Equal(t, *result.DatasetConfig.Insights.Image.Caption.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.Caption.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.Caption.PersonReference.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.Label.System.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.Label.UserDefined.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.Label.Highlight.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.Insights.Video.MultiStream.Enable, false)
+	assert.Equal(t, *result.DatasetConfig.SmartCluster.Figure.AutoGenerate, false)
+	assert.Equal(t, *result.DatasetConfig.SmartCluster.Figure.AutoClustering, false)
+	assert.Equal(t, *result.DatasetConfig.SmartCluster.Figure.MinEntityCount, int64(3))
+	assert.Equal(t, result.DatasetConfig.SmartCluster.Figure.EnabledFeatures[0], "face")
+
+	output = &oss.OperationOutput{
+		StatusCode: 400,
+		Status:     "Bad Request",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &GetMetaQueryStatusResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "Bad Request")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_DoMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *DoMetaQueryRequest
+	var input *oss.OperationInput
+	var err error
+
+	request = &DoMetaQueryRequest{}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket.")
+
+	request = &DoMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+	}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Mode.")
+
+	request = &DoMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Mode:   oss.Ptr("basic"),
+	}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, MetaQuery.")
+
+	request = &DoMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Mode:   oss.Ptr("basic"),
+		MetaQuery: &DoMetaQuery{
+			Query: oss.Ptr(`{"Field":"Size","Operation":"gt","Value":"1048576"}`),
+			Sort:  oss.Ptr("Size"),
+			Order: oss.Ptr(MetaQueryOrderDesc),
+			Aggregations: &MetaQueryAggregations{
+				[]Aggregation{
+					{
+						Field:     oss.Ptr("Size"),
+						Operation: oss.Ptr("sum"),
+					},
+				},
+			},
+			MaxResults: oss.Ptr(int64(100)),
+		},
+	}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, "bucket", *input.Bucket)
+	assert.Equal(t, "doMetaQuery", input.Parameters["action"])
+	assert.Equal(t, "basic", input.Parameters["mode"])
+	body, _ := io.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<MetaQuery><MaxResults>100</MaxResults><Query>{&#34;Field&#34;:&#34;Size&#34;,&#34;Operation&#34;:&#34;gt&#34;,&#34;Value&#34;:&#34;1048576&#34;}</Query><Sort>Size</Sort><Order>desc</Order><Aggregations><Aggregation><Operation>sum</Operation><Field>Size</Field><Groups></Groups></Aggregation></Aggregations></MetaQuery>")
+
+	request = &DoMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Mode:   oss.Ptr("semantic"),
+		MetaQuery: &DoMetaQuery{
+			Query: oss.Ptr(`The cat in the living room`),
+			MediaTypes: &MetaQueryMediaTypes{
+				[]string{"image"},
+			},
+			SimpleQuery: oss.Ptr(`{"Field":"Size","Operation":"gt","Value":"102400"}`),
+			MaxResults:  oss.Ptr(int64(20)),
+		},
+	}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, "bucket", *input.Bucket)
+	assert.Equal(t, "doMetaQuery", input.Parameters["action"])
+	assert.Equal(t, "semantic", input.Parameters["mode"])
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<MetaQuery><MaxResults>20</MaxResults><Query>The cat in the living room</Query><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{&#34;Field&#34;:&#34;Size&#34;,&#34;Operation&#34;:&#34;gt&#34;,&#34;Value&#34;:&#34;102400&#34;}</SimpleQuery></MetaQuery>")
+}
+
+func TestUnmarshalOutput_DoMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *oss.OperationOutput
+	var err error
+	body := `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<MetaQuery>
+    <NextToken>next-page-token-abc</NextToken>
+    <TotalHits>123</TotalHits>
+    <Files>
+        <File>
+            <Filename>photos/sunset.jpg</Filename>
+            <Size>2097152</Size>
+            <FileModifiedTime>2026-05-19T15:30:00.000+08:00</FileModifiedTime>
+            <ContentType>image/jpeg</ContentType>
+            <ObjectACL>default</ObjectACL>
+            <OSSStorageClass>Standard</OSSStorageClass>
+        </File>
+        <File>
+            <Filename>photos/mountain.png</Filename>
+            <Size>5242880</Size>
+        </File>
+    </Files>
+    <Aggregations>
+        <Aggregation>
+            <Field>Size</Field>
+            <Operation>sum</Operation>
+            <Value>12345678</Value>
+        </Aggregation>
+    </Aggregations>
+</MetaQuery>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &DoMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.NextToken, "next-page-token-abc")
+	assert.Equal(t, *result.TotalHits, int64(123))
+	assert.Equal(t, *result.Files[0].Filename, "photos/sunset.jpg")
+	assert.Equal(t, *result.Files[0].Size, int64(2097152))
+	assert.Equal(t, *result.Files[0].FileModifiedTime, "2026-05-19T15:30:00.000+08:00")
+	assert.Equal(t, *result.Files[0].ContentType, "image/jpeg")
+	assert.Equal(t, *result.Files[0].ObjectACL, "default")
+	assert.Equal(t, *result.Files[0].OSSStorageClass, "Standard")
+	assert.Equal(t, *result.Files[1].Filename, "photos/mountain.png")
+	assert.Equal(t, *result.Files[1].Size, int64(5242880))
+	assert.Equal(t, *result.Aggregations[0].Field, "Size")
+	assert.Equal(t, *result.Aggregations[0].Operation, "sum")
+	assert.Equal(t, *result.Aggregations[0].Value, "12345678")
+
+	body = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<MetaQuery>
+    <TotalHits>2</TotalHits>
+    <Files>
+        <File>
+            <Filename>photos/cat-in-living-room.jpg</Filename>
+            <Size>3145728</Size>
+            <OSSStorageClass>Standard</OSSStorageClass>
+            <Labels>
+                <Label>
+                    <LabelName>cat</LabelName>
+                    <LabelConfidence>0.98</LabelConfidence>
+                </Label>
+            </Labels>
+        </File>
+        <File>
+            <Filename>photos/kitten-sofa.jpg</Filename>
+            <Size>2621440</Size>
+        </File>
+    </Files>
+</MetaQuery>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &DoMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.TotalHits, int64(2))
+	assert.Equal(t, *result.Files[0].Filename, "photos/cat-in-living-room.jpg")
+	assert.Equal(t, *result.Files[0].Size, int64(3145728))
+	assert.Equal(t, *result.Files[0].OSSStorageClass, "Standard")
+	assert.Equal(t, *result.Files[0].Labels[0].LabelName, "cat")
+	assert.Equal(t, *result.Files[0].Labels[0].LabelConfidence, float64(0.98))
+	assert.Equal(t, *result.Files[1].Filename, "photos/kitten-sofa.jpg")
+	assert.Equal(t, *result.Files[1].Size, int64(2621440))
+
+	body = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<MetaQuery>
+    <TotalHits>50</TotalHits>
+    <Aggregations>
+        <Aggregation>
+            <Field>StorageClass</Field>
+            <Operation>group_by</Operation>
+            <Groups>
+                <AggregationGroup>
+                    <Value>Standard</Value>
+                    <Count>30</Count>
+                </AggregationGroup>
+                <AggregationGroup>
+                    <Value>IA</Value>
+                    <Count>20</Count>
+                </AggregationGroup>
+            </Groups>
+        </Aggregation>
+    </Aggregations>
+</MetaQuery>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &DoMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+	assert.Equal(t, *result.TotalHits, int64(50))
+	assert.Equal(t, len(result.Aggregations), 1)
+	assert.Equal(t, *result.Aggregations[0].Field, "StorageClass")
+	assert.Equal(t, *result.Aggregations[0].Operation, "group_by")
+	assert.Equal(t, *result.Aggregations[0].AggregationGroups[0].Value, "Standard")
+	assert.Equal(t, *result.Aggregations[0].AggregationGroups[0].Count, int64(30))
+	assert.Equal(t, *result.Aggregations[0].AggregationGroups[1].Value, "IA")
+	assert.Equal(t, *result.Aggregations[0].AggregationGroups[1].Count, int64(20))
+
+	output = &oss.OperationOutput{
+		StatusCode: 400,
+		Status:     "Bad Request",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &DoMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 400)
+	assert.Equal(t, result.Status, "Bad Request")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+}
+
+func TestMarshalInput_CloseMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var request *CloseMetaQueryRequest
+	var input *oss.OperationInput
+	var err error
+
+	request = &CloseMetaQueryRequest{}
+	input = &oss.OperationInput{
+		OpName: "CloseMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "closeMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "missing required field, Bucket.")
+
+	request = &CloseMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+	}
+	input = &oss.OperationInput{
+		OpName: "CloseMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "closeMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, "bucket", *input.Bucket)
+	assert.Equal(t, "closeMetaQuery", input.Parameters["action"])
+}
+
+func TestUnmarshalOutput_CloseMetaQuery(t *testing.T) {
+	c := Client{}
+	assert.NotNil(t, c)
+	var output *oss.OperationOutput
+	var err error
+
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result := &CloseMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output)
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, result.Headers.Get("Content-Type"), "application/xml")
+
+	output = &oss.OperationOutput{
+		StatusCode: 400,
+		Status:     "Bad Request",
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &CloseMetaQueryResult{}
+	err = c.client.UnmarshalOutput(result, output)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 400)
 	assert.Equal(t, result.Status, "Bad Request")

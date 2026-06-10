@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/signer"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -80,8 +79,6 @@ func TestMarshalInput_CreateDataset(t *testing.T) {
 		Bucket:      oss.Ptr("bucket"),
 		DatasetName: oss.Ptr("your_dataset"),
 		Description: oss.Ptr("this is a demo"),
-		TemplateId:  oss.Ptr("Official:OSSBasicMeta"),
-		ClusterType: oss.Ptr("auto"),
 		DatasetConfig: oss.Ptr(`{
   "Insights": {
     "EnableLabel": true,
@@ -106,14 +103,11 @@ func TestMarshalInput_CreateDataset(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
 	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "bucket")
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
 	assert.Equal(t, input.Parameters["description"], "this is a demo")
-	assert.Equal(t, input.Parameters["templateId"], "Official:OSSBasicMeta")
-	assert.Equal(t, input.Parameters["clusterType"], "auto")
 	assert.Equal(t, input.Parameters["datasetConfig"], "{\n  \"Insights\": {\n    \"EnableLabel\": true,\n    \"EnableOCR\": true,\n    \"EnableFace\": true,\n    \"EnableImage\": true,\n    \"EnableVideo\": true,\n    \"EnableAudio\": true,\n    \"Language\": \"zh\"\n  }\n}")
 }
 
@@ -126,8 +120,6 @@ func TestUnmarshalOutput_CreateDataset(t *testing.T) {
 <Dataset>
 <DatasetName>test-dataset</DatasetName>
 <WorkflowParameters></WorkflowParameters>
-<WorkflowParametersString></WorkflowParametersString>
-<TemplateId>Official:OSSBasicMeta</TemplateId>
 <CreateTime>2026-04-22T11:39:28.148283473+08:00</CreateTime>
 <UpdateTime>2026-04-22T11:39:28.148283473+08:00</UpdateTime>
 <Description>this is a demo</Description>
@@ -161,8 +153,6 @@ func TestUnmarshalOutput_CreateDataset(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, *result.Dataset.DatasetName, "test-dataset")
-	assert.Equal(t, *result.Dataset.WorkflowParametersString, "")
-	assert.Equal(t, *result.Dataset.TemplateId, "Official:OSSBasicMeta")
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
@@ -277,7 +267,6 @@ func TestMarshalInput_GetDataset(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
 	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "bucket")
@@ -293,9 +282,9 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 	body := `<GetDatasetResponse>
 <Dataset>
 <DatasetName>test-dataset</DatasetName>
-<WorkflowParameters></WorkflowParameters>
-<WorkflowParametersString></WorkflowParametersString>
-<TemplateId>Official:OSSBasicMeta</TemplateId>
+<WorkflowParameters>
+      <WorkflowParameter><Name>ImageInsightEnable</Name><Value>True</Value></WorkflowParameter>
+</WorkflowParameters>
 <CreateTime>2026-04-21T18:17:58.727923181+08:00</CreateTime>
 <UpdateTime>2026-04-21T18:17:58.727923181+08:00</UpdateTime>
 <Description>this is a demo</Description>
@@ -305,6 +294,8 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 <DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
 <DatasetMaxTotalFileSize>90000000000000000</DatasetMaxTotalFileSize>
 <DatasetConfig><Insights><Language>zh-Hans</Language></Insights></DatasetConfig>
+<FileCount>3456</FileCount>
+<TotalFileSize>10737418240</TotalFileSize>
 </Dataset>
 </GetDatasetResponse>`
 	output = &oss.OperationOutput{
@@ -329,9 +320,59 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, *result.Dataset.DatasetName, "test-dataset")
-	assert.Equal(t, result.Dataset.WorkflowParameters.WorkflowParameter, []WorkflowParameter(nil))
-	assert.Equal(t, *result.Dataset.WorkflowParametersString, "")
-	assert.Equal(t, *result.Dataset.TemplateId, "Official:OSSBasicMeta")
+	assert.Equal(t, *result.Dataset.WorkflowParameters.WorkflowParameter[0].Name, "ImageInsightEnable")
+	assert.Equal(t, *result.Dataset.WorkflowParameters.WorkflowParameter[0].Value, "True")
+	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-21T18:17:58.727923181+08:00")
+	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-21T18:17:58.727923181+08:00")
+	assert.Equal(t, *result.Dataset.Description, "this is a demo")
+	assert.Equal(t, *result.Dataset.DatasetMaxBindCount, int64(10))
+	assert.Equal(t, *result.Dataset.DatasetMaxFileCount, int64(100000000))
+	assert.Equal(t, *result.Dataset.DatasetMaxEntityCount, int64(10000000000))
+	assert.Equal(t, *result.Dataset.DatasetMaxRelationCount, int64(100000000000))
+	assert.Equal(t, *result.Dataset.DatasetMaxTotalFileSize, int64(90000000000000000))
+	assert.Equal(t, *result.Dataset.DatasetConfig.Insights.Language, "zh-Hans")
+	assert.Equal(t, *result.Dataset.FileCount, int64(3456))
+	assert.Equal(t, *result.Dataset.TotalFileSize, int64(10737418240))
+
+	body = `<GetDatasetResponse>
+<Dataset>
+<DatasetName>photos-2026</DatasetName>
+<WorkflowParameters></WorkflowParameters>
+<WorkflowParametersString></WorkflowParametersString>
+<TemplateId>Official:OSSBasicMeta</TemplateId>
+<CreateTime>2026-04-21T18:17:58.727923181+08:00</CreateTime>
+<UpdateTime>2026-04-21T18:17:58.727923181+08:00</UpdateTime>
+<Description>this is a demo</Description>
+<DatasetMaxBindCount>10</DatasetMaxBindCount>
+<DatasetMaxFileCount>100000000</DatasetMaxFileCount>
+<DatasetMaxEntityCount>10000000000</DatasetMaxEntityCount>
+<DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
+<DatasetMaxTotalFileSize>90000000000000000</DatasetMaxTotalFileSize>
+<DatasetConfig><Insights><Language>zh-Hans</Language></Insights></DatasetConfig>
+</Dataset>
+</GetDatasetResponse>`
+	output = &oss.OperationOutput{
+		StatusCode: 200,
+		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
+		Headers: http.Header{
+			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
+			"Content-Type":     {"application/xml"},
+		},
+	}
+	result = &GetDatasetResult{}
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
+	assert.Nil(t, err)
+	assert.Equal(t, result.StatusCode, 200)
+	assert.Equal(t, result.Status, "OK")
+	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.Dataset.DatasetName, "photos-2026")
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
@@ -409,8 +450,11 @@ func TestMarshalInput_UpdateDataset(t *testing.T) {
 	assert.Contains(t, err.Error(), "missing required field, DatasetName.")
 
 	request = &UpdateDatasetRequest{
-		Bucket:      oss.Ptr("bucket"),
-		DatasetName: oss.Ptr("your_dataset"),
+		Bucket:             oss.Ptr("bucket"),
+		DatasetName:        oss.Ptr("your_dataset"),
+		Description:        oss.Ptr("this is a demo"),
+		WorkflowParameters: oss.Ptr(`[{"Name": "ImageInsightEnable","Value": "True","Description": "The source bucket for data processing"}]`),
+		DatasetConfig:      oss.Ptr(`{"Insights":{"Language":"zh","Image":{"Caption":{"Enable":"true"}},"Video":{"Caption":{"Enable":"true"},"Label":{"System":{"Enable":"true"},"UserDefined":{"Enable":"true"},"Highlight":{"Enable":"true"}},"MultiStream":{"Enable":"true"}}}}`),
 	}
 	input = &oss.OperationInput{
 		OpName: "UpdateDataset",
@@ -424,56 +468,13 @@ func TestMarshalInput_UpdateDataset(t *testing.T) {
 		},
 		Bucket: request.Bucket,
 	}
-	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
-	assert.Nil(t, err)
-	assert.Equal(t, *input.Bucket, "bucket")
-	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
-
-	request = &UpdateDatasetRequest{
-		Bucket:      oss.Ptr("bucket"),
-		DatasetName: oss.Ptr("your_dataset"),
-		Description: oss.Ptr("this is a demo"),
-		TemplateId:  oss.Ptr("Official:OSSBasicMeta"),
-		WorkflowParameters: oss.Ptr(`[
-      {
-        "Name": "demo",
-        "Value": "test",
-        "Description": "The source bucket for data processing"
-      }
-    ]`),
-		DatasetConfig: oss.Ptr(`{
-  "Insights": {
-    "EnableLabel": true,
-    "EnableOCR": true,
-    "EnableFace": true,
-    "EnableImage": true,
-    "EnableVideo": true,
-    "EnableAudio": true,
-    "Language": "zh"
-  }
-}`),
-	}
-	input = &oss.OperationInput{
-		OpName: "UpdateDataset",
-		Method: "POST",
-		Headers: map[string]string{
-			"Content-Type": "application/xml",
-		},
-		Parameters: map[string]string{
-			"metaQuery": "",
-			"action":    "updateDataset",
-		},
-		Bucket: request.Bucket,
-	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
 	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "bucket")
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
 	assert.Equal(t, input.Parameters["description"], "this is a demo")
-	assert.Equal(t, input.Parameters["templateId"], "Official:OSSBasicMeta")
-	assert.Equal(t, input.Parameters["workflowParameters"], "[\n      {\n        \"Name\": \"demo\",\n        \"Value\": \"test\",\n        \"Description\": \"The source bucket for data processing\"\n      }\n    ]")
-	assert.Equal(t, input.Parameters["datasetConfig"], "{\n  \"Insights\": {\n    \"EnableLabel\": true,\n    \"EnableOCR\": true,\n    \"EnableFace\": true,\n    \"EnableImage\": true,\n    \"EnableVideo\": true,\n    \"EnableAudio\": true,\n    \"Language\": \"zh\"\n  }\n}")
+	assert.Equal(t, input.Parameters["workflowParameters"], "[{\"Name\": \"ImageInsightEnable\",\"Value\": \"True\",\"Description\": \"The source bucket for data processing\"}]")
+	assert.Equal(t, input.Parameters["datasetConfig"], "{\"Insights\":{\"Language\":\"zh\",\"Image\":{\"Caption\":{\"Enable\":\"true\"}},\"Video\":{\"Caption\":{\"Enable\":\"true\"},\"Label\":{\"System\":{\"Enable\":\"true\"},\"UserDefined\":{\"Enable\":\"true\"},\"Highlight\":{\"Enable\":\"true\"}},\"MultiStream\":{\"Enable\":\"true\"}}}}")
 }
 
 func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
@@ -485,8 +486,6 @@ func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
 <Dataset>
 <DatasetName>test-dataset</DatasetName>
 <WorkflowParameters></WorkflowParameters>
-<WorkflowParametersString></WorkflowParametersString>
-<TemplateId>Official:OSSBasicMeta</TemplateId>
 <CreateTime>2026-04-22T11:39:28.148283473+08:00</CreateTime>
 <UpdateTime>2026-04-22T11:39:28.148283473+08:00</UpdateTime>
 <Description>this is a demo</Description>
@@ -520,8 +519,6 @@ func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, *result.Dataset.DatasetName, "test-dataset")
-	assert.Equal(t, *result.Dataset.WorkflowParametersString, "")
-	assert.Equal(t, *result.Dataset.TemplateId, "Official:OSSBasicMeta")
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
@@ -615,18 +612,8 @@ func TestUnmarshalOutput_ListDatasets(t *testing.T) {
 <Datasets>
 <Dataset>
 <DatasetName>test-dataset</DatasetName>
-<WorkflowParameters></WorkflowParameters>
-<WorkflowParametersString></WorkflowParametersString>
-<TemplateId>Official:OSSBasicMeta</TemplateId>
 <CreateTime>2026-04-22T11:39:28.148283473+08:00</CreateTime>
 <UpdateTime>2026-04-22T11:39:28.148283473+08:00</UpdateTime>
-<Description>this is a demo</Description>
-<DatasetMaxBindCount>10</DatasetMaxBindCount>
-<DatasetMaxFileCount>100000000</DatasetMaxFileCount>
-<DatasetMaxEntityCount>10000000000</DatasetMaxEntityCount>
-<DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
-<DatasetMaxTotalFileSize>90000000000000000</DatasetMaxTotalFileSize>
-<DatasetConfig><Insights><Language>zh</Language></Insights></DatasetConfig>
 </Dataset>
 </Datasets>
 </ListDatasetsResponse>`
@@ -654,17 +641,8 @@ func TestUnmarshalOutput_ListDatasets(t *testing.T) {
 	assert.Equal(t, len(result.Datasets), 1)
 	assert.Equal(t, *result.NextToken, "1986505809429276:oss_1234567890_demo-bucket:test-dataset")
 	assert.Equal(t, *result.Datasets[0].DatasetName, "test-dataset")
-	assert.Equal(t, *result.Datasets[0].WorkflowParametersString, "")
-	assert.Equal(t, *result.Datasets[0].TemplateId, "Official:OSSBasicMeta")
 	assert.Equal(t, *result.Datasets[0].CreateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Datasets[0].UpdateTime, "2026-04-22T11:39:28.148283473+08:00")
-	assert.Equal(t, *result.Datasets[0].Description, "this is a demo")
-	assert.Equal(t, *result.Datasets[0].DatasetMaxBindCount, int64(10))
-	assert.Equal(t, *result.Datasets[0].DatasetMaxFileCount, int64(100000000))
-	assert.Equal(t, *result.Datasets[0].DatasetMaxEntityCount, int64(10000000000))
-	assert.Equal(t, *result.Datasets[0].DatasetMaxRelationCount, int64(100000000000))
-	assert.Equal(t, *result.Datasets[0].DatasetMaxTotalFileSize, int64(90000000000000000))
-	assert.Equal(t, *result.Datasets[0].DatasetConfig.Insights.Language, "zh")
 
 	output = &oss.OperationOutput{
 		StatusCode: 400,
@@ -752,28 +730,6 @@ func TestMarshalInput_DeleteDataset(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "bucket")
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
-
-	request = &DeleteDatasetRequest{
-		Bucket:      oss.Ptr("bucket"),
-		DatasetName: oss.Ptr("your_dataset"),
-	}
-	input = &oss.OperationInput{
-		OpName: "DeleteDataset",
-		Method: "POST",
-		Headers: map[string]string{
-			"Content-Type": "application/xml",
-		},
-		Parameters: map[string]string{
-			"metaQuery": "",
-			"action":    "deleteDataset",
-		},
-		Bucket: request.Bucket,
-	}
-	input.OpMetadata.Set(signer.SubResource, []string{"metaQuery"})
-	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
-	assert.Nil(t, err)
-	assert.Equal(t, *input.Bucket, "bucket")
-	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
 }
 
 func TestUnmarshalOutput_DeleteDataset(t *testing.T) {
@@ -790,13 +746,7 @@ func TestUnmarshalOutput_DeleteDataset(t *testing.T) {
 		},
 	}
 	result := &DeleteDatasetResult{}
-	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
-		if output.Body == nil {
-			return nil
-		}
-		defer output.Body.Close()
-		return xml.NewDecoder(output.Body).Decode(result)
-	})
+	err = c.client.UnmarshalOutput(result, output)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
@@ -811,13 +761,7 @@ func TestUnmarshalOutput_DeleteDataset(t *testing.T) {
 		},
 	}
 	result = &DeleteDatasetResult{}
-	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
-		if output.Body == nil {
-			return nil
-		}
-		defer output.Body.Close()
-		return xml.NewDecoder(output.Body).Decode(result)
-	})
+	err = c.client.UnmarshalOutput(result, output, oss.UnmarshalDiscardBody)
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 404)
 	assert.Equal(t, result.Status, "Not Found")
