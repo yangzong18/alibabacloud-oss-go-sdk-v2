@@ -22139,7 +22139,7 @@ var testMockPutBucketInventorySuccessCases = []struct {
 					},
 				},
 				Schedule: &InventorySchedule{
-					InventoryFrequencyDaily,
+					Frequency: InventoryFrequencyDaily,
 				},
 				IncludedObjectVersions: Ptr("All"),
 			},
@@ -22194,7 +22194,7 @@ var testMockPutBucketInventorySuccessCases = []struct {
 					},
 				},
 				Schedule: &InventorySchedule{
-					InventoryFrequencyDaily,
+					Frequency: InventoryFrequencyDaily,
 				},
 				IncludedObjectVersions: Ptr("All"),
 				OptionalFields: &OptionalFields{
@@ -22205,6 +22205,101 @@ var testMockPutBucketInventorySuccessCases = []struct {
 						InventoryOptionalFieldStorageClass,
 						InventoryOptionalFieldIsMultipartUploaded,
 						InventoryOptionalFieldEncryptionStatus,
+					},
+				},
+			},
+		},
+		func(t *testing.T, o *PutBucketInventoryResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(``),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "PUT", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?inventory&inventoryId=report1", urlStr)
+			data, _ := io.ReadAll(r.Body)
+			assert.Equal(t, string(data), "<InventoryConfiguration><Id>report1</Id><IsEnabled>true</IsEnabled><Destination><OSSBucketDestination><Format>CSV</Format><AccountId>1000000000000000</AccountId><RoleArn>acs:ram::1000000000000000:role/AliyunOSSRole</RoleArn><Bucket>acs:oss:::destination-bucket</Bucket><Prefix>prefix1</Prefix><Encryption><SSE-KMS><KeyId>keyId</KeyId></SSE-KMS></Encryption></OSSBucketDestination></Destination><Schedule><Frequency>Monthly</Frequency><DayOfMonth>15</DayOfMonth></Schedule><Filter><LastModifyBeginTimeStamp>1637883649</LastModifyBeginTimeStamp><LastModifyEndTimeStamp>1638347592</LastModifyEndTimeStamp><LowerSizeBound>1024</LowerSizeBound><UpperSizeBound>1048576</UpperSizeBound><StorageClass>Standard,IA</StorageClass><Prefix>filterPrefix</Prefix></Filter><IncludedObjectVersions>All</IncludedObjectVersions><OptionalFields><Field>Size</Field><Field>LastModifiedDate</Field><Field>ETag</Field><Field>StorageClass</Field><Field>IsMultipartUploaded</Field><Field>EncryptionStatus</Field><Field>ObjectAcl</Field><Field>TaggingCount</Field><Field>ObjectType</Field><Field>Crc64</Field></OptionalFields><IncrementalInventory><IsEnabled>true</IsEnabled><Schedule><Frequency>600</Frequency></Schedule><OptionalFields><Field>SequenceNumber</Field><Field>RecordType</Field><Field>RecordTimestamp</Field><Field>Requester</Field><Field>SourceIp</Field><Field>RequestId</Field><Field>Size</Field><Field>StorageClass</Field><Field>LastModifiedDate</Field><Field>ETag</Field><Field>IsMultipartUploaded</Field><Field>ObjectType</Field><Field>ObjectAcl</Field><Field>Crc64</Field><Field>EncryptionStatus</Field></OptionalFields></IncrementalInventory></InventoryConfiguration>")
+		},
+		&PutBucketInventoryRequest{
+			Bucket:      Ptr("bucket"),
+			InventoryId: Ptr("report1"),
+			InventoryConfiguration: &InventoryConfiguration{
+				Id:        Ptr("report1"),
+				IsEnabled: Ptr(true),
+				Filter: &InventoryFilter{
+					Prefix:                   Ptr("filterPrefix"),
+					LastModifyBeginTimeStamp: Ptr(int64(1637883649)),
+					LastModifyEndTimeStamp:   Ptr(int64(1638347592)),
+					LowerSizeBound:           Ptr(int64(1024)),
+					UpperSizeBound:           Ptr(int64(1048576)),
+					StorageClass:             Ptr("Standard,IA"),
+				},
+				Destination: &InventoryDestination{
+					&InventoryOSSBucketDestination{
+						Format:    InventoryFormatCSV,
+						AccountId: Ptr("1000000000000000"),
+						RoleArn:   Ptr("acs:ram::1000000000000000:role/AliyunOSSRole"),
+						Bucket:    Ptr("acs:oss:::destination-bucket"),
+						Prefix:    Ptr("prefix1"),
+						Encryption: &InventoryEncryption{
+							SseKms: &SSEKMS{
+								Ptr("keyId"),
+							},
+						},
+					},
+				},
+				Schedule: &InventorySchedule{
+					Frequency:  InventoryFrequencyMonthly,
+					DayOfMonth: Ptr(int(15)),
+				},
+				IncludedObjectVersions: Ptr("All"),
+				OptionalFields: &OptionalFields{
+					Fields: []InventoryOptionalFieldType{
+						InventoryOptionalFieldSize,
+						InventoryOptionalFieldLastModifiedDate,
+						InventoryOptionalFieldETag,
+						InventoryOptionalFieldStorageClass,
+						InventoryOptionalFieldIsMultipartUploaded,
+						InventoryOptionalFieldEncryptionStatus,
+						InventoryOptionalFieldObjectAcl,
+						InventoryOptionalFieldTaggingCount,
+						InventoryOptionalFieldObjectType,
+						InventoryOptionalFieldCRC64,
+					},
+				},
+				IncrementalInventory: &IncrementalInventory{
+					IsEnabled: Ptr(true),
+					Schedule: &IncrementInventorySchedule{
+						Frequency: Ptr(int64(600)),
+					},
+					OptionalFields: &IncrementalInventoryOptionalFields{
+						Fields: []IncrementalInventoryOptionalFieldType{
+							IncrementalInventoryOptionalFieldSequenceNumber,
+							IncrementalInventoryOptionalFieldRecordType,
+							IncrementalInventoryOptionalFieldRecordTimestamp,
+							IncrementalInventoryOptionalFieldRequester,
+							IncrementalInventoryOptionalFieldSourceIp,
+							IncrementalInventoryOptionalFieldRequestId,
+							IncrementalInventoryOptionalFieldSize,
+							IncrementalInventoryOptionalFieldStorageClass,
+							IncrementalInventoryOptionalFieldLastModifiedDate,
+							IncrementalInventoryOptionalFieldETag,
+							IncrementalInventoryOptionalFieldIsMultipartUploaded,
+							IncrementalInventoryOptionalFieldObjectType,
+							IncrementalInventoryOptionalFieldObjectAcl,
+							IncrementalInventoryOptionalFieldCRC64,
+							IncrementalInventoryOptionalFieldEncryptionStatus,
+						},
 					},
 				},
 			},
@@ -22290,7 +22385,7 @@ var testMockPutBucketInventoryErrorCases = []struct {
 					},
 				},
 				Schedule: &InventorySchedule{
-					InventoryFrequencyDaily,
+					Frequency: InventoryFrequencyDaily,
 				},
 				IncludedObjectVersions: Ptr("All"),
 			},
@@ -22354,7 +22449,7 @@ var testMockPutBucketInventoryErrorCases = []struct {
 					},
 				},
 				Schedule: &InventorySchedule{
-					InventoryFrequencyDaily,
+					Frequency: InventoryFrequencyDaily,
 				},
 				IncludedObjectVersions: Ptr("All"),
 			},
@@ -22525,6 +22620,121 @@ var testMockGetBucketInventorySuccessCases = []struct {
 			assert.Equal(t, *o.InventoryConfiguration.Destination.OSSBucketDestination.Bucket, "acs:oss:::destination-bucket")
 			assert.Equal(t, o.InventoryConfiguration.Schedule.Frequency, InventoryFrequencyWeekly)
 			assert.Equal(t, *o.InventoryConfiguration.IncludedObjectVersions, "Current")
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			<InventoryConfiguration>
+    <Id>report1</Id>
+    <IsEnabled>true</IsEnabled>
+    <Destination>
+        <OSSBucketDestination>
+            <Format>CSV</Format>
+            <AccountId>1000000000000000</AccountId>
+            <RoleArn>acs:ram::1000000000000000:role/AliyunOSSRole</RoleArn>
+            <Bucket>acs:oss:::destination-bucket</Bucket>
+        </OSSBucketDestination>
+    </Destination>
+    <Schedule>
+        <Frequency>Weekly</Frequency>
+    </Schedule>
+    <IncludedObjectVersions>Current</IncludedObjectVersions>
+      <OptionalFields>
+        <Field>Size</Field>
+        <Field>LastModifiedDate</Field>
+        <Field>ETag</Field>
+        <Field>StorageClass</Field>
+        <Field>IsMultipartUploaded</Field>
+        <Field>EncryptionStatus</Field>
+		<Field>TransitionTime</Field>
+		<Field>ObjectAcl</Field>
+		<Field>TaggingCount</Field>
+		<Field>ObjectType</Field>
+		<Field>Crc64</Field>
+     </OptionalFields>
+    <IncrementalInventory>
+        <IsEnabled>true</IsEnabled>
+		<Schedule>
+        	<Frequency>600</Frequency>
+		</Schedule>
+		<OptionalFields>
+         <Field>SequenceNumber</Field>
+         <Field>RecordType</Field>
+         <Field>RecordTimestamp</Field>
+         <Field>Requester</Field>
+         <Field>SourceIp</Field>
+         <Field>RequestId</Field>
+         <Field>Size</Field>
+         <Field>StorageClass</Field>
+         <Field>LastModifiedDate</Field>
+         <Field>ETag</Field>
+         <Field>IsMultipartUploaded</Field>
+         <Field>ObjectType</Field>
+         <Field>ObjectAcl</Field>
+         <Field>Crc64</Field>
+         <Field>EncryptionStatus</Field>
+      </OptionalFields>
+     </IncrementalInventory>
+</InventoryConfiguration>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "GET", r.Method)
+			urlStr := sortQuery(r)
+			assert.Equal(t, "/bucket/?inventory&inventoryId=report1", urlStr)
+		},
+		&GetBucketInventoryRequest{
+			Bucket:      Ptr("bucket"),
+			InventoryId: Ptr("report1"),
+		},
+		func(t *testing.T, o *GetBucketInventoryResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.InventoryConfiguration.Id, "report1")
+			assert.True(t, *o.InventoryConfiguration.IsEnabled)
+			assert.Equal(t, o.InventoryConfiguration.Destination.OSSBucketDestination.Format, InventoryFormatCSV)
+			assert.Equal(t, *o.InventoryConfiguration.Destination.OSSBucketDestination.AccountId, "1000000000000000")
+			assert.Equal(t, *o.InventoryConfiguration.Destination.OSSBucketDestination.RoleArn, "acs:ram::1000000000000000:role/AliyunOSSRole")
+			assert.Equal(t, *o.InventoryConfiguration.Destination.OSSBucketDestination.Bucket, "acs:oss:::destination-bucket")
+			assert.Equal(t, o.InventoryConfiguration.Schedule.Frequency, InventoryFrequencyWeekly)
+			assert.Equal(t, *o.InventoryConfiguration.IncludedObjectVersions, "Current")
+
+			assert.Equal(t, len(o.InventoryConfiguration.OptionalFields.Fields), 11)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[0], InventoryOptionalFieldSize)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[1], InventoryOptionalFieldLastModifiedDate)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[2], InventoryOptionalFieldETag)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[3], InventoryOptionalFieldStorageClass)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[4], InventoryOptionalFieldIsMultipartUploaded)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[5], InventoryOptionalFieldEncryptionStatus)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[6], InventoryOptionalFieldTransitionTime)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[7], InventoryOptionalFieldObjectAcl)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[8], InventoryOptionalFieldTaggingCount)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[9], InventoryOptionalFieldObjectType)
+			assert.Equal(t, o.InventoryConfiguration.OptionalFields.Fields[10], InventoryOptionalFieldCRC64)
+
+			assert.Equal(t, *o.InventoryConfiguration.IncrementalInventory.Schedule.Frequency, int64(600))
+			assert.Equal(t, *o.InventoryConfiguration.IncrementalInventory.IsEnabled, true)
+			assert.Equal(t, len(o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields), 15)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[0], IncrementalInventoryOptionalFieldSequenceNumber)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[1], IncrementalInventoryOptionalFieldRecordType)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[2], IncrementalInventoryOptionalFieldRecordTimestamp)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[3], IncrementalInventoryOptionalFieldRequester)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[4], IncrementalInventoryOptionalFieldSourceIp)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[5], IncrementalInventoryOptionalFieldRequestId)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[6], IncrementalInventoryOptionalFieldSize)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[7], IncrementalInventoryOptionalFieldStorageClass)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[8], IncrementalInventoryOptionalFieldLastModifiedDate)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[9], IncrementalInventoryOptionalFieldETag)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[10], IncrementalInventoryOptionalFieldIsMultipartUploaded)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[11], IncrementalInventoryOptionalFieldObjectType)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[12], IncrementalInventoryOptionalFieldObjectAcl)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[13], IncrementalInventoryOptionalFieldCRC64)
+			assert.Equal(t, o.InventoryConfiguration.IncrementalInventory.OptionalFields.Fields[14], IncrementalInventoryOptionalFieldEncryptionStatus)
 		},
 	},
 }

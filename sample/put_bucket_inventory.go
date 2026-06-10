@@ -64,9 +64,35 @@ func main() {
 				},
 			},
 			Schedule: &oss.InventorySchedule{
-				oss.InventoryFrequencyDaily,
+				Frequency: oss.InventoryFrequencyDaily,
 			},
 			IncludedObjectVersions: oss.Ptr("All"),
+			// Incremental Inventory
+			//IncrementalInventory: &oss.IncrementalInventory{
+			//	IsEnabled: oss.Ptr(true),
+			//	Schedule: &oss.IncrementInventorySchedule{
+			//		Frequency: oss.Ptr(int64(600)),
+			//	},
+			//	OptionalFields: &oss.IncrementalInventoryOptionalFields{
+			//		Fields: []oss.IncrementalInventoryOptionalFieldType{
+			//			oss.IncrementalInventoryOptionalFieldSequenceNumber,
+			//			oss.IncrementalInventoryOptionalFieldRecordType,
+			//			oss.IncrementalInventoryOptionalFieldRecordTimestamp,
+			//			oss.IncrementalInventoryOptionalFieldRequester,
+			//			oss.IncrementalInventoryOptionalFieldSourceIp,
+			//			oss.IncrementalInventoryOptionalFieldRequestId,
+			//			oss.IncrementalInventoryOptionalFieldSize,
+			//			oss.IncrementalInventoryOptionalFieldStorageClass,
+			//			oss.IncrementalInventoryOptionalFieldLastModifiedDate,
+			//			oss.IncrementalInventoryOptionalFieldETag,
+			//			oss.IncrementalInventoryOptionalFieldIsMultipartUploaded,
+			//			oss.IncrementalInventoryOptionalFieldObjectType,
+			//			oss.IncrementalInventoryOptionalFieldObjectAcl,
+			//			oss.IncrementalInventoryOptionalFieldCRC64,
+			//			oss.IncrementalInventoryOptionalFieldEncryptionStatus,
+			//		},
+			//	},
+			//},
 		},
 	}
 	putResult, err := client.PutBucketInventory(context.TODO(), putRequest)
