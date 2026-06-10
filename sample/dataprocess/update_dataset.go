@@ -11,15 +11,13 @@ import (
 )
 
 var (
-	region      string
-	bucketName  string
-	datasetName string
+	region     string
+	bucketName string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&bucketName, "bucket", "", "The name of the bucket.")
-	flag.StringVar(&datasetName, "dataset", "", "The name of the dataset.")
 }
 
 func main() {
@@ -34,27 +32,34 @@ func main() {
 		log.Fatalf("invalid parameters, region required")
 	}
 
-	if len(datasetName) == 0 {
-		flag.PrintDefaults()
-		log.Fatalf("invalid parameters, dataset name required")
-	}
-
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
-		WithRegion(region)
+		WithRegion(region).WithEndpoint("http://oss-cn-hangzhou.aliyuncs.com")
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SemanticQueryRequest{
+	delResult, err := client.UpdateDataset(context.TODO(), &dataprocess.UpdateDatasetRequest{
 		Bucket:      oss.Ptr(bucketName),
-		DatasetName: oss.Ptr(datasetName),
-		Query:       oss.Ptr("Sunset by the sea"),
-		MaxResults:  oss.Ptr(int32(10)),
-		MediaTypes:  oss.Ptr(`["image"]`),
-	}
-	result, err := client.SemanticQuery(context.TODO(), request)
+		DatasetName: oss.Ptr("test_dataset"),
+		Description: oss.Ptr("this is a test"),
+		WorkflowParameters: oss.Ptr(`
+		[
+		  {
+		   "Name": "ImageInsightEnable",
+			"Value": "True",
+			"Description": "The source bucket for data processing"
+		  }
+		]`),
+		DatasetConfig: oss.Ptr(`
+		{
+		  "Insights": {
+			"Language": "zh"
+		  }
+		}`),
+	})
 	if err != nil {
-		log.Fatalf("failed to semantic query %v", err)
+		log.Fatalf("failed to update dataset %v", err)
 	}
-	log.Printf("semantic query result:%#v\n", result)
+
+	log.Printf("update dataset result:%#v\n", delResult)
 }

@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/dataprocess"
 	"log"
 
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/credentials"
+	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss/dataprocess"
 )
 
 var (

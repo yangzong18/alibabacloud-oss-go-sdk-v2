@@ -55,7 +55,7 @@ func main() {
 
 		// Log the objects found
 		for _, dataset := range page.Datasets {
-			log.Printf("DatasetName:%v, Description:%v, Create Time:%v, Update Time:%v, Template Id:%v, File Count:%v, Dataset Max Bind Count:%v,Dataset Max File Count:%v, Dataset Max Entity Count:%v, Dataset Max Relation Count:%v, Dataset Max Total File Size:%v, Bind Count:%v, Total File Size:%v\n", oss.ToString(dataset.DatasetName), oss.ToString(dataset.Description), oss.ToString(dataset.CreateTime), oss.ToString(dataset.UpdateTime), oss.ToString(dataset.TemplateId), oss.ToInt64(dataset.FileCount), oss.ToInt64(dataset.DatasetMaxBindCount), oss.ToInt64(dataset.DatasetMaxFileCount), oss.ToInt64(dataset.DatasetMaxEntityCount), oss.ToInt64(dataset.DatasetMaxRelationCount), oss.ToInt64(dataset.DatasetMaxTotalFileSize), oss.ToInt64(dataset.BindCount), oss.ToInt64(dataset.TotalFileSize))
+			log.Printf("DatasetName:%v, Description:%v, Create Time:%v, Update Time:%v, File Count:%v, Dataset Max Bind Count:%v,Dataset Max File Count:%v, Dataset Max Entity Count:%v, Dataset Max Relation Count:%v, Dataset Max Total File Size:%v, Bind Count:%v, Total File Size:%v\n", oss.ToString(dataset.DatasetName), oss.ToString(dataset.Description), oss.ToString(dataset.CreateTime), oss.ToString(dataset.UpdateTime), oss.ToInt64(dataset.FileCount), oss.ToInt64(dataset.DatasetMaxBindCount), oss.ToInt64(dataset.DatasetMaxFileCount), oss.ToInt64(dataset.DatasetMaxEntityCount), oss.ToInt64(dataset.DatasetMaxRelationCount), oss.ToInt64(dataset.DatasetMaxTotalFileSize), oss.ToInt64(dataset.BindCount), oss.ToInt64(dataset.TotalFileSize))
 		}
 	}
 }

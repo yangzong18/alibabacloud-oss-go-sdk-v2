@@ -45,19 +45,16 @@ func main() {
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SimpleQueryRequest{
-		Bucket:           oss.Ptr(bucketName),
-		DatasetName:      oss.Ptr(datasetName),
-		Query:            oss.Ptr("{\"Field\": \"Size\",\"Value\": \"10\",\"Operation\": \"gt\"}"),
-		MaxResults:       oss.Ptr(int32(10)),
-		Sort:             oss.Ptr("Size"),
-		Order:            oss.Ptr("asc"),
-		WithFields:       oss.Ptr(`["Filename","Size"]`),
-		WithoutTotalHits: oss.Ptr(true),
+	request := &dataprocess.CreateSmartClusterRequest{
+		Bucket:      oss.Ptr(bucketName),
+		DatasetName: oss.Ptr(datasetName),
+		Name:        oss.Ptr("demo"),
+		ClusterType: dataprocess.SmartClusterTypeKnowledge,
+		Rules:       oss.Ptr(`[{"RuleType": "keywords","Keywords": ["character","car"]}]`),
 	}
-	result, err := client.SimpleQuery(context.TODO(), request)
+	result, err := client.CreateSmartCluster(context.TODO(), request)
 	if err != nil {
-		log.Fatalf("failed to simple query %v", err)
+		log.Fatalf("failed to create smart cluster %v", err)
 	}
-	log.Printf("simple query result:%#v\n", result)
+	log.Printf("create smart cluster result:%#v\n", result)
 }

@@ -11,15 +11,13 @@ import (
 )
 
 var (
-	region      string
-	bucketName  string
-	datasetName string
+	region     string
+	bucketName string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&bucketName, "bucket", "", "The name of the bucket.")
-	flag.StringVar(&datasetName, "dataset", "", "The name of the dataset.")
 }
 
 func main() {
@@ -34,30 +32,18 @@ func main() {
 		log.Fatalf("invalid parameters, region required")
 	}
 
-	if len(datasetName) == 0 {
-		flag.PrintDefaults()
-		log.Fatalf("invalid parameters, dataset name required")
-	}
-
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
 
 	client := dataprocess.NewClient(cfg)
 
-	request := &dataprocess.SimpleQueryRequest{
-		Bucket:           oss.Ptr(bucketName),
-		DatasetName:      oss.Ptr(datasetName),
-		Query:            oss.Ptr("{\"Field\": \"Size\",\"Value\": \"10\",\"Operation\": \"gt\"}"),
-		MaxResults:       oss.Ptr(int32(10)),
-		Sort:             oss.Ptr("Size"),
-		Order:            oss.Ptr("asc"),
-		WithFields:       oss.Ptr(`["Filename","Size"]`),
-		WithoutTotalHits: oss.Ptr(true),
+	request := &dataprocess.GetMetaQueryStatusRequest{
+		Bucket: oss.Ptr(bucketName),
 	}
-	result, err := client.SimpleQuery(context.TODO(), request)
+	result, err := client.GetMetaQueryStatus(context.TODO(), request)
 	if err != nil {
-		log.Fatalf("failed to simple query %v", err)
+		log.Fatalf("failed to get meta query status %v", err)
 	}
-	log.Printf("simple query result:%#v\n", result)
+	log.Printf("get meta query status result:%#v\n", result)
 }
