@@ -107,6 +107,7 @@ type Label struct {
 type Clip struct {
 	XMLName   xml.Name `xml:"Clip"`
 	TimeRange []int64  `xml:"TimeRange"`
+	ClipURI   *string  `xml:"ClipURI"`
 }
 
 // OCRContents represents OCR recognition results
@@ -343,16 +344,14 @@ func (c *Client) SimpleQuery(ctx context.Context, request *SimpleQueryRequest, o
 
 // SemanticQueryRequest defines the request for semantic query operation
 type SemanticQueryRequest struct {
-	Bucket          *string `input:"host,bucket,required"`
-	DatasetName     *string `input:"query,datasetName,required"`
-	NextToken       *string `input:"query,nextToken"`
-	MaxResults      *int32  `input:"query,maxResults"`
-	Query           *string `input:"query,query"`
-	SimpleQuery     *string `input:"query,simpleQuery"`
-	WithFields      *string `input:"query,withFields"`
-	MediaTypes      *string `input:"query,mediaTypes"`
-	SourceUri       *string `input:"query,sourceURI"`
-	SmartClusterIds *string `input:"query,smartClusterIds"`
+	Bucket      *string `input:"host,bucket,required"`
+	DatasetName *string `input:"query,datasetName,required"`
+	MaxResults  *int32  `input:"query,maxResults"`
+	Query       *string `input:"query,query"`
+	SimpleQuery *string `input:"query,simpleQuery"`
+	WithFields  *string `input:"query,withFields"`
+	MediaTypes  *string `input:"query,mediaTypes"`
+	SourceUri   *string `input:"query,sourceURI"`
 	oss.RequestCommon
 }
 
@@ -515,7 +514,7 @@ type OpenMetaQuery struct {
 
 	Filters *Filters `xml:"Filters,omitempty"`
 
-	NotificationAttributes *NotificationAttributes `xml:"NotificationAttributes>NotificationAttribute,omitempty"`
+	NotificationAttributes *NotificationAttributes `xml:"NotificationAttributes,omitempty"`
 
 	DatasetConfig *DatasetConfig `xml:"DatasetConfig,omitempty"`
 
@@ -704,6 +703,8 @@ type DoMetaQuery struct {
 	SourceURI *string `xml:"SourceURI"`
 
 	SmartClusterIds *SmartClusterIds `xml:"SmartClusterIds"`
+
+	WithFields *WithFields `xml:"WithFields,omitempty"`
 }
 
 type SmartClusterIds struct {
