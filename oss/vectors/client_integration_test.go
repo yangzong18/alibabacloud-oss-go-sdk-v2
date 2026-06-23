@@ -35,7 +35,7 @@ var (
 )
 
 var (
-	bucketNamePrefix = "go-sdk-test-bucket-"
+	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
 	indexNamePrefix  = "goSdkIndex"
 	letters          = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )

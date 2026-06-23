@@ -30,7 +30,7 @@ var (
 )
 
 var (
-	datasetNamePrefix = "go-sdk-test-ds-"
+	datasetNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
 	letters           = []rune("abcdefghijklmnopqrstuvwxyz")
 )
 
