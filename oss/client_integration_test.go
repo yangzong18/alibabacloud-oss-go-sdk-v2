@@ -54,9 +54,16 @@ var (
 )
 
 var (
-	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
-	objectNamePrefix = os.Getenv("OSS_TEST_OBJECT_NAME_PREFIX")
+	bucketNamePrefix = getBucketNamePrefix()
+	objectNamePrefix = "sdk-oss-test-go-object-"
 )
+
+func getBucketNamePrefix() string {
+	if val := os.Getenv("OSS_TEST_BUCKET_PREFIX"); val != "" {
+		return val + "go-bucket-"
+	}
+	return "sdk-oss-test-go-bucket-"
+}
 
 func getDefaultClient() *Client {
 	testOnce_.Do(func() {

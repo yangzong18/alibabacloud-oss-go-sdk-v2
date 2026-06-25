@@ -35,10 +35,17 @@ var (
 )
 
 var (
-	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
+	bucketNamePrefix = getBucketNamePrefix()
 	indexNamePrefix  = "goSdkIndex"
 	letters          = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )
+
+func getBucketNamePrefix() string {
+	if val := os.Getenv("OSS_TEST_BUCKET_PREFIX"); val != "" {
+		return val + "go-"
+	}
+	return "sdk-oss-test-go-"
+}
 
 func getDefaultClient() *VectorsClient {
 	testOnce_.Do(func() {
