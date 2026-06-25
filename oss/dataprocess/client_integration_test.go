@@ -55,6 +55,16 @@ func getInvalidAkClient() *Client {
 	return NewClient(cfg)
 }
 
+func getClient(region, endpoint string) *Client {
+	cfg := oss.LoadDefaultConfig().
+		WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessID_, accessKey_)).
+		WithRegion(region).
+		WithEndpoint(endpoint).
+		WithSignatureVersion(oss.SignatureVersionV4)
+
+	return NewClient(cfg)
+}
+
 func randStr(n int) string {
 	b := make([]rune, n)
 	randMarker := rand.New(rand.NewSource(time.Now().UnixNano()))
