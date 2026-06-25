@@ -10,9 +10,7 @@ import (
 // Dataset represents a dataset in OSS Data Process
 type Dataset struct {
 	XMLName                 xml.Name            `xml:"Dataset"`
-	BindCount               *int64              `xml:"BindCount,omitempty"`
 	CreateTime              *string             `xml:"CreateTime,omitempty"`
-	DatasetMaxBindCount     *int64              `xml:"DatasetMaxBindCount,omitempty"`
 	DatasetMaxEntityCount   *int64              `xml:"DatasetMaxEntityCount,omitempty"`
 	DatasetMaxFileCount     *int64              `xml:"DatasetMaxFileCount,omitempty"`
 	DatasetMaxRelationCount *int64              `xml:"DatasetMaxRelationCount,omitempty"`
@@ -71,16 +69,10 @@ type Enable struct {
 
 // InsightsConfig represents the insights configuration
 type InsightsConfig struct {
-	XMLName     xml.Name       `xml:"Insights"`
-	EnableLabel *bool          `xml:"EnableLabel,omitempty"`
-	EnableOCR   *bool          `xml:"EnableOCR,omitempty"`
-	EnableFace  *bool          `xml:"EnableFace,omitempty"`
-	EnableImage *bool          `xml:"EnableImage,omitempty"`
-	EnableVideo *bool          `xml:"EnableVideo,omitempty"`
-	EnableAudio *bool          `xml:"EnableAudio,omitempty"`
-	Language    *string        `xml:"Language,omitempty"`
-	Image       *InsightsImage `xml:"Image,omitempty"`
-	Video       *InsightsVideo `xml:"Video,omitempty"`
+	XMLName  xml.Name       `xml:"Insights"`
+	Language *string        `xml:"Language,omitempty"`
+	Image    *InsightsImage `xml:"Image,omitempty"`
+	Video    *InsightsVideo `xml:"Video,omitempty"`
 }
 
 type InsightsImage struct {
@@ -422,5 +414,3 @@ func (c *Client) ListDatasets(ctx context.Context, request *ListDatasetsRequest,
 
 	return result, nil
 }
-
-

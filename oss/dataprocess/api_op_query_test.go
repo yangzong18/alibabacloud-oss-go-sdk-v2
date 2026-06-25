@@ -384,7 +384,6 @@ func TestMarshalInput_SemanticQuery(t *testing.T) {
 	request = &SemanticQueryRequest{
 		Bucket:      oss.Ptr("bucket"),
 		DatasetName: oss.Ptr("your_dataset"),
-		NextToken:   oss.Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
 		MaxResults:  oss.Ptr(int32(10)),
 		Query:       oss.Ptr("{\"Field\": \"Size\",\"Value\": \"1\",\"Operation\": \"gt\"}"),
 		WithFields:  oss.Ptr(`["Filename","Size"]`),
@@ -407,7 +406,6 @@ func TestMarshalInput_SemanticQuery(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, *input.Bucket, "bucket")
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
-	assert.Equal(t, input.Parameters["nextToken"], "MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****")
 	assert.Equal(t, input.Parameters["maxResults"], "10")
 	assert.Equal(t, input.Parameters["query"], "{\"Field\": \"Size\",\"Value\": \"1\",\"Operation\": \"gt\"}")
 	assert.Equal(t, input.Parameters["mediaTypes"], "[\"video\",\"image\"]")
@@ -974,7 +972,7 @@ func TestMarshalInput_OpenMetaQuery(t *testing.T) {
 	assert.Equal(t, input.Parameters["mode"], "semantic")
 	assert.Equal(t, input.Parameters["role"], "AliyunMetaQueryDefaultRole")
 	body, _ = io.ReadAll(input.Body)
-	assert.Equal(t, string(body), "<MetaQuery><WorkflowParameters><WorkflowParameter><Name>ImageInsightEnable</Name><Value>True</Value></WorkflowParameter><WorkflowParameter><Name>VideoInsightEnable</Name><Value>True</Value></WorkflowParameter></WorkflowParameters><NotificationAttributes><NotificationAttribute><Notifications><Notification><MNS>imm-index-notification</MNS></Notification></Notifications><WithFields><WithField>Insights</WithField><WithField>Labels</WithField></WithFields></NotificationAttribute></NotificationAttributes><DatasetConfig><Insights><Language>en</Language></Insights></DatasetConfig><IndexOptions><IgnoreObjectDelete>true</IgnoreObjectDelete></IndexOptions><RouteRule><Type>OSSTag</Type><AutoCreateDataset>true</AutoCreateDataset><OSSTagKey>routing-dataset</OSSTagKey></RouteRule></MetaQuery>")
+	assert.Equal(t, string(body), "<MetaQuery><WorkflowParameters><WorkflowParameter><Name>ImageInsightEnable</Name><Value>True</Value></WorkflowParameter><WorkflowParameter><Name>VideoInsightEnable</Name><Value>True</Value></WorkflowParameter></WorkflowParameters><NotificationAttributes><Notifications><Notification><MNS>imm-index-notification</MNS></Notification></Notifications><WithFields><WithField>Insights</WithField><WithField>Labels</WithField></WithFields></NotificationAttributes><DatasetConfig><Insights><Language>en</Language></Insights></DatasetConfig><IndexOptions><IgnoreObjectDelete>true</IgnoreObjectDelete></IndexOptions><RouteRule><Type>OSSTag</Type><AutoCreateDataset>true</AutoCreateDataset><OSSTagKey>routing-dataset</OSSTagKey></RouteRule></MetaQuery>")
 }
 
 func TestUnmarshalOutput_OpenMetaQuery(t *testing.T) {
@@ -1447,6 +1445,58 @@ func TestMarshalInput_DoMetaQuery(t *testing.T) {
 	assert.Equal(t, "semantic", input.Parameters["mode"])
 	body, _ = io.ReadAll(input.Body)
 	assert.Equal(t, string(body), "<MetaQuery><MaxResults>20</MaxResults><Query>The cat in the living room</Query><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{&#34;Field&#34;:&#34;Size&#34;,&#34;Operation&#34;:&#34;gt&#34;,&#34;Value&#34;:&#34;102400&#34;}</SimpleQuery></MetaQuery>")
+
+	request = &DoMetaQueryRequest{
+		Bucket: oss.Ptr("bucket"),
+		Mode:   oss.Ptr("semantic"),
+		MetaQuery: &DoMetaQuery{
+			Query: oss.Ptr(`{"Field":"Size","Operation":"gt","Value":"1048576"}`),
+			MediaTypes: &MetaQueryMediaTypes{
+				[]string{"image"},
+			},
+			SimpleQuery: oss.Ptr(`{"Field":"Size","Operation":"gt","Value":"102400"}`),
+			MaxResults:  oss.Ptr(int64(10)),
+			NextToken:   oss.Ptr("MTIzNDU2"),
+			WithFields: &WithFields{
+				[]string{
+					"URI", "Size", "FileModifiedTime",
+				},
+			},
+			WithoutTotalHits: oss.Ptr("False"),
+			Aggregations: &MetaQueryAggregations{
+				Aggregations: []Aggregation{
+					{
+						Operation: oss.Ptr("sum"),
+						Field:     oss.Ptr("Field"),
+					},
+				},
+			},
+			SmartClusterIds: &SmartClusterIds{
+				SmartClusterId: []string{
+					"cluster-001",
+				},
+			},
+		},
+	}
+	input = &oss.OperationInput{
+		OpName: "DoMetaQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "doMetaQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, "bucket", *input.Bucket)
+	assert.Equal(t, "doMetaQuery", input.Parameters["action"])
+	assert.Equal(t, "semantic", input.Parameters["mode"])
+	body, _ = io.ReadAll(input.Body)
+	assert.Equal(t, string(body), "<MetaQuery><MaxResults>10</MaxResults><Query>{&#34;Field&#34;:&#34;Size&#34;,&#34;Operation&#34;:&#34;gt&#34;,&#34;Value&#34;:&#34;1048576&#34;}</Query><Aggregations><Aggregation><Operation>sum</Operation><Field>Field</Field><Groups></Groups></Aggregation></Aggregations><NextToken>MTIzNDU2</NextToken><MediaTypes><MediaType>image</MediaType></MediaTypes><SimpleQuery>{&#34;Field&#34;:&#34;Size&#34;,&#34;Operation&#34;:&#34;gt&#34;,&#34;Value&#34;:&#34;102400&#34;}</SimpleQuery><WithoutTotalHits>False</WithoutTotalHits><SmartClusterIds><SmartClusterId>cluster-001</SmartClusterId></SmartClusterIds><WithFields><WithField>URI</WithField><WithField>Size</WithField><WithField>FileModifiedTime</WithField></WithFields></MetaQuery>")
 }
 
 func TestUnmarshalOutput_DoMetaQuery(t *testing.T) {

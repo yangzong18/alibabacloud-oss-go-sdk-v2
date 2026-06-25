@@ -123,7 +123,6 @@ func TestUnmarshalOutput_CreateDataset(t *testing.T) {
 <CreateTime>2026-04-22T11:39:28.148283473+08:00</CreateTime>
 <UpdateTime>2026-04-22T11:39:28.148283473+08:00</UpdateTime>
 <Description>this is a demo</Description>
-<DatasetMaxBindCount>10</DatasetMaxBindCount>
 <DatasetMaxFileCount>100000000</DatasetMaxFileCount>
 <DatasetMaxEntityCount>10000000000</DatasetMaxEntityCount>
 <DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
@@ -156,7 +155,6 @@ func TestUnmarshalOutput_CreateDataset(t *testing.T) {
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
-	assert.Equal(t, *result.Dataset.DatasetMaxBindCount, int64(10))
 	assert.Equal(t, *result.Dataset.DatasetMaxFileCount, int64(100000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxEntityCount, int64(10000000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxRelationCount, int64(100000000000))
@@ -288,7 +286,6 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 <CreateTime>2026-04-21T18:17:58.727923181+08:00</CreateTime>
 <UpdateTime>2026-04-21T18:17:58.727923181+08:00</UpdateTime>
 <Description>this is a demo</Description>
-<DatasetMaxBindCount>10</DatasetMaxBindCount>
 <DatasetMaxFileCount>100000000</DatasetMaxFileCount>
 <DatasetMaxEntityCount>10000000000</DatasetMaxEntityCount>
 <DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
@@ -325,7 +322,6 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
-	assert.Equal(t, *result.Dataset.DatasetMaxBindCount, int64(10))
 	assert.Equal(t, *result.Dataset.DatasetMaxFileCount, int64(100000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxEntityCount, int64(10000000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxRelationCount, int64(100000000000))
@@ -376,7 +372,6 @@ func TestUnmarshalOutput_GetDataset(t *testing.T) {
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-21T18:17:58.727923181+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
-	assert.Equal(t, *result.Dataset.DatasetMaxBindCount, int64(10))
 	assert.Equal(t, *result.Dataset.DatasetMaxFileCount, int64(100000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxEntityCount, int64(10000000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxRelationCount, int64(100000000000))
@@ -489,7 +484,6 @@ func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
 <CreateTime>2026-04-22T11:39:28.148283473+08:00</CreateTime>
 <UpdateTime>2026-04-22T11:39:28.148283473+08:00</UpdateTime>
 <Description>this is a demo</Description>
-<DatasetMaxBindCount>10</DatasetMaxBindCount>
 <DatasetMaxFileCount>100000000</DatasetMaxFileCount>
 <DatasetMaxEntityCount>10000000000</DatasetMaxEntityCount>
 <DatasetMaxRelationCount>100000000000</DatasetMaxRelationCount>
@@ -522,7 +516,6 @@ func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
 	assert.Equal(t, *result.Dataset.CreateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.UpdateTime, "2026-04-22T11:39:28.148283473+08:00")
 	assert.Equal(t, *result.Dataset.Description, "this is a demo")
-	assert.Equal(t, *result.Dataset.DatasetMaxBindCount, int64(10))
 	assert.Equal(t, *result.Dataset.DatasetMaxFileCount, int64(100000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxEntityCount, int64(10000000000))
 	assert.Equal(t, *result.Dataset.DatasetMaxRelationCount, int64(100000000000))
