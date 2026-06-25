@@ -35,11 +35,18 @@ var (
 )
 
 var (
-	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_PREFIX")
+	bucketNamePrefix = getBucketNamePrefix()
 	spaceNamePrefix  = "go_sdk_space"
 	tableNamePrefix  = "go_sdk_table"
 	letters          = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )
+
+func getBucketNamePrefix() string {
+	if val := os.Getenv("OSS_TEST_BUCKET_PREFIX"); val != "" {
+		return val + "go-bucket-"
+	}
+	return "sdk-oss-test-go-bucket-"
+}
 
 func getDefaultClient() *TablesClient {
 	testOnce_.Do(func() {
