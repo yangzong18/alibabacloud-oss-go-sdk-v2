@@ -35,7 +35,7 @@ var (
 )
 
 var (
-	bucketNamePrefix = "go-sdk-test-bucket-"
+	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
 	indexNamePrefix  = "goSdkIndex"
 	letters          = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 )
@@ -253,7 +253,7 @@ func TestInvokeOperation_BucketPolicy(t *testing.T) {
 	// PutBucketPolicy
 	policy := `{"Version":"1","Statement":[{"Action":["ossvector:PutVectors","ossvector:GetVectors"],"Effect":"Deny","Principal":["` + accountUid_ + `"],"Resource":["acs:ossvector:` + region_ + `:` + accountUid_ + `:*"]}]}`
 	input := &oss.OperationInput{
-		OpName: "PutBucketPolicy",
+		OpName: "PutVectorBucketPolicy",
 		Method: "PUT",
 		Parameters: map[string]string{
 			"policy": "",
@@ -270,7 +270,7 @@ func TestInvokeOperation_BucketPolicy(t *testing.T) {
 
 	// GetBucketPolicy
 	input = &oss.OperationInput{
-		OpName: "GetBucketPolicy",
+		OpName: "GetVectorBucketPolicy",
 		Method: "GET",
 		Parameters: map[string]string{
 			"policy": "",
@@ -288,7 +288,7 @@ func TestInvokeOperation_BucketPolicy(t *testing.T) {
 
 	// DeleteBucketPolicy
 	input = &oss.OperationInput{
-		OpName: "DeleteBucketPolicy",
+		OpName: "DeleteVectorBucketPolicy",
 		Method: "DELETE",
 		Parameters: map[string]string{
 			"policy": "",

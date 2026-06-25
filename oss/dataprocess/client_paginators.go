@@ -139,3 +139,67 @@ func (p *ListSmartClustersPaginator) NextPage(ctx context.Context, optFns ...fun
 
 	return result, nil
 }
+
+// ListDataPipelineConfigurationsPaginator is a paginator for ListDataPipelineConfigurations
+type ListDataPipelineConfigurationsPaginator struct {
+	options     PaginatorOptions
+	client      *Client
+	request     *ListDataPipelineConfigurationsRequest
+	nextToken   *string
+	firstPage   bool
+	isTruncated bool
+}
+
+func (c *Client) NewListDataPipelineConfigurationsPaginator(request *ListDataPipelineConfigurationsRequest, optFns ...func(*PaginatorOptions)) *ListDataPipelineConfigurationsPaginator {
+	if request == nil {
+		request = &ListDataPipelineConfigurationsRequest{}
+	}
+
+	options := PaginatorOptions{}
+	options.Limit = request.MaxResults
+
+	for _, fn := range optFns {
+		fn(&options)
+	}
+
+	return &ListDataPipelineConfigurationsPaginator{
+		options:     options,
+		client:      c,
+		request:     request,
+		nextToken:   request.NextToken,
+		firstPage:   true,
+		isTruncated: false,
+	}
+}
+
+// HasNext Returns true if there’s a next page.
+func (p *ListDataPipelineConfigurationsPaginator) HasNext() bool {
+	return p.firstPage || p.isTruncated
+}
+
+// NextPage retrieves the next ListDataPipelineConfigurations page.
+func (p *ListDataPipelineConfigurationsPaginator) NextPage(ctx context.Context, optFns ...func(*oss.Options)) (*ListDataPipelineConfigurationsResult, error) {
+	if !p.HasNext() {
+		return nil, fmt.Errorf("no more pages available")
+	}
+
+	request := *p.request
+	request.NextToken = p.nextToken
+
+	var limit *int64
+	if oss.ToInt64(p.options.Limit) > 0 {
+		limit = p.options.Limit
+	}
+	request.MaxResults = limit
+
+	result, err := p.client.ListDataPipelineConfigurations(ctx, &request, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	p.firstPage = false
+	p.isTruncated = oss.ToString(result.NextToken) != ""
+	p.nextToken = result.NextToken
+
+	return result, nil
+}

@@ -5,6 +5,7 @@ package oss
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -273,8 +274,8 @@ func TestDoDataPipeLineAction(t *testing.T) {
 	defer after(t)
 
 	var err error
-	client := getDefaultClient()
-
+	endpoint := "https://oss-" + region_ + ".aliyuncs.com"
+	client := getClient(region_, endpoint)
 	_, err = client.DoDataPipeLineAction(context.TODO(), &DoDataPipeLineActionRequest{
 		Action: Ptr("listDataPipelineConfigurations"),
 	})
@@ -283,21 +284,63 @@ func TestDoDataPipeLineAction(t *testing.T) {
 	var serr *ServiceError
 	_, err = client.DoDataPipeLineAction(context.TODO(), &DoDataPipeLineActionRequest{
 		Action: Ptr("putDataPipelineConfiguration"),
+		RequestCommon: RequestCommon{
+			Parameters: map[string]string{
+				"dataPipelineName": "data-pipeline",
+				"role":             "not-exist-role",
+			},
+		},
+		Body: strings.NewReader(`<?xml version="1.0" encoding="UTF-8" ?>
+<DataPipelineConfiguration>
+    <DataPipelineDescription>Vectorize business data using the BERT multimodal model</DataPipelineDescription>
+    <Sources>
+        <InputBucket>oss-sdk-test-an</InputBucket>
+        <InputDataScope>All</InputDataScope>
+        <IgnoreDelete>true</IgnoreDelete>
+        <FilterConfiguration>
+            <PrefixSet>prefix1/</PrefixSet>
+            <ObjectMediaTypes>video</ObjectMediaTypes>
+        </FilterConfiguration>
+    </Sources>
+    <DataPipelineEmbeddingConfiguration>
+        <EmbeddingProvider>bailian</EmbeddingProvider>
+        <ApiKey>sk-123323423423423423424242425436457657567</ApiKey>
+        <Model>qwen2.5-vl-embedding</Model>
+        <FPS>1</FPS>
+    </DataPipelineEmbeddingConfiguration>
+    <Destination>
+        <VectorBucketName>my-vector-bucket</VectorBucketName>
+        <VectorIndexNames>index</VectorIndexNames>
+        <ObjectTagToMetadata>key1</ObjectTagToMetadata>
+        <ObjectTagToMetadata>key2</ObjectTagToMetadata>
+        <UsermetaToMetadata>x-oss-meta-key1</UsermetaToMetadata>
+    </Destination>
+    <DataPipelineError>
+        <ErrorMode>ignoreAndRecord</ErrorMode>
+        <ErrorBucket>my-error-bucket</ErrorBucket>
+        <ErrorPrefix>error-output/</ErrorPrefix>
+    </DataPipelineError>
+</DataPipelineConfiguration>`),
 	})
 	assert.NotNil(t, err)
 	errors.As(err, &serr)
-	assert.Equal(t, int(404), serr.StatusCode)
-	assert.Equal(t, "NoSuchDataPipeline", serr.Code)
-	assert.Equal(t, "The specified resource dataPipeline is not found.", serr.Message)
+	assert.Equal(t, int(400), serr.StatusCode)
+	assert.Equal(t, "InvalidArgument", serr.Code)
+	assert.Equal(t, "The ServiceRole (not-exist-role) you provided does not exist.", serr.Message)
 	assert.NotEmpty(t, serr.RequestID)
 
 	_, err = client.DoDataPipeLineAction(context.TODO(), &DoDataPipeLineActionRequest{
 		Action: Ptr("getDataPipelineConfiguration"),
+		RequestCommon: RequestCommon{
+			Parameters: map[string]string{
+				"dataPipelineName": "not-exist-data-pipeline",
+			},
+		},
 	})
 	assert.NotNil(t, err)
 	errors.As(err, &serr)
 	assert.Equal(t, int(404), serr.StatusCode)
 	assert.Equal(t, "NoSuchDataPipeline", serr.Code)
-	assert.Equal(t, "The specified resource dataPipeline is not found.", serr.Message)
+	assert.Equal(t, "The specified resource DataPipeline is not found.", serr.Message)
 	assert.NotEmpty(t, serr.RequestID)
 }

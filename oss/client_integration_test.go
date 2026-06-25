@@ -54,8 +54,8 @@ var (
 )
 
 var (
-	bucketNamePrefix = "go-sdk-test-bucket-"
-	objectNamePrefix = "go-sdk-test-object-"
+	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_NAME_PREFIX")
+	objectNamePrefix = os.Getenv("OSS_TEST_OBJECT_NAME_PREFIX")
 )
 
 func getDefaultClient() *Client {
