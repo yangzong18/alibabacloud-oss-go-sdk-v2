@@ -35,7 +35,7 @@ var (
 )
 
 var (
-	bucketNamePrefix = "go-sdk-test-bucket-"
+	bucketNamePrefix = os.Getenv("OSS_TEST_BUCKET_PREFIX")
 	spaceNamePrefix  = "go_sdk_space"
 	tableNamePrefix  = "go_sdk_table"
 	letters          = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -247,7 +247,7 @@ func TestInvokeOperation_TableBucketPolicy(t *testing.T) {
 
 	// GetBucketPolicy
 	input = &oss.OperationInput{
-		OpName: "GetBucketPolicy",
+		OpName: "GetTableBucketPolicy",
 		Method: "GET",
 		Bucket: bucketArn,
 		Key:    oss.Ptr(fmt.Sprintf("buckets/%s/policy", url.QueryEscape(oss.ToString(bucketArn)))),
