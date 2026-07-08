@@ -15,12 +15,14 @@ var (
 	region           string
 	apiKey           string
 	dataPipelineName string
+	roleArn          string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&apiKey, "api-key", "", "the Bailian API key.")
 	flag.StringVar(&dataPipelineName, "data-pipeline-name", "", "the name of the data pipeline.")
+	flag.StringVar(&roleArn, "role-arn", "", "the role ARN of the data pipeline.")
 }
 
 func main() {
@@ -40,6 +42,11 @@ func main() {
 		log.Fatalf("invalid parameters, region required")
 	}
 
+	if len(roleArn) == 0 {
+		flag.PrintDefaults()
+		log.Fatalf("invalid parameters, role arn required")
+	}
+
 	cfg := oss.LoadDefaultConfig().
 		WithCredentialsProvider(credentials.NewEnvironmentVariableCredentialsProvider()).
 		WithRegion(region)
@@ -48,7 +55,7 @@ func main() {
 
 	result, err := client.PutDataPipelineConfiguration(context.TODO(), &dataprocess.PutDataPipelineConfigurationRequest{
 		DataPipelineName: oss.Ptr(dataPipelineName),
-		Role:             oss.Ptr("AliyunOSSDataPipelineRole"),
+		Role:             oss.Ptr(roleArn),
 		DataPipelineConfiguration: &dataprocess.DataPipelineConfiguration{
 			DataPipelineDescription: oss.Ptr("Vectorize business data using the BERT multimodal model"),
 			Sources: []dataprocess.DataPipelineSource{
