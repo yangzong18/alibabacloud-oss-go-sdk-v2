@@ -13,22 +13,31 @@ var (
 	region     string
 	bucketName string
 	objectName string
+	uploadId   string
 )
 
 func init() {
 	flag.StringVar(&region, "region", "", "The region in which the bucket is located.")
 	flag.StringVar(&bucketName, "bucket", "", "The name of the bucket.")
 	flag.StringVar(&objectName, "object", "", "The name of the object.")
+	flag.StringVar(&uploadId, "upload-id", "", "The upload id.")
 }
 
 func main() {
 	flag.Parse()
 	var (
-		uploadId = "your upload id"
-		parts    = oss.UploadParts{
+		parts = oss.UploadParts{
 			oss.UploadPart{
-				PartNumber: int32(0),
-				ETag:       oss.Ptr("part etag"),
+				PartNumber: int32(1),
+				ETag:       oss.Ptr("part one etag"),
+			},
+			oss.UploadPart{
+				PartNumber: int32(2),
+				ETag:       oss.Ptr("part two etag"),
+			},
+			oss.UploadPart{
+				PartNumber: int32(3),
+				ETag:       oss.Ptr("part three etag"),
 			},
 		}
 	)
@@ -45,6 +54,11 @@ func main() {
 	if len(objectName) == 0 {
 		flag.PrintDefaults()
 		log.Fatalf("invalid parameters, object name required")
+	}
+
+	if len(uploadId) == 0 {
+		flag.PrintDefaults()
+		log.Fatalf("invalid parameters, upload id required")
 	}
 
 	cfg := oss.LoadDefaultConfig().
