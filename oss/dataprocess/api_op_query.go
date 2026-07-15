@@ -7,15 +7,15 @@ import (
 	"github.com/aliyun/alibabacloud-oss-go-sdk-v2/oss"
 )
 
-// Image represents image information
-type Image struct {
-	XMLName             xml.Name             `xml:"Image"`
+// AudioCover represents image information
+type AudioCover struct {
+	XMLName             xml.Name             `xml:"AudioCover"`
 	ImageWidth          *int64               `xml:"ImageWidth,omitempty"`
 	ImageHeight         *int64               `xml:"ImageHeight,omitempty"`
 	Exif                *string              `xml:"EXIF,omitempty"`
 	ImageScore          *ImageScore          `xml:"ImageScore,omitempty"`
 	CroppingSuggestions []CroppingSuggestion `xml:"CroppingSuggestions>CroppingSuggestion,omitempty"`
-	OCRContents         []OCRContents        `xml:"OCRContents>OCRContents,omitempty"`
+	OCRContents         []OCRContent         `xml:"OCRContents>OCRContent,omitempty"`
 }
 
 // VideoStream represents video stream information
@@ -110,9 +110,9 @@ type Clip struct {
 	ClipURI   *string  `xml:"ClipURI"`
 }
 
-// OCRContents represents OCR recognition results
-type OCRContents struct {
-	XMLName    xml.Name  `xml:"OCRContents"`
+// OCRContent represents OCR recognition results
+type OCRContent struct {
+	XMLName    xml.Name  `xml:"OCRContent"`
 	Language   *string   `xml:"Language,omitempty"`
 	Contents   *string   `xml:"Contents,omitempty"`
 	Confidence *float64  `xml:"Confidence,omitempty"`
@@ -195,7 +195,7 @@ type Element struct {
 type SceneElement struct {
 	XMLName          xml.Name `xml:"SceneElement"`
 	TimeRange        []int64  `xml:"TimeRange"`
-	FrameTimes       []int64  `xml:"FrameTimes>FrameTime,omitempty"`
+	FrameTimes       []int64  `xml:"FrameTimes,omitempty"`
 	VideoStreamIndex *int64   `xml:"VideoStreamIndex,omitempty"`
 	Labels           []Label  `xml:"Labels>Label,omitempty"`
 }
@@ -244,18 +244,18 @@ type Insights struct {
 
 // AggregationGroup represents a group of aggregation results
 type AggregationGroup struct {
-	XMLName xml.Name `xml:"AggregationGroup"`
+	XMLName xml.Name `xml:"Group"`
 	Value   *string  `xml:"Value,omitempty"`
 	Count   *int64   `xml:"Count,omitempty"`
 }
 
 // Aggregation represents an aggregation result
 type Aggregation struct {
-	XMLName           xml.Name           `xml:"Aggregation"`
-	Operation         *string            `xml:"Operation,omitempty"`
-	Field             *string            `xml:"Field,omitempty"`
-	Value             *string            `xml:"Value,omitempty"`
-	AggregationGroups []AggregationGroup `xml:"Groups>AggregationGroup,omitempty"`
+	XMLName           xml.Name           `xml:"Aggregation" json:"-"`
+	Operation         *string            `xml:"Operation,omitempty" json:"Operation,omitempty"`
+	Field             *string            `xml:"Field,omitempty" json:"Field,omitempty"`
+	Value             *string            `xml:"Value,omitempty" json:"Value,omitempty"`
+	AggregationGroups []AggregationGroup `xml:"Groups>Group,omitempty" json:"-"`
 }
 
 // CroppingSuggestion represents an image cropping suggestion
@@ -275,17 +275,31 @@ type ElementRelation struct {
 
 // SimpleQueryRequest defines the request for simple query operation
 type SimpleQueryRequest struct {
-	Bucket           *string `input:"host,bucket,required"`
-	DatasetName      *string `input:"query,datasetName,required"`
-	NextToken        *string `input:"query,nextToken"`
-	MaxResults       *int32  `input:"query,maxResults"`
-	Query            *string `input:"query,query"`
-	Sort             *string `input:"query,sort"`
-	Order            *string `input:"query,order"`
-	Aggregations     *string `input:"query,aggregations"`
-	WithFields       *string `input:"query,withFields"`
-	WithoutTotalHits *bool   `input:"query,withoutTotalHits"`
+	Bucket      *string `input:"host,bucket,required"`
+	DatasetName *string `input:"query,datasetName,required"`
+	NextToken   *string `input:"query,nextToken"`
+	MaxResults  *int32  `input:"query,maxResults"`
+
+	// Query The assignment can be made through SimpleQuery{}.ToParameterValue().
+	Query *string `input:"query,query"`
+	Sort  *string `input:"query,sort"`
+	Order *string `input:"query,order"`
+
+	// Aggregations The assignment can be made through MetaQueryAggregations{}.ToParameterValue().
+	Aggregations *string `input:"query,aggregations"`
+
+	// WithFields The assignment can be made through WithFields{}.ToParameterValue().
+	WithFields *string `input:"query,withFields"`
+
+	WithoutTotalHits *bool `input:"query,withoutTotalHits"`
 	oss.RequestCommon
+}
+
+type SimpleQuery struct {
+	Field      *string       `json:"Field,omitempty"`
+	Value      *string       `json:"Value,omitempty"`
+	Operation  *string       `json:"Operation,omitempty"`
+	SubQueries []SimpleQuery `json:"SubQueries,omitempty"`
 }
 
 // SimpleQueryResult defines the result for SimpleQuery operation
@@ -348,10 +362,16 @@ type SemanticQueryRequest struct {
 	DatasetName *string `input:"query,datasetName,required"`
 	MaxResults  *int32  `input:"query,maxResults"`
 	Query       *string `input:"query,query"`
+
+	// SimpleQuery The assignment can be made through SimpleQuery{}.ToParameterValue().
 	SimpleQuery *string `input:"query,simpleQuery"`
-	WithFields  *string `input:"query,withFields"`
-	MediaTypes  *string `input:"query,mediaTypes"`
-	SourceUri   *string `input:"query,sourceURI"`
+
+	// WithFields The assignment can be made through WithFields{}.ToParameterValue().
+	WithFields *string `input:"query,withFields"`
+
+	// MediaTypes The assignment can be made through MetaQueryMediaTypes{}.ToParameterValue().
+	MediaTypes *string `input:"query,mediaTypes"`
+	SourceUri  *string `input:"query,sourceURI"`
 	oss.RequestCommon
 }
 
@@ -389,7 +409,7 @@ type File struct {
 	EXIF                                  *string              `xml:"EXIF,omitempty"`
 	ImageScore                            *ImageScore          `xml:"ImageScore,omitempty"`
 	CroppingSuggestions                   []CroppingSuggestion `xml:"CroppingSuggestions>CroppingSuggestion,omitempty"`
-	OCRContents                           []OCRContents        `xml:"OCRContents>OCRContents,omitempty"`
+	OCRContents                           []OCRContent         `xml:"OCRContents>OCRContent,omitempty"`
 	VideoWidth                            *int64               `xml:"VideoWidth,omitempty"`
 	VideoHeight                           *int64               `xml:"VideoHeight,omitempty"`
 	VideoStreams                          []VideoStream        `xml:"VideoStreams>VideoStream,omitempty"`
@@ -397,7 +417,7 @@ type File struct {
 	AudioStreams                          []AudioStream        `xml:"AudioStreams>AudioStream,omitempty"`
 	Artist                                *string              `xml:"Artist,omitempty"`
 	AlbumArtist                           *string              `xml:"AlbumArtist,omitempty"`
-	AudioCovers                           []Image              `xml:"AudioCovers>AudioCover,omitempty"`
+	AudioCovers                           []AudioCover         `xml:"AudioCovers>AudioCover,omitempty"`
 	Composer                              *string              `xml:"Composer,omitempty"`
 	Performer                             *string              `xml:"Performer,omitempty"`
 	Language                              *string              `xml:"Language,omitempty"`

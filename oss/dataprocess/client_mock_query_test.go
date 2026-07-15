@@ -46,14 +46,14 @@ var testMockSimpleQuerySuccessCases = []struct {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <AggregationGroup>
+        <Group>
           <Value>document</Value>
           <Count>80</Count>
-        </AggregationGroup>
-        <AggregationGroup>
+        </Group>
+        <Group>
           <Value>image</Value>
           <Count>70</Count>
-        </AggregationGroup>
+        </Group>
       </Groups>
     </Aggregation>
   </Aggregations>
@@ -135,14 +135,14 @@ var testMockSimpleQuerySuccessCases = []struct {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <AggregationGroup>
+       <Group>
           <Value>image</Value>
           <Count>200</Count>
-        </AggregationGroup>
-        <AggregationGroup>
+       </Group>
+       <Group>
           <Value>video</Value>
           <Count>58</Count>
-        </AggregationGroup>
+       </Group>
       </Groups>
     </Aggregation>
   </Aggregations>
@@ -162,6 +162,128 @@ var testMockSimpleQuerySuccessCases = []struct {
 			Order:            oss.Ptr("acs"),
 			Aggregations:     oss.Ptr("Size"),
 			WithFields:       oss.Ptr(`["Filename","Size"]`),
+			WithoutTotalHits: oss.Ptr(true),
+		},
+		func(t *testing.T, o *SimpleQueryResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.NextToken, "MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx****")
+			assert.Equal(t, *o.TotalHits, int64(258))
+			assert.Equal(t, len(o.Files), 2)
+			assert.Equal(t, *o.Files[0].Filename, "photos/sunset.jpg")
+			assert.Equal(t, *o.Files[0].Size, int64(2048000))
+			assert.Equal(t, *o.Files[0].URI, "oss://examplebucket/photos/sunset.jpg")
+			assert.Equal(t, *o.Files[0].OSSURI, "oss://examplebucket/photos/sunset.jpg")
+			assert.Equal(t, *o.Files[0].MediaType, "image")
+			assert.Equal(t, *o.Files[0].ContentType, "image/jpeg")
+			assert.Equal(t, *o.Files[0].FileModifiedTime, "2025-12-01T10:30:00Z")
+			assert.Equal(t, *o.Files[0].ImageWidth, int64(3840))
+			assert.Equal(t, *o.Files[0].ImageHeight, int64(2160))
+			assert.Equal(t, *o.Files[0].Orientation, int64(1))
+
+			assert.Equal(t, *o.Files[1].Filename, "photos/mountain.png")
+			assert.Equal(t, *o.Files[1].Size, int64(5120000))
+			assert.Equal(t, *o.Files[1].URI, "oss://examplebucket/photos/mountain.png")
+			assert.Equal(t, *o.Files[1].OSSURI, "oss://examplebucket/photos/mountain.png")
+			assert.Equal(t, *o.Files[1].MediaType, "image")
+			assert.Equal(t, *o.Files[1].ContentType, "image/png")
+			assert.Equal(t, *o.Files[1].FileModifiedTime, "2025-11-20T14:00:00Z")
+			assert.Equal(t, *o.Files[1].ImageWidth, int64(1920))
+			assert.Equal(t, *o.Files[1].ImageHeight, int64(1080))
+			assert.Equal(t, *o.Files[1].Orientation, int64(1))
+			assert.Equal(t, len(o.Aggregations), 1)
+			assert.Equal(t, *o.Aggregations[0].Field, "MediaType")
+			assert.Equal(t, *o.Aggregations[0].Operation, "group")
+			assert.Equal(t, len(o.Aggregations[0].AggregationGroups), 2)
+			assert.Equal(t, *o.Aggregations[0].AggregationGroups[0].Value, "image")
+			assert.Equal(t, *o.Aggregations[0].AggregationGroups[0].Count, int64(200))
+			assert.Equal(t, *o.Aggregations[0].AggregationGroups[1].Value, "video")
+			assert.Equal(t, *o.Aggregations[0].AggregationGroups[1].Count, int64(58))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<MetaQuery>
+  <NextToken>MTIzNDU2Nzg5MDEyMzQ1Njc4OTAx****</NextToken>
+  <TotalHits>258</TotalHits>
+  <Files>
+    <File>
+      <Filename>photos/sunset.jpg</Filename>
+      <Size>2048000</Size>
+      <URI>oss://examplebucket/photos/sunset.jpg</URI>
+      <OSSURI>oss://examplebucket/photos/sunset.jpg</OSSURI>
+      <MediaType>image</MediaType>
+      <ContentType>image/jpeg</ContentType>
+      <FileModifiedTime>2025-12-01T10:30:00Z</FileModifiedTime>
+      <ImageWidth>3840</ImageWidth>
+      <ImageHeight>2160</ImageHeight>
+      <Orientation>1</Orientation>
+    </File>
+    <File>
+      <Filename>photos/mountain.png</Filename>
+      <Size>5120000</Size>
+      <URI>oss://examplebucket/photos/mountain.png</URI>
+      <OSSURI>oss://examplebucket/photos/mountain.png</OSSURI>
+      <MediaType>image</MediaType>
+      <ContentType>image/png</ContentType>
+      <FileModifiedTime>2025-11-20T14:00:00Z</FileModifiedTime>
+      <ImageWidth>1920</ImageWidth>
+      <ImageHeight>1080</ImageHeight>
+      <Orientation>1</Orientation>
+    </File>
+  </Files>
+  <Aggregations>
+    <Aggregation>
+      <Field>MediaType</Field>
+      <Operation>group</Operation>
+      <Groups>
+        <Group>
+          <Value>image</Value>
+          <Count>200</Count>
+        </Group>
+        <Group>
+          <Value>video</Value>
+          <Count>58</Count>
+        </Group>
+      </Groups>
+    </Aggregation>
+  </Aggregations>
+</MetaQuery>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/?action=simpleQuery&aggregations=%5B%7B%22Operation%22%3A%22sum%22%2C%22Field%22%3A%22Size%22%7D%5D&datasetName=your_dataset&maxResults=99&metaQuery&nextToken=MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw%2A%2A%2A%2A&order=acs&query=%7B%22Field%22%3A%22Size%22%2C%22Value%22%3A%221%22%2C%22Operation%22%3A%22gt%22%7D&sort=Size&withFields=%5B%22Filename%22%2C%22Size%22%5D&withoutTotalHits=true", strUrl)
+		},
+		&SimpleQueryRequest{
+			Bucket:      oss.Ptr("bucket"),
+			DatasetName: oss.Ptr("your_dataset"),
+			NextToken:   oss.Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+			MaxResults:  oss.Ptr(int32(99)),
+			Query: oss.Ptr((&SimpleQuery{
+				Field:     oss.Ptr("Size"),
+				Value:     oss.Ptr("1"),
+				Operation: oss.Ptr("gt"),
+			}).ToParameterValue()),
+			Sort:  oss.Ptr("Size"),
+			Order: oss.Ptr("acs"),
+			Aggregations: oss.Ptr((MetaQueryAggregations{
+				Aggregations: []Aggregation{
+					{
+						Field:     oss.Ptr("Size"),
+						Operation: oss.Ptr("sum"),
+					},
+				},
+			}).ToParameterValue()),
+			WithFields: oss.Ptr(WithFields{
+				WithField: []string{"Filename", "Size"},
+			}.ToParameterValue()),
 			WithoutTotalHits: oss.Ptr(true),
 		},
 		func(t *testing.T, o *SimpleQueryResult, err error) {
@@ -583,7 +705,13 @@ var testMockSemanticQuerySuccessCases = []struct {
                 </Label>
             </Labels>
             <MediaType>video</MediaType>
-            <OCRContents/>
+             <OCRContents>
+				<OCRContent>
+					<Language>zh</Language>
+					<Contents>demo</Contents>
+					<Confidence>0.5</Confidence>
+				</OCRContent>
+			</OCRContents>
             <OSSCRC64>16628192875747293357</OSSCRC64>
             <OSSObjectType>Normal</OSSObjectType>
             <OSSStorageClass>Standard</OSSStorageClass>
@@ -619,6 +747,7 @@ var testMockSemanticQuerySuccessCases = []struct {
             <SceneElements>
                 <SceneElement>
                     <FrameTimes>6000</FrameTimes>
+					<FrameTimes>7000</FrameTimes>
                     <TimeRange>4133</TimeRange>
                     <TimeRange>8533</TimeRange>
                     <VideoStreamIndex>0</VideoStreamIndex>
@@ -764,6 +893,265 @@ var testMockSemanticQuerySuccessCases = []struct {
 			assert.Equal(t, *o.Files[0].VideoStreams[0].Width, int64(640))
 			assert.Equal(t, *o.Files[0].VideoStreams[0].Level, int64(22))
 			assert.Equal(t, *o.Files[0].VideoStreams[0].TimeBase, "1/1000")
+			assert.Equal(t, *o.Files[0].OCRContents[0].Language, "zh")
+			assert.Equal(t, *o.Files[0].OCRContents[0].Contents, "demo")
+			assert.Equal(t, *o.Files[0].OCRContents[0].Confidence, 0.5)
+			assert.Equal(t, len(o.Files[0].SceneElements), 1)
+			assert.Equal(t, o.Files[0].SceneElements[0].FrameTimes[0], int64(6000))
+			assert.Equal(t, o.Files[0].SceneElements[0].FrameTimes[1], int64(7000))
+			assert.Equal(t, o.Files[0].SceneElements[0].TimeRange[0], int64(4133))
+			assert.Equal(t, o.Files[0].SceneElements[0].TimeRange[1], int64(8533))
+			assert.Equal(t, *o.Files[0].SceneElements[0].VideoStreamIndex, int64(0))
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<MetaQuery>
+    <Files>
+        <File>
+            <Addresses/>
+            <AudioCovers/>
+            <AudioStreams>
+                <AudioStream>
+                    <Bitrate>14983</Bitrate>
+                    <ChannelLayout>mono</ChannelLayout>
+                    <Channels>1</Channels>
+                    <CodecLongName>AAC (Advanced Audio Coding)</CodecLongName>
+                    <CodecName>aac</CodecName>
+                    <CodecTag>0x6134706d</CodecTag>
+                    <CodecTagString>mp4a</CodecTagString>
+                    <Duration>7.936</Duration>
+                    <FrameCount>62</FrameCount>
+                    <Index>1</Index>
+                    <SampleFormat>fltp</SampleFormat>
+                    <SampleRate>8000</SampleRate>
+                    <TimeBase>1/8000</TimeBase>
+                </AudioStream>
+            </AudioStreams>
+            <Bitrate>196284</Bitrate>
+            <ContentMd5>5/ZLrWYXpuQfDfxEf4+lyA==</ContentMd5>
+            <ContentType>video/mp4</ContentType>
+            <CreateTime>2026-04-21T10:51:38.264045621+08:00</CreateTime>
+            <CroppingSuggestions/>
+            <DatasetName>dataset-aianalysis-walk</DatasetName>
+            <Duration>8</Duration>
+            <ETag>\"E7F64BAD6617A6E41F0DFC447F8FA5C8\"</ETag>
+            <Elements/>
+            <Figures/>
+            <FileHash>E7F64BAD6617A6E41F0DFC447F8FA5C8</FileHash>
+            <FileModifiedTime>2026-04-21T10:51:25+08:00</FileModifiedTime>
+            <Filename>mp4file/AE09411YAG00081_AE09411YAG00081-0_e723c79f850047458a3e0c0115c4b108_20260421104610825sf0-203372.mp4</Filename>
+            <FormatLongName>QuickTime / MOV</FormatLongName>
+            <FormatName>mov,mp4,m4a,3gp,3g2,mj2</FormatName>
+            <Labels>
+                <Label>
+                    <LabelConfidence>1</LabelConfidence>
+                    <LabelName>有人走过</LabelName>
+                    <ParentLabelName>自定义标签</ParentLabelName>
+                    <Clips>
+                        <Clip>
+                            <TimeRange>200</TimeRange>
+                            <TimeRange>5533</TimeRange>
+                        </Clip>
+                    </Clips>
+                </Label>
+            </Labels>
+            <MediaType>video</MediaType>
+            <OCRContents/>
+            <OSSCRC64>16628192875747293357</OSSCRC64>
+            <OSSObjectType>Normal</OSSObjectType>
+            <OSSStorageClass>Standard</OSSStorageClass>
+            <OSSTagging>
+				<Tagging>
+					<Key>routing-dataset</Key>
+					<Value>photos-2026</Value>
+				</Tagging>
+				<Tagging>
+					<Key>env</Key>
+					<Value>production</Value>
+				</Tagging>
+            </OSSTagging>
+            <OSSTaggingCount>2</OSSTaggingCount>
+            <OSSUserMeta>
+				<UserMeta>
+					<Key>category</Key>
+					<Value>photo</Value>
+				</UserMeta>
+				<UserMeta>
+					<Key>album</Key>
+					<Value>vacation</Value>
+				</UserMeta>
+            </OSSUserMeta>
+ 			<CustomLabels>
+				<Item>
+					<Key>label-ley</Key>
+					<Value>label-val</Value>
+				</Item>
+			</CustomLabels>
+            <ObjectACL>default</ObjectACL>
+            <ProduceTime>2026-04-21T10:46:10+08:00</ProduceTime>
+            <SceneElements>
+                <SceneElement>
+                    <FrameTimes>6000</FrameTimes>
+                    <TimeRange>4133</TimeRange>
+                    <TimeRange>8533</TimeRange>
+                    <VideoStreamIndex>0</VideoStreamIndex>
+                    <Labels/>
+                </SceneElement>
+            </SceneElements>
+            <SemanticSimilarity>0.2536</SemanticSimilarity>
+            <SequenceNumber>5</SequenceNumber>
+            <Size>196284</Size>
+            <SmartClusters/>
+            <StreamCount>2</StreamCount>
+            <Subtitles/>
+            <URI>oss://paas-smart-cloud-test/mp4file/AE09411YAG00081_AE09411YAG00081-0_e723c79f850047458a3e0c0115c4b108_20260421104610825sf0-203372.mp4</URI>
+            <UpdateTime>2026-04-21T10:52:39.412605575+08:00</UpdateTime>
+            <VideoHeight>360</VideoHeight>
+            <VideoStreams>
+                <VideoStream>
+                    <AverageFrameRate>15/1</AverageFrameRate>
+                    <BitDepth>8</BitDepth>
+                    <Bitrate>178202</Bitrate>
+                    <CodecLongName>H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10</CodecLongName>
+                    <CodecName>h264</CodecName>
+                    <CodecTag>0x31637661</CodecTag>
+                    <CodecTagString>avc1</CodecTagString>
+                    <Duration>8</Duration>
+                    <FrameCount>120</FrameCount>
+                    <FrameRate>500/33</FrameRate>
+                    <Height>360</Height>
+                    <Level>22</Level>
+                    <PixelFormat>yuv420p</PixelFormat>
+                    <Profile>Main</Profile>
+                    <TimeBase>1/1000</TimeBase>
+                    <Width>640</Width>
+                </VideoStream>
+            </VideoStreams>
+            <VideoWidth>640</VideoWidth>
+        </File>
+    </Files>
+</MetaQuery>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/?action=semanticQuery&datasetName=your_dataset&maxResults=10&mediaTypes=%5B%22video%22%2C%22image%22%5D&metaQuery&query=%7B%22Field%22%3A%22Size%22%2C%22Value%22%3A%221%22%2C%22Operation%22%3A%22gt%22%7D&sourceURI=oss%3A%2F%2Fbucket%2Fprefix&withFields=%5B%22Filename%22%2C%22Size%22%5D", strUrl)
+		},
+		&SemanticQueryRequest{
+			Bucket:      oss.Ptr("bucket"),
+			DatasetName: oss.Ptr("your_dataset"),
+			MaxResults:  oss.Ptr(int32(10)),
+			Query: oss.Ptr(SimpleQuery{
+				Field: oss.Ptr("Size"), Value: oss.Ptr("1"), Operation: oss.Ptr("gt"),
+			}.ToParameterValue()),
+			WithFields: oss.Ptr(WithFields{
+				WithField: []string{"Filename", "Size"},
+			}.ToParameterValue()),
+			MediaTypes: oss.Ptr(MetaQueryMediaTypes{MediaTypes: []string{"video", "image"}}.ToParameterValue()),
+			SourceUri:  oss.Ptr("oss://bucket/prefix"),
+		},
+		func(t *testing.T, o *SemanticQueryResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, len(o.Files), 1)
+			assert.Equal(t, *o.Files[0].Bitrate, int64(196284))
+			assert.Equal(t, *o.Files[0].ContentMd5, "5/ZLrWYXpuQfDfxEf4+lyA==")
+			assert.Equal(t, *o.Files[0].ContentType, "video/mp4")
+			assert.Equal(t, *o.Files[0].CreateTime, "2026-04-21T10:51:38.264045621+08:00")
+			assert.Equal(t, *o.Files[0].DatasetName, "dataset-aianalysis-walk")
+			assert.Equal(t, *o.Files[0].Duration, float64(8))
+			assert.Equal(t, *o.Files[0].ETag, "\\\"E7F64BAD6617A6E41F0DFC447F8FA5C8\\\"")
+			assert.Equal(t, *o.Files[0].FileHash, "E7F64BAD6617A6E41F0DFC447F8FA5C8")
+			assert.Equal(t, *o.Files[0].FileModifiedTime, "2026-04-21T10:51:25+08:00")
+			assert.Equal(t, *o.Files[0].Filename, "mp4file/AE09411YAG00081_AE09411YAG00081-0_e723c79f850047458a3e0c0115c4b108_20260421104610825sf0-203372.mp4")
+			assert.Equal(t, *o.Files[0].FormatLongName, "QuickTime / MOV")
+			assert.Equal(t, *o.Files[0].FormatName, "mov,mp4,m4a,3gp,3g2,mj2")
+			assert.Equal(t, *o.Files[0].MediaType, "video")
+			assert.Equal(t, *o.Files[0].OSSCRC64, "16628192875747293357")
+			assert.Equal(t, *o.Files[0].Size, int64(196284))
+			assert.Equal(t, *o.Files[0].VideoWidth, int64(640))
+			assert.Equal(t, *o.Files[0].VideoHeight, int64(360))
+			assert.Equal(t, *o.Files[0].StreamCount, int64(2))
+			assert.Equal(t, *o.Files[0].OSSObjectType, "Normal")
+			assert.Equal(t, *o.Files[0].OSSStorageClass, "Standard")
+			assert.Equal(t, len(o.Files[0].OSSTagging), 2)
+			assert.Equal(t, *o.Files[0].OSSTagging[0].Key, "routing-dataset")
+			assert.Equal(t, *o.Files[0].OSSTagging[1].Key, "env")
+			assert.Equal(t, *o.Files[0].OSSTagging[0].Value, "photos-2026")
+			assert.Equal(t, *o.Files[0].OSSTagging[1].Value, "production")
+			assert.Equal(t, len(o.Files[0].OSSUserMeta), 2)
+			assert.Equal(t, *o.Files[0].OSSUserMeta[0].Key, "category")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[0].Value, "photo")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[1].Key, "album")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[1].Value, "vacation")
+			assert.Equal(t, *o.Files[0].OSSTaggingCount, int64(2))
+			assert.Equal(t, *o.Files[0].ObjectACL, "default")
+			assert.Equal(t, len(o.Files[0].OSSUserMeta), 2)
+			assert.Equal(t, *o.Files[0].OSSUserMeta[0].Key, "category")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[0].Value, "photo")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[1].Key, "album")
+			assert.Equal(t, *o.Files[0].OSSUserMeta[1].Value, "vacation")
+			assert.Equal(t, len(o.Files[0].CustomLabels), 1)
+			assert.Equal(t, *o.Files[0].CustomLabels[0].Key, "label-ley")
+			assert.Equal(t, *o.Files[0].CustomLabels[0].Value, "label-val")
+			assert.Equal(t, *o.Files[0].ProduceTime, "2026-04-21T10:46:10+08:00")
+			assert.Equal(t, *o.Files[0].SequenceNumber, int64(5))
+			assert.Equal(t, *o.Files[0].SemanticSimilarity, float64(0.2536))
+			assert.Equal(t, *o.Files[0].Size, int64(196284))
+			assert.Equal(t, *o.Files[0].StreamCount, int64(2))
+			assert.Equal(t, *o.Files[0].URI, "oss://paas-smart-cloud-test/mp4file/AE09411YAG00081_AE09411YAG00081-0_e723c79f850047458a3e0c0115c4b108_20260421104610825sf0-203372.mp4")
+			assert.Equal(t, *o.Files[0].UpdateTime, "2026-04-21T10:52:39.412605575+08:00")
+
+			assert.Equal(t, len(o.Files[0].Labels), 1)
+			assert.Equal(t, *o.Files[0].Labels[0].LabelConfidence, float64(1))
+			assert.Equal(t, *o.Files[0].Labels[0].LabelName, "有人走过")
+			assert.Equal(t, *o.Files[0].Labels[0].ParentLabelName, "自定义标签")
+			assert.Equal(t, len(o.Files[0].Labels[0].Clips), 1)
+			assert.Equal(t, o.Files[0].Labels[0].Clips[0].TimeRange[0], int64(200))
+			assert.Equal(t, o.Files[0].Labels[0].Clips[0].TimeRange[1], int64(5533))
+
+			assert.Equal(t, len(o.Files[0].AudioStreams), 1)
+			assert.Equal(t, *o.Files[0].AudioStreams[0].Bitrate, int64(14983))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].Channels, int64(1))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].ChannelLayout, "mono")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].CodecLongName, "AAC (Advanced Audio Coding)")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].CodecName, "aac")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].CodecTag, "0x6134706d")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].CodecTagString, "mp4a")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].Duration, float64(7.936))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].FrameCount, int64(62))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].Index, int64(1))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].SampleFormat, "fltp")
+			assert.Equal(t, *o.Files[0].AudioStreams[0].SampleRate, int64(8000))
+			assert.Equal(t, *o.Files[0].AudioStreams[0].TimeBase, "1/8000")
+
+			assert.Equal(t, len(o.Files[0].VideoStreams), 1)
+			assert.Equal(t, *o.Files[0].VideoStreams[0].AverageFrameRate, "15/1")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].BitDepth, int64(8))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].Bitrate, int64(178202))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].CodecLongName, "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].CodecName, "h264")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].CodecTag, "0x31637661")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].CodecTagString, "avc1")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].Duration, float64(8))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].FrameCount, int64(120))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].FrameRate, "500/33")
+			assert.Equal(t, *o.Files[0].VideoStreams[0].Height, int64(360))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].Width, int64(640))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].Level, int64(22))
+			assert.Equal(t, *o.Files[0].VideoStreams[0].TimeBase, "1/1000")
+			assert.Equal(t, len(o.Files[0].SceneElements), 1)
+			assert.Equal(t, o.Files[0].SceneElements[0].FrameTimes[0], int64(6000))
+			assert.Equal(t, o.Files[0].SceneElements[0].TimeRange[0], int64(4133))
+			assert.Equal(t, o.Files[0].SceneElements[0].TimeRange[1], int64(8533))
+			assert.Equal(t, *o.Files[0].SceneElements[0].VideoStreamIndex, int64(0))
 		},
 	},
 }

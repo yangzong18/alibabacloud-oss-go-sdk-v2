@@ -670,14 +670,14 @@ var testMockDoMetaQuerySuccessCases = []struct {
             <Field>StorageClass</Field>
             <Operation>group_by</Operation>
             <Groups>
-                <AggregationGroup>
+                <Group>
                     <Value>Standard</Value>
                     <Count>30</Count>
-                </AggregationGroup>
-                <AggregationGroup>
+                </Group>
+                <Group>
                     <Value>IA</Value>
                     <Count>20</Count>
-                </AggregationGroup>
+                </Group>
             </Groups>
         </Aggregation>
     </Aggregations>

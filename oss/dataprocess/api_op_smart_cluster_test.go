@@ -147,6 +147,48 @@ func TestMarshalInput_CreateSmartCluster(t *testing.T) {
 	assert.Equal(t, input.Parameters["rules"], "[{\"RuleType\": \"keywords\",\"Keywords\": [\"car\"]}]")
 	assert.Equal(t, input.Parameters["description"], "your_description")
 	assert.Equal(t, input.Parameters["notification"], `{"MNS":{"TopicName":"imm-cluster-notification"}}`)
+
+	request = &CreateSmartClusterRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		Name:        oss.Ptr("your_name"),
+		ClusterType: SmartClusterTypeKnowledge,
+		Rules: oss.Ptr((SmartClusterRules{
+			Rules: []SmartClusterRule{
+				{
+					RuleType: oss.Ptr("keywords"),
+					Keywords: []string{"car"},
+				},
+			},
+		}).ToParameterValue()),
+		Description: oss.Ptr("your_description"),
+		Notification: oss.Ptr(SmartClusterNotification{
+			MNS: &SmartClusterTopicName{
+				TopicName: oss.Ptr("imm-cluster-notification"),
+			},
+		}.ToParameterValue()),
+	}
+	input = &oss.OperationInput{
+		OpName: "CreateSmartCluster",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "createSmartCluster",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["name"], "your_name")
+	assert.Equal(t, input.Parameters["clusterType"], "knowledge")
+	assert.Equal(t, input.Parameters["rules"], "[{\"RuleType\":\"keywords\",\"Keywords\":[\"car\"]}]")
+	assert.Equal(t, input.Parameters["description"], "your_description")
+	assert.Equal(t, input.Parameters["notification"], `{"MNS":{"TopicName":"imm-cluster-notification"}}`)
 }
 
 func TestUnmarshalOutput_CreateSmartCluster(t *testing.T) {
@@ -487,6 +529,46 @@ func TestMarshalInput_UpdateSmartCluster(t *testing.T) {
 	assert.Equal(t, input.Parameters["description"], "this is a demo")
 	assert.Equal(t, input.Parameters["name"], "face-cluster-alice")
 	assert.Equal(t, input.Parameters["rules"], "[{\"RuleType\":\"face\",\"Sensitivity\":0.7}]")
+
+	request = &UpdateSmartClusterRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		ObjectId:    oss.Ptr("cluster-abc123def456"),
+		Description: oss.Ptr("this is a demo"),
+		Name:        oss.Ptr("face-cluster-alice"),
+		Rules: oss.Ptr(SmartClusterRules{Rules: []SmartClusterRule{
+			{
+				RuleType:    oss.Ptr("face"),
+				Sensitivity: oss.Ptr(0.7),
+			},
+		}}.ToParameterValue()),
+		Notification: oss.Ptr(SmartClusterNotification{
+			MNS: &SmartClusterTopicName{
+				TopicName: oss.Ptr("imm-cluster-notification"),
+			},
+		}.ToParameterValue()),
+	}
+	input = &oss.OperationInput{
+		OpName: "UpdateSmartCluster",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "updateSmartCluster",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["objectId"], "cluster-abc123def456")
+	assert.Equal(t, input.Parameters["description"], "this is a demo")
+	assert.Equal(t, input.Parameters["name"], "face-cluster-alice")
+	assert.Equal(t, input.Parameters["rules"], "[{\"RuleType\":\"face\",\"Sensitivity\":0.7}]")
+	assert.Equal(t, input.Parameters["notification"], "{\"MNS\":{\"TopicName\":\"imm-cluster-notification\"}}")
 }
 
 func TestUnmarshalOutput_UpdateSmartCluster(t *testing.T) {
@@ -495,20 +577,29 @@ func TestUnmarshalOutput_UpdateSmartCluster(t *testing.T) {
 	var output *oss.OperationOutput
 	var err error
 
+	body := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<UpdateSmartClusterResponse>\n  <ObjectId>cluster-abc123def456</ObjectId>\n</UpdateSmartClusterResponse>"
 	output = &oss.OperationOutput{
 		StatusCode: 200,
 		Status:     "OK",
+		Body:       io.NopCloser(bytes.NewReader([]byte(body))),
 		Headers: http.Header{
 			"X-Oss-Request-Id": {"534B371674E88A4D8906****"},
 			"Content-Type":     {"application/xml"},
 		},
 	}
 	result := &UpdateSmartClusterResult{}
-	err = c.client.UnmarshalOutput(result, output)
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 200)
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
+	assert.Equal(t, *result.ObjectId, "cluster-abc123def456")
 
 	output = &oss.OperationOutput{
 		StatusCode: 400,
@@ -519,7 +610,13 @@ func TestUnmarshalOutput_UpdateSmartCluster(t *testing.T) {
 		},
 	}
 	result = &UpdateSmartClusterResult{}
-	err = c.client.UnmarshalOutput(result, output)
+	err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	})
 	assert.Nil(t, err)
 	assert.Equal(t, result.StatusCode, 400)
 	assert.Equal(t, result.Status, "Bad Request")

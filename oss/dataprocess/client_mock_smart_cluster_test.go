@@ -49,6 +49,48 @@ var testMockCreateSmartClusterSuccessCases = []struct {
 			assert.Equal(t, *o.ObjectId, "cluster-abc123def456")
 		},
 	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<CreateSmartClusterResponse>
+  <ObjectId>cluster-abc123def456</ObjectId>
+</CreateSmartClusterResponse>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/?action=createSmartCluster&clusterType=knowledge&datasetName=test-dataset&metaQuery&name=your_name&notification=%7B%22MNS%22%3A%7B%22TopicName%22%3A%22imm-cluster-notification%22%7D%7D&rules=%5B%7B%22RuleType%22%3A%22keywords%22%2C%22Keywords%22%3A%5B%22car%22%5D%7D%5D", strUrl)
+		},
+		&CreateSmartClusterRequest{
+			Bucket:      oss.Ptr("bucket"),
+			DatasetName: oss.Ptr("test-dataset"),
+			Name:        oss.Ptr("your_name"),
+			ClusterType: SmartClusterTypeKnowledge,
+			Rules: oss.Ptr((SmartClusterRules{
+				Rules: []SmartClusterRule{
+					{
+						RuleType: oss.Ptr("keywords"),
+						Keywords: []string{"car"},
+					},
+				},
+			}).ToParameterValue()),
+			Notification: oss.Ptr(SmartClusterNotification{
+				MNS: &SmartClusterTopicName{
+					TopicName: oss.Ptr("imm-cluster-notification"),
+				},
+			}.ToParameterValue()),
+		},
+		func(t *testing.T, o *CreateSmartClusterResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, *o.ObjectId, "cluster-abc123def456")
+		},
+	},
 }
 
 func TestMockCreateSmartCluster_Success(t *testing.T) {
@@ -384,7 +426,7 @@ var testMockUpdateSmartClusterSuccessCases = []struct {
 			"x-oss-request-id": "534B371674E88A4D8906****",
 			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
 		},
-		[]byte(``),
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?><UpdateSmartClusterResponse><ObjectId>cluster-abc123def456</ObjectId></UpdateSmartClusterResponse>`),
 		func(t *testing.T, r *http.Request) {
 			assert.Equal(t, "POST", r.Method)
 			strUrl := sortQuery(r)
@@ -403,7 +445,45 @@ var testMockUpdateSmartClusterSuccessCases = []struct {
 			assert.Equal(t, "200 OK", o.Status)
 			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
 			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
-
+			assert.Equal(t, "cluster-abc123def456", *o.ObjectId)
+		},
+	},
+	{
+		200,
+		map[string]string{
+			"x-oss-request-id": "534B371674E88A4D8906****",
+			"Date":             "Fri, 24 Feb 2017 03:15:40 GMT",
+		},
+		[]byte(`<?xml version="1.0" encoding="UTF-8"?><UpdateSmartClusterResponse><ObjectId>cluster-abc123def456</ObjectId></UpdateSmartClusterResponse>`),
+		func(t *testing.T, r *http.Request) {
+			assert.Equal(t, "POST", r.Method)
+			strUrl := sortQuery(r)
+			assert.Equal(t, "/bucket/?action=updateSmartCluster&datasetName=your_dataset&description=this+is+a+demo&metaQuery&name=face-cluster-alice&notification=%7B%22MNS%22%3A%7B%22TopicName%22%3A%22imm-cluster-notification%22%7D%7D&objectId=cluster-abc123def456&rules=%5B%7B%22RuleType%22%3A%22face%22%2C%22Sensitivity%22%3A0.7%7D%5D", strUrl)
+		},
+		&UpdateSmartClusterRequest{
+			Bucket:      oss.Ptr("bucket"),
+			DatasetName: oss.Ptr("your_dataset"),
+			ObjectId:    oss.Ptr("cluster-abc123def456"),
+			Description: oss.Ptr("this is a demo"),
+			Name:        oss.Ptr("face-cluster-alice"),
+			Rules: oss.Ptr(SmartClusterRules{Rules: []SmartClusterRule{
+				{
+					RuleType:    oss.Ptr("face"),
+					Sensitivity: oss.Ptr(0.7),
+				},
+			}}.ToParameterValue()),
+			Notification: oss.Ptr(SmartClusterNotification{
+				MNS: &SmartClusterTopicName{
+					TopicName: oss.Ptr("imm-cluster-notification"),
+				},
+			}.ToParameterValue()),
+		},
+		func(t *testing.T, o *UpdateSmartClusterResult, err error) {
+			assert.Equal(t, 200, o.StatusCode)
+			assert.Equal(t, "200 OK", o.Status)
+			assert.Equal(t, "534B371674E88A4D8906****", o.Headers.Get("x-oss-request-id"))
+			assert.Equal(t, "Fri, 24 Feb 2017 03:15:40 GMT", o.Headers.Get("Date"))
+			assert.Equal(t, "cluster-abc123def456", *o.ObjectId)
 		},
 	},
 }
