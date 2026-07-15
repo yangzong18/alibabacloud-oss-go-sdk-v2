@@ -111,6 +111,114 @@ func TestMarshalInput_SimpleQuery(t *testing.T) {
 	assert.Equal(t, input.Parameters["aggregations"], "Size")
 	assert.Equal(t, input.Parameters["withFields"], "[\"Filename\",\"Size\"]")
 	assert.Equal(t, input.Parameters["withoutTotalHits"], "true")
+
+	request = &SimpleQueryRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		NextToken:   oss.Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+		MaxResults:  oss.Ptr(int32(99)),
+		Query: oss.Ptr((&SimpleQuery{
+			Field:     oss.Ptr("Size"),
+			Value:     oss.Ptr("1"),
+			Operation: oss.Ptr("gt"),
+		}).ToParameterValue()),
+		Sort:  oss.Ptr("Size"),
+		Order: oss.Ptr("acs"),
+		Aggregations: oss.Ptr((MetaQueryAggregations{
+			Aggregations: []Aggregation{
+				{
+					Field:     oss.Ptr("Size"),
+					Operation: oss.Ptr("sum"),
+				},
+			},
+		}).ToParameterValue()),
+		WithFields: oss.Ptr(WithFields{
+			WithField: []string{"Filename", "Size"},
+		}.ToParameterValue()),
+		WithoutTotalHits: oss.Ptr(true),
+	}
+	input = &oss.OperationInput{
+		OpName: "SimpleQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "simpleQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["nextToken"], "MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****")
+	assert.Equal(t, input.Parameters["maxResults"], "99")
+	assert.Equal(t, input.Parameters["query"], "{\"Field\":\"Size\",\"Value\":\"1\",\"Operation\":\"gt\"}")
+	assert.Equal(t, input.Parameters["sort"], "Size")
+	assert.Equal(t, input.Parameters["order"], "acs")
+	assert.Equal(t, input.Parameters["aggregations"], "[{\"Operation\":\"sum\",\"Field\":\"Size\"}]")
+	assert.Equal(t, input.Parameters["withFields"], "[\"Filename\",\"Size\"]")
+	assert.Equal(t, input.Parameters["withoutTotalHits"], "true")
+
+	request = &SimpleQueryRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		NextToken:   oss.Ptr("MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****"),
+		MaxResults:  oss.Ptr(int32(99)),
+		Query: oss.Ptr((&SimpleQuery{
+			Operation: oss.Ptr("and"),
+			SubQueries: []SimpleQuery{
+				{
+					Field:     oss.Ptr("Size"),
+					Operation: oss.Ptr("gt"),
+					Value:     oss.Ptr("1048576"),
+				},
+				{
+					Field:     oss.Ptr("Filename"),
+					Operation: oss.Ptr("prefix"),
+					Value:     oss.Ptr("photos/"),
+				},
+			},
+		}).ToParameterValue()),
+		Sort:  oss.Ptr("Size"),
+		Order: oss.Ptr("acs"),
+		Aggregations: oss.Ptr((MetaQueryAggregations{
+			Aggregations: []Aggregation{
+				{
+					Field:     oss.Ptr("Size"),
+					Operation: oss.Ptr("sum"),
+				},
+			},
+		}).ToParameterValue()),
+		WithFields:       oss.Ptr(`["Filename","Size"]`),
+		WithoutTotalHits: oss.Ptr(true),
+	}
+	input = &oss.OperationInput{
+		OpName: "SimpleQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "simpleQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["nextToken"], "MTIzNDU2Nzg6aW1tdGVzdDpleGFtcGxlYnVja2V0OmRhdGFzZXQwMDE6b3NzOi8vZXhhbXBsZWJ1Y2tldC9zYW1wbGVvYmplY3QxLmpw****")
+	assert.Equal(t, input.Parameters["maxResults"], "99")
+	assert.Equal(t, input.Parameters["query"], "{\"Operation\":\"and\",\"SubQueries\":[{\"Field\":\"Size\",\"Value\":\"1048576\",\"Operation\":\"gt\"},{\"Field\":\"Filename\",\"Value\":\"photos/\",\"Operation\":\"prefix\"}]}")
+	assert.Equal(t, input.Parameters["sort"], "Size")
+	assert.Equal(t, input.Parameters["order"], "acs")
+	assert.Equal(t, input.Parameters["aggregations"], "[{\"Operation\":\"sum\",\"Field\":\"Size\"}]")
+	assert.Equal(t, input.Parameters["withFields"], "[\"Filename\",\"Size\"]")
+	assert.Equal(t, input.Parameters["withoutTotalHits"], "true")
 }
 
 func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
@@ -139,14 +247,14 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <AggregationGroup>
+        <Group>
           <Value>document</Value>
           <Count>80</Count>
-        </AggregationGroup>
-        <AggregationGroup>
+        </Group>
+        <Group>
           <Value>image</Value>
           <Count>70</Count>
-        </AggregationGroup>
+        </Group>
       </Groups>
     </Aggregation>
   </Aggregations>
@@ -227,14 +335,14 @@ func TestUnmarshalOutput_SimpleQuery(t *testing.T) {
       <Field>MediaType</Field>
       <Operation>group</Operation>
       <Groups>
-        <AggregationGroup>
+        <Group>
           <Value>image</Value>
           <Count>200</Count>
-        </AggregationGroup>
-        <AggregationGroup>
+        </Group>
+        <Group>
           <Value>video</Value>
           <Count>58</Count>
-        </AggregationGroup>
+        </Group>
       </Groups>
     </Aggregation>
   </Aggregations>
@@ -411,6 +519,41 @@ func TestMarshalInput_SemanticQuery(t *testing.T) {
 	assert.Equal(t, input.Parameters["mediaTypes"], "[\"video\",\"image\"]")
 	assert.Equal(t, input.Parameters["withFields"], "[\"Filename\",\"Size\"]")
 	assert.Equal(t, input.Parameters["sourceURI"], "oss://bucket/prefix")
+
+	request = &SemanticQueryRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		MaxResults:  oss.Ptr(int32(10)),
+		Query: oss.Ptr(SimpleQuery{
+			Field: oss.Ptr("Size"), Value: oss.Ptr("1"), Operation: oss.Ptr("gt"),
+		}.ToParameterValue()),
+		WithFields: oss.Ptr(WithFields{
+			WithField: []string{"Filename", "Size"},
+		}.ToParameterValue()),
+		MediaTypes: oss.Ptr(MetaQueryMediaTypes{MediaTypes: []string{"video", "image"}}.ToParameterValue()),
+		SourceUri:  oss.Ptr("oss://bucket/prefix"),
+	}
+	input = &oss.OperationInput{
+		OpName: "SemanticQuery",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "semanticQuery",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["maxResults"], "10")
+	assert.Equal(t, input.Parameters["query"], "{\"Field\":\"Size\",\"Value\":\"1\",\"Operation\":\"gt\"}")
+	assert.Equal(t, input.Parameters["mediaTypes"], "[\"video\",\"image\"]")
+	assert.Equal(t, input.Parameters["withFields"], "[\"Filename\",\"Size\"]")
+	assert.Equal(t, input.Parameters["sourceURI"], "oss://bucket/prefix")
 }
 
 func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
@@ -423,7 +566,17 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 <Files>
       <File>
           <Addresses/>
-          <AudioCovers/>
+		  <AudioCovers>
+			<AudioCover>	
+				<OCRContents>
+					<OCRContent>
+						<Language>zh</Language>
+						<Contents>demo</Contents>
+						<Confidence>0.5</Confidence>
+					</OCRContent>
+				</OCRContents>
+			</AudioCover>
+          </AudioCovers>
           <AudioStreams>
               <AudioStream>
                   <Bitrate>128000</Bitrate>
@@ -537,6 +690,10 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 	assert.Equal(t, result.Status, "OK")
 	assert.Equal(t, result.Headers.Get("X-Oss-Request-Id"), "534B371674E88A4D8906****")
 	assert.Equal(t, len(result.Files), 1)
+	assert.Equal(t, *result.Files[0].AudioCovers[0].OCRContents[0].Language, "zh")
+	assert.Equal(t, *result.Files[0].AudioCovers[0].OCRContents[0].Contents, "demo")
+	assert.Equal(t, *result.Files[0].AudioCovers[0].OCRContents[0].Confidence, 0.5)
+	assert.Equal(t, *result.Files[0].ContentMd5, "5oJccWuBoqVXS8zrzckPlg==")
 	assert.Equal(t, *result.Files[0].Bitrate, int64(1656706))
 	assert.Equal(t, *result.Files[0].ContentMd5, "5oJccWuBoqVXS8zrzckPlg==")
 	assert.Equal(t, *result.Files[0].ContentType, "video/mp4")
@@ -660,7 +817,13 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
                 </Label>
             </Labels>
             <MediaType>video</MediaType>
-            <OCRContents/>
+            <OCRContents>
+				<OCRContent>
+					<Language>zh</Language>
+					<Contents>demo</Contents>
+					<Confidence>0.5</Confidence>
+				</OCRContent>
+			</OCRContents>
             <OSSCRC64>16628192875747293357</OSSCRC64>
             <OSSObjectType>Normal</OSSObjectType>
             <OSSStorageClass>Standard</OSSStorageClass>
@@ -696,6 +859,7 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
             <SceneElements>
                 <SceneElement>
                     <FrameTimes>6000</FrameTimes>
+ 					<FrameTimes>7000</FrameTimes>
                     <TimeRange>4133</TimeRange>
                     <TimeRange>8533</TimeRange>
                     <VideoStreamIndex>0</VideoStreamIndex>
@@ -770,6 +934,9 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 	assert.Equal(t, *result.Files[0].FormatLongName, "QuickTime / MOV")
 	assert.Equal(t, *result.Files[0].FormatName, "mov,mp4,m4a,3gp,3g2,mj2")
 	assert.Equal(t, *result.Files[0].MediaType, "video")
+	assert.Equal(t, *result.Files[0].OCRContents[0].Language, "zh")
+	assert.Equal(t, *result.Files[0].OCRContents[0].Contents, "demo")
+	assert.Equal(t, *result.Files[0].OCRContents[0].Confidence, 0.5)
 	assert.Equal(t, *result.Files[0].OSSCRC64, "16628192875747293357")
 	assert.Equal(t, *result.Files[0].Size, int64(196284))
 	assert.Equal(t, *result.Files[0].VideoWidth, int64(640))
@@ -793,6 +960,12 @@ func TestUnmarshalOutput_SemanticQuery(t *testing.T) {
 	assert.Equal(t, *result.Files[0].CustomLabels[0].Value, "label-val")
 
 	assert.Equal(t, *result.Files[0].ProduceTime, "2026-04-21T10:46:10+08:00")
+	assert.Equal(t, len(result.Files[0].SceneElements), 1)
+	assert.Equal(t, result.Files[0].SceneElements[0].FrameTimes[0], int64(6000))
+	assert.Equal(t, result.Files[0].SceneElements[0].FrameTimes[1], int64(7000))
+	assert.Equal(t, result.Files[0].SceneElements[0].TimeRange[0], int64(4133))
+	assert.Equal(t, result.Files[0].SceneElements[0].TimeRange[1], int64(8533))
+	assert.Equal(t, *result.Files[0].SceneElements[0].VideoStreamIndex, int64(0))
 	assert.Equal(t, *result.Files[0].SequenceNumber, int64(5))
 	assert.Equal(t, *result.Files[0].SemanticSimilarity, float64(0.2536))
 	assert.Equal(t, *result.Files[0].Size, int64(196284))
@@ -1657,14 +1830,14 @@ func TestUnmarshalOutput_DoMetaQuery(t *testing.T) {
             <Field>StorageClass</Field>
             <Operation>group_by</Operation>
             <Groups>
-                <AggregationGroup>
+                <Group>
                     <Value>Standard</Value>
                     <Count>30</Count>
-                </AggregationGroup>
-                <AggregationGroup>
+                </Group>
+                <Group>
                     <Value>IA</Value>
                     <Count>20</Count>
-                </AggregationGroup>
+                </Group>
             </Groups>
         </Aggregation>
     </Aggregations>
