@@ -8,14 +8,26 @@ import (
 )
 
 type CreateSmartClusterRequest struct {
-	Bucket       *string          `input:"host,bucket,required"`
-	DatasetName  *string          `input:"query,datasetName,required"`
-	Name         *string          `input:"query,name,required"`
-	ClusterType  SmartClusterType `input:"query,clusterType,required"`
-	Rules        *string          `input:"query,rules,required"`
-	Description  *string          `input:"query,description"`
-	Notification *string          `input:"query,notification"`
+	Bucket      *string          `input:"host,bucket,required"`
+	DatasetName *string          `input:"query,datasetName,required"`
+	Name        *string          `input:"query,name,required"`
+	ClusterType SmartClusterType `input:"query,clusterType,required"`
+
+	// Rules The assignment can be made through SmartClusterRules{}.ToParameterValue().
+	Rules       *string `input:"query,rules,required"`
+	Description *string `input:"query,description"`
+
+	// Notification The assignment can be made through SmartClusterNotification{}.ToParameterValue().
+	Notification *string `input:"query,notification"`
 	oss.RequestCommon
+}
+
+type SmartClusterNotification struct {
+	MNS *SmartClusterTopicName `json:"MNS,omitempty"`
+}
+
+type SmartClusterTopicName struct {
+	TopicName *string `json:"TopicName,omitempty"`
 }
 
 type CreateSmartClusterResult struct {
@@ -81,22 +93,26 @@ type GetSmartClusterResult struct {
 }
 
 type SmartClusterInfo struct {
-	ObjectId     *string           `xml:"ObjectId"`
-	ClusterType  *string           `xml:"ClusterType"`
-	Name         *string           `xml:"Name"`
-	Description  *string           `xml:"Description"`
-	Rules        []Rule            `xml:"Rules>Rule"`
-	Reason       *string           `xml:"Reason"`
-	Notification *NotificationInfo `xml:"Notification"`
-	CreateTime   *string           `xml:"CreateTime"`
-	UpdateTime   *string           `xml:"UpdateTime"`
+	ObjectId     *string            `xml:"ObjectId"`
+	ClusterType  *string            `xml:"ClusterType"`
+	Name         *string            `xml:"Name"`
+	Description  *string            `xml:"Description"`
+	Rules        []SmartClusterRule `xml:"Rules>Rule"`
+	Reason       *string            `xml:"Reason"`
+	Notification *NotificationInfo  `xml:"Notification"`
+	CreateTime   *string            `xml:"CreateTime"`
+	UpdateTime   *string            `xml:"UpdateTime"`
 }
 
-type Rule struct {
-	RuleType    *string  `xml:"RuleType"`
-	BaseURIs    []string `xml:"BaseURIs"`
-	Keywords    []string `xml:"Keywords"`
-	Sensitivity *float64 `xml:"Sensitivity"`
+type SmartClusterRules struct {
+	Rules []SmartClusterRule
+}
+
+type SmartClusterRule struct {
+	RuleType    *string  `xml:"RuleType" json:"RuleType,omitempty"`
+	BaseURIs    []string `xml:"BaseURIs" json:"BaseURIs,omitempty"`
+	Keywords    []string `xml:"Keywords" json:"Keywords,omitempty"`
+	Sensitivity *float64 `xml:"Sensitivity" json:"Sensitivity,omitempty"`
 }
 
 type NotificationInfo struct {
@@ -151,17 +167,23 @@ func (c *Client) GetSmartCluster(ctx context.Context, request *GetSmartClusterRe
 }
 
 type UpdateSmartClusterRequest struct {
-	Bucket       *string `input:"host,bucket,required"`
-	DatasetName  *string `input:"query,datasetName,required"`
-	ObjectId     *string `input:"query,objectId,required"`
-	Name         *string `input:"query,name"`
-	Description  *string `input:"query,description"`
-	Rules        *string `input:"query,rules"`
+	Bucket      *string `input:"host,bucket,required"`
+	DatasetName *string `input:"query,datasetName,required"`
+	ObjectId    *string `input:"query,objectId,required"`
+	Name        *string `input:"query,name"`
+	Description *string `input:"query,description"`
+
+	// Rules The assignment can be made through SmartClusterRules{}.ToParameterValue().
+	Rules *string `input:"query,rules"`
+
+	// Notification The assignment can be made through SmartClusterNotification{}.ToParameterValue().
 	Notification *string `input:"query,notification"`
 	oss.RequestCommon
 }
 
 type UpdateSmartClusterResult struct {
+	XMLName  xml.Name `xml:"UpdateSmartClusterResponse"`
+	ObjectId *string  `xml:"ObjectId,omitempty"`
 	oss.ResultCommon
 }
 
@@ -195,7 +217,13 @@ func (c *Client) UpdateSmartCluster(ctx context.Context, request *UpdateSmartClu
 
 	result := &UpdateSmartClusterResult{}
 
-	if err = c.client.UnmarshalOutput(result, output); err != nil {
+	if err = c.client.UnmarshalOutput(result, output, func(result interface{}, output *oss.OperationOutput) error {
+		if output.Body == nil {
+			return nil
+		}
+		defer output.Body.Close()
+		return xml.NewDecoder(output.Body).Decode(result)
+	}); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
 

@@ -32,103 +32,118 @@ type WorkflowParameters struct {
 
 // WorkflowParameter represents a single workflow parameter
 type WorkflowParameter struct {
-	XMLName     xml.Name `xml:"WorkflowParameter"`
-	Name        *string  `xml:"Name,omitempty"`
-	Value       *string  `xml:"Value,omitempty"`
-	Description *string  `xml:"Description,omitempty"`
+	XMLName     xml.Name `xml:"WorkflowParameter" json:"-"`
+	Name        *string  `xml:"Name,omitempty" json:"Name,omitempty"`
+	Value       *string  `xml:"Value,omitempty" json:"Value,omitempty"`
+	Description *string  `xml:"Description,omitempty" json:"Description,omitempty"`
 }
 
 // DatasetConfig represents the dataset configuration
 type DatasetConfig struct {
-	XMLName      xml.Name        `xml:"DatasetConfig"`
-	Insights     *InsightsConfig `xml:"Insights,omitempty"`
-	SmartCluster *SmartCluster   `xml:"SmartCluster,omitempty"`
-	ReverseImage *ReverseImage   `xml:"ReverseImage,omitempty"`
+	XMLName      xml.Name        `xml:"DatasetConfig" json:"-"`
+	Insights     *InsightsConfig `xml:"Insights,omitempty" json:"Insights,omitempty"`
+	SmartCluster *SmartCluster   `xml:"SmartCluster,omitempty" json:"SmartCluster,omitempty"`
+	ReverseImage *ReverseImage   `xml:"ReverseImage,omitempty" json:"ReverseImage,omitempty"`
 }
 
 type SmartCluster struct {
-	Figure *SmartClusterFigure `xml:"Figure,omitempty"`
+	Figure *SmartClusterFigure `xml:"Figure,omitempty" json:"Figure,omitempty"`
 }
 
 type SmartClusterFigure struct {
-	AutoGenerate    *bool    `xml:"AutoGenerate,omitempty"`
-	AutoClustering  *bool    `xml:"AutoClustering,omitempty"`
-	MinEntityCount  *int64   `xml:"MinEntityCount,omitempty"`
-	EnabledFeatures []string `xml:"EnabledFeatures,omitempty"`
+	AutoGenerate    *bool    `xml:"AutoGenerate,omitempty" json:"AutoGenerate,omitempty"`
+	AutoClustering  *bool    `xml:"AutoClustering,omitempty" json:"AutoClustering,omitempty"`
+	MinEntityCount  *int64   `xml:"MinEntityCount,omitempty" json:"MinEntityCount,omitempty"`
+	EnabledFeatures []string `xml:"EnabledFeatures,omitempty" json:"EnabledFeatures,omitempty"`
 }
 
 type ReverseImage struct {
-	Image *Enable `xml:"Image,omitempty"`
-	Video *Enable `xml:"Video,omitempty"`
+	Image *ReverseImageImage `xml:"Image,omitempty" json:"Image,omitempty"`
+	Video *ReverseImageVideo `xml:"Video,omitempty" json:"Video,omitempty"`
 }
 
-// Enable is a generic configuration model containing a single Enable field.
-type Enable struct {
-	Enable *bool `xml:"Enable"`
+type ReverseImageImage struct {
+	Enable *bool `xml:"Enable,omitempty" json:"Enable,omitempty"`
+}
+
+type ReverseImageVideo struct {
+	Enable *bool `xml:"Enable,omitempty" json:"Enable,omitempty"`
 }
 
 // InsightsConfig represents the insights configuration
 type InsightsConfig struct {
-	XMLName  xml.Name       `xml:"Insights"`
-	Language *string        `xml:"Language,omitempty"`
-	Image    *InsightsImage `xml:"Image,omitempty"`
-	Video    *InsightsVideo `xml:"Video,omitempty"`
+	XMLName  xml.Name       `xml:"Insights" json:"-"`
+	Language *string        `xml:"Language,omitempty" json:"Language,omitempty"`
+	Image    *InsightsImage `xml:"Image,omitempty" json:"Image,omitempty"`
+	Video    *InsightsVideo `xml:"Video,omitempty" json:"Video,omitempty"`
 }
 
 type InsightsImage struct {
-	Caption *InsightsImageCaption `xml:"Caption,omitempty"`
+	Caption *InsightsImageCaption `xml:"Caption,omitempty" json:"Caption,omitempty"`
 }
 
 type InsightsVideo struct {
-	Caption     *InsightsVideoCaption `xml:"Caption,omitempty"`
-	Label       *InsightsVideoLabel   `xml:"Label,omitempty"`
-	MultiStream *Enable               `xml:"MultiStream,omitempty"`
+	Caption     *InsightsVideoCaption     `xml:"Caption,omitempty" json:"Caption,omitempty"`
+	Label       *InsightsVideoLabel       `xml:"Label,omitempty" json:"Label,omitempty"`
+	MultiStream *InsightsVideoMultiStream `xml:"MultiStream,omitempty" json:"MultiStream,omitempty"`
 }
 
 type InsightsImageCaption struct {
-	Enable *bool   `xml:"Enable,omitempty"`
-	Prompt *string `xml:"Prompt,omitempty"`
+	Enable *bool   `xml:"Enable,omitempty" json:"Enable,omitempty"`
+	Prompt *string `xml:"Prompt,omitempty" json:"Prompt,omitempty"`
 }
 
 type InsightsVideoCaption struct {
-	Enable          *bool   `xml:"Enable,omitempty"`
-	Prompt          *string `xml:"Prompt,omitempty"`
-	PersonReference *Enable `xml:"PersonReference,omitempty"`
+	Enable          *bool                    `xml:"Enable,omitempty" json:"Enable,omitempty"`
+	Prompt          *string                  `xml:"Prompt,omitempty" json:"Prompt,omitempty"`
+	PersonReference *InsightsPersonReference `xml:"PersonReference,omitempty" json:"PersonReference,omitempty"`
+}
+
+type InsightsPersonReference struct {
+	Enable *bool `xml:"Enable,omitempty" json:"Enable,omitempty"`
 }
 
 type InsightsVideoLabel struct {
-	System      *InsightsVideoSystem      `xml:"System,omitempty"`
-	UserDefined *InsightsVideoUserDefined `xml:"UserDefined,omitempty"`
-	Highlight   *InsightsVideoHighlight   `xml:"Highlight,omitempty"`
+	System      *InsightsVideoSystem      `xml:"System,omitempty" json:"System,omitempty"`
+	UserDefined *InsightsVideoUserDefined `xml:"UserDefined,omitempty" json:"UserDefined,omitempty"`
+	Highlight   *InsightsVideoHighlight   `xml:"Highlight,omitempty" json:"Highlight,omitempty"`
 }
 
 type InsightsVideoSystem struct {
-	Enable *bool `xml:"Enable,omitempty"`
+	Enable *bool `xml:"Enable,omitempty" json:"Enable,omitempty"`
 }
 
 type InsightsVideoUserDefined struct {
-	Enable *bool       `xml:"Enable,omitempty"`
-	Mode   *string     `xml:"Mode,omitempty"`
-	Labels []LabelItem `xml:"Labels>Label,omitempty"`
+	Enable *bool       `xml:"Enable,omitempty" json:"Enable,omitempty"`
+	Mode   *string     `xml:"Mode,omitempty" json:"Mode,omitempty"`
+	Labels []LabelItem `xml:"Labels>Label,omitempty" json:"Labels,omitempty"`
 }
 
 type LabelItem struct {
-	Name        *string `xml:"Name,omitempty"`
-	Description *string `xml:"Description,omitempty"`
+	Name        *string `xml:"Name,omitempty" json:"Name,omitempty"`
+	Description *string `xml:"Description,omitempty" json:"Description,omitempty"`
 }
 
 type InsightsVideoHighlight struct {
-	Enable *bool       `xml:"Enable,omitempty"`
-	Labels []LabelItem `xml:"Labels>Label,omitempty"`
+	Enable *bool       `xml:"Enable,omitempty" json:"Enable,omitempty"`
+	Labels []LabelItem `xml:"Labels>Label,omitempty" json:"Labels,omitempty"`
+}
+
+type InsightsVideoMultiStream struct {
+	Enable *bool `xml:"Enable,omitempty" json:"Enable,omitempty"`
 }
 
 // CreateDatasetRequest defines the request for creating a dataset
 type CreateDatasetRequest struct {
-	Bucket             *string `input:"host,bucket,required"`
-	DatasetName        *string `input:"query,datasetName,required"`
-	Description        *string `input:"query,description"`
+	Bucket      *string `input:"host,bucket,required"`
+	DatasetName *string `input:"query,datasetName,required"`
+	Description *string `input:"query,description"`
+
+	// WorkflowParameters The assignment can be made through WorkflowParameters{}.ToParameterValue().
 	WorkflowParameters *string `input:"query,workflowParameters"`
-	DatasetConfig      *string `input:"query,datasetConfig"`
+
+	// DatasetConfig The assignment can be made through DatasetConfig{}.ToParameterValue().
+	DatasetConfig *string `input:"query,datasetConfig"`
 	oss.RequestCommon
 }
 
@@ -244,11 +259,15 @@ func (c *Client) GetDataset(ctx context.Context, request *GetDatasetRequest, opt
 
 // UpdateDatasetRequest defines the request for updating a dataset
 type UpdateDatasetRequest struct {
-	Bucket             *string `input:"host,bucket,required"`
-	DatasetName        *string `input:"query,datasetName,required"`
-	Description        *string `input:"query,description"`
+	Bucket      *string `input:"host,bucket,required"`
+	DatasetName *string `input:"query,datasetName,required"`
+	Description *string `input:"query,description"`
+
+	// WorkflowParameters The assignment can be made through WorkflowParameters{}.ToParameterValue().
 	WorkflowParameters *string `input:"query,workflowParameters"`
-	DatasetConfig      *string `input:"query,datasetConfig"`
+
+	// DatasetConfig The assignment can be made through DatasetConfig{}.ToParameterValue().
+	DatasetConfig *string `input:"query,datasetConfig"`
 	oss.RequestCommon
 }
 

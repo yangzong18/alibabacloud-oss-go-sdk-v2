@@ -81,12 +81,6 @@ func TestMarshalInput_CreateDataset(t *testing.T) {
 		Description: oss.Ptr("this is a demo"),
 		DatasetConfig: oss.Ptr(`{
   "Insights": {
-    "EnableLabel": true,
-    "EnableOCR": true,
-    "EnableFace": true,
-    "EnableImage": true,
-    "EnableVideo": true,
-    "EnableAudio": true,
     "Language": "zh"
   }
 }`),
@@ -108,7 +102,49 @@ func TestMarshalInput_CreateDataset(t *testing.T) {
 	assert.Equal(t, *input.Bucket, "bucket")
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
 	assert.Equal(t, input.Parameters["description"], "this is a demo")
-	assert.Equal(t, input.Parameters["datasetConfig"], "{\n  \"Insights\": {\n    \"EnableLabel\": true,\n    \"EnableOCR\": true,\n    \"EnableFace\": true,\n    \"EnableImage\": true,\n    \"EnableVideo\": true,\n    \"EnableAudio\": true,\n    \"Language\": \"zh\"\n  }\n}")
+	assert.Equal(t, input.Parameters["datasetConfig"], "{\n  \"Insights\": {\n    \"Language\": \"zh\"\n  }\n}")
+
+	request = &CreateDatasetRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		Description: oss.Ptr("this is a demo"),
+		WorkflowParameters: oss.Ptr(WorkflowParameters{
+			WorkflowParameter: []WorkflowParameter{
+				{
+					Name:  oss.Ptr("VideoInsightEnable"),
+					Value: oss.Ptr("True"),
+				},
+				{
+					Name:  oss.Ptr("ImageInsightEnable"),
+					Value: oss.Ptr("True"),
+				},
+			},
+		}.ToParameterValue()),
+		DatasetConfig: oss.Ptr((&DatasetConfig{
+			Insights: &InsightsConfig{
+				Language: oss.Ptr("zh"),
+			},
+		}).ToParameterValue()),
+	}
+	input = &oss.OperationInput{
+		OpName: "CreateDataset",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "createDataset",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["description"], "this is a demo")
+	assert.Equal(t, input.Parameters["datasetConfig"], "{\"Insights\":{\"Language\":\"zh\"}}")
+	assert.Equal(t, input.Parameters["workflowParameters"], "[{\"Name\":\"VideoInsightEnable\",\"Value\":\"True\"},{\"Name\":\"ImageInsightEnable\",\"Value\":\"True\"}]")
 }
 
 func TestUnmarshalOutput_CreateDataset(t *testing.T) {
@@ -449,7 +485,7 @@ func TestMarshalInput_UpdateDataset(t *testing.T) {
 		DatasetName:        oss.Ptr("your_dataset"),
 		Description:        oss.Ptr("this is a demo"),
 		WorkflowParameters: oss.Ptr(`[{"Name": "ImageInsightEnable","Value": "True","Description": "The source bucket for data processing"}]`),
-		DatasetConfig:      oss.Ptr(`{"Insights":{"Language":"zh","Image":{"Caption":{"Enable":"true"}},"Video":{"Caption":{"Enable":"true"},"Label":{"System":{"Enable":"true"},"UserDefined":{"Enable":"true"},"Highlight":{"Enable":"true"}},"MultiStream":{"Enable":"true"}}}}`),
+		DatasetConfig:      oss.Ptr(`{"Insights":{"Language":"zh","Image":{"Caption":{"Enable":"true"}},"Video":{"Caption":{"Enable":"true"},"Label":{"System":{"Enable":"true"},"UserDefined":{"Enable":"true"},"Highlight":{"Enable":"true"}},"MultiStream":{"Enable":"true"}}}}}`),
 	}
 	input = &oss.OperationInput{
 		OpName: "UpdateDataset",
@@ -469,7 +505,73 @@ func TestMarshalInput_UpdateDataset(t *testing.T) {
 	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
 	assert.Equal(t, input.Parameters["description"], "this is a demo")
 	assert.Equal(t, input.Parameters["workflowParameters"], "[{\"Name\": \"ImageInsightEnable\",\"Value\": \"True\",\"Description\": \"The source bucket for data processing\"}]")
-	assert.Equal(t, input.Parameters["datasetConfig"], "{\"Insights\":{\"Language\":\"zh\",\"Image\":{\"Caption\":{\"Enable\":\"true\"}},\"Video\":{\"Caption\":{\"Enable\":\"true\"},\"Label\":{\"System\":{\"Enable\":\"true\"},\"UserDefined\":{\"Enable\":\"true\"},\"Highlight\":{\"Enable\":\"true\"}},\"MultiStream\":{\"Enable\":\"true\"}}}}")
+	assert.Equal(t, input.Parameters["datasetConfig"], "{\"Insights\":{\"Language\":\"zh\",\"Image\":{\"Caption\":{\"Enable\":\"true\"}},\"Video\":{\"Caption\":{\"Enable\":\"true\"},\"Label\":{\"System\":{\"Enable\":\"true\"},\"UserDefined\":{\"Enable\":\"true\"},\"Highlight\":{\"Enable\":\"true\"}},\"MultiStream\":{\"Enable\":\"true\"}}}}}")
+
+	request = &UpdateDatasetRequest{
+		Bucket:      oss.Ptr("bucket"),
+		DatasetName: oss.Ptr("your_dataset"),
+		Description: oss.Ptr("this is a demo"),
+		WorkflowParameters: oss.Ptr(WorkflowParameters{
+			WorkflowParameter: []WorkflowParameter{
+				{
+					Name:        oss.Ptr("ImageInsightEnable"),
+					Value:       oss.Ptr("True"),
+					Description: oss.Ptr("The source bucket for data processing"),
+				},
+			},
+		}.ToParameterValue()),
+		DatasetConfig: oss.Ptr((&DatasetConfig{
+			Insights: &InsightsConfig{
+				Language: oss.Ptr("zh"),
+				Image: &InsightsImage{
+					Caption: &InsightsImageCaption{
+						Enable: oss.Ptr(true),
+					},
+				},
+				Video: &InsightsVideo{
+					Caption: &InsightsVideoCaption{
+						Enable: oss.Ptr(true),
+					},
+					Label: &InsightsVideoLabel{
+						System: &InsightsVideoSystem{
+							Enable: oss.Ptr(true),
+						},
+						UserDefined: &InsightsVideoUserDefined{
+							Enable: oss.Ptr(true),
+							Labels: []LabelItem{
+								{
+									Name:        oss.Ptr("有人摔倒"),
+									Description: oss.Ptr("画面中有人由站立或行走变为倒在地面的动作"),
+								},
+							},
+						},
+					},
+					MultiStream: &InsightsVideoMultiStream{
+						Enable: oss.Ptr(true),
+					},
+				},
+			},
+		}).ToParameterValue()),
+	}
+	input = &oss.OperationInput{
+		OpName: "UpdateDataset",
+		Method: "POST",
+		Headers: map[string]string{
+			"Content-Type": "application/xml",
+		},
+		Parameters: map[string]string{
+			"metaQuery": "",
+			"action":    "updateDataset",
+		},
+		Bucket: request.Bucket,
+	}
+	err = c.client.MarshalInput(request, input, oss.MarshalUpdateContentMd5)
+	assert.Nil(t, err)
+	assert.Equal(t, *input.Bucket, "bucket")
+	assert.Equal(t, input.Parameters["datasetName"], "your_dataset")
+	assert.Equal(t, input.Parameters["description"], "this is a demo")
+	assert.Equal(t, input.Parameters["workflowParameters"], "[{\"Name\":\"ImageInsightEnable\",\"Value\":\"True\",\"Description\":\"The source bucket for data processing\"}]")
+	assert.Equal(t, input.Parameters["datasetConfig"], "{\"Insights\":{\"Language\":\"zh\",\"Image\":{\"Caption\":{\"Enable\":true}},\"Video\":{\"Caption\":{\"Enable\":true},\"Label\":{\"System\":{\"Enable\":true},\"UserDefined\":{\"Enable\":true,\"Labels\":[{\"Name\":\"有人摔倒\",\"Description\":\"画面中有人由站立或行走变为倒在地面的动作\"}]}},\"MultiStream\":{\"Enable\":true}}}}")
 }
 
 func TestUnmarshalOutput_UpdateDataset(t *testing.T) {
