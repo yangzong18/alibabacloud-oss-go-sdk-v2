@@ -269,3 +269,60 @@ func (c *VectorsClient) QueryVectors(ctx context.Context, request *QueryVectorsR
 
 	return result, err
 }
+
+type QueryVectorsFusionRequest struct {
+	// The name of the vector bucket.
+	Bucket               *string          `input:"host,bucket,required"`
+	IndexName            *string          `input:"body,indexName,json,required"`
+	Knn                  any              `input:"body,knn,json,required"`
+	Query                any              `input:"body,query,json,required"`
+	Retriever            *string          `input:"body,retriever,json"`
+	ReturnMetadata       *bool            `input:"body,returnMetadata,json"`
+	ReturnMetadataFields []string         `input:"body,returnMetadataFields,json"`
+	PartitionKeys        []string         `input:"body,partitionKeys,json"`
+	Limit                *int             `input:"body,limit,json"`
+	NextToken            *string          `input:"body,nextToken,json"`
+	Sort                 []map[string]any `input:"body,sort,json"`
+
+	oss.RequestCommon
+}
+
+type QueryVectorsFusionResult struct {
+	Vectors []map[string]any `json:"vectors"`
+
+	oss.ResultCommon
+}
+
+// QueryVectorsFusion Query a vector.
+func (c *VectorsClient) QueryVectorsFusion(ctx context.Context, request *QueryVectorsFusionRequest, optFns ...func(*oss.Options)) (*QueryVectorsFusionResult, error) {
+	var err error
+	if request == nil {
+		request = &QueryVectorsFusionRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "QueryVectorsFusion",
+		Method: "POST",
+		Headers: map[string]string{
+			oss.HTTPHeaderContentType: contentTypeJSON,
+		},
+		Parameters: map[string]string{
+			"queryVectorsFusion": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInputJson(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.clientImpl.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &QueryVectorsFusionResult{}
+	if err = c.unmarshalOutput(result, output, unmarshalBodyJsonStyle); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}

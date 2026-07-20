@@ -74,14 +74,17 @@ type GetVectorIndexResult struct {
 }
 
 type VectorIndex struct {
-	CreateTime       *time.Time     `json:"createTime"`
-	DataType         *string        `json:"dataType"`
-	Dimension        *int           `json:"dimension"`
-	DistanceMetric   *string        `json:"distanceMetric"`
-	IndexName        *string        `json:"indexName"`
-	Metadata         map[string]any `json:"metadata"`
-	Status           *string        `json:"status"`
-	VectorBucketName *string        `json:"vectorBucketName"`
+	CreateTime          *time.Time     `json:"createTime"`
+	DataType            *string        `json:"dataType"`
+	Dimension           *int           `json:"dimension"`
+	DistanceMetric      *string        `json:"distanceMetric"`
+	IndexName           *string        `json:"indexName"`
+	Metadata            map[string]any `json:"metadata"`
+	Status              *string        `json:"status"`
+	BucketArn           *string        `json:"bucketArn"`
+	Mode                *string        `json:"mode"`
+	SchemaConfiguration map[string]any `json:"schemaConfiguration"`
+	VectorBucketName    *string        `json:"vectorBucketName"`
 }
 
 // GetVectorIndex Get a vector Index.
@@ -213,6 +216,55 @@ func (c *VectorsClient) DeleteVectorIndex(ctx context.Context, request *DeleteVe
 	}
 
 	result := &DeleteVectorIndexResult{}
+	if err = c.unmarshalOutput(result, output, oss.UnmarshalDiscardBody); err != nil {
+		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
+	}
+
+	return result, err
+}
+
+type PutVectorIndexFusionRequest struct {
+	// The name of the vector bucket.
+	Bucket              *string        `input:"host,bucket,required"`
+	IndexName           *string        `input:"body,indexName,json,required"`
+	Mode                *string        `input:"body,mode,json,required"`
+	SchemaConfiguration map[string]any `input:"body,schemaConfiguration,json,required"`
+
+	oss.RequestCommon
+}
+
+type PutVectorIndexFusionResult struct {
+	oss.ResultCommon
+}
+
+// PutVectorIndexFusion Creates a vector Index.
+func (c *VectorsClient) PutVectorIndexFusion(ctx context.Context, request *PutVectorIndexFusionRequest, optFns ...func(*oss.Options)) (*PutVectorIndexFusionResult, error) {
+	var err error
+	if request == nil {
+		request = &PutVectorIndexFusionRequest{}
+	}
+	input := &oss.OperationInput{
+		OpName: "PutVectorIndexFusion",
+		Method: "POST",
+		Headers: map[string]string{
+			oss.HTTPHeaderContentType: contentTypeJSON,
+		},
+		Parameters: map[string]string{
+			"putVectorIndexFusion": "",
+		},
+		Bucket: request.Bucket,
+	}
+	if err = c.marshalInputJson(request, input, oss.MarshalUpdateContentMd5); err != nil {
+		return nil, err
+	}
+
+	output, err := c.clientImpl.InvokeOperation(ctx, input, optFns...)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &PutVectorIndexFusionResult{}
+
 	if err = c.unmarshalOutput(result, output, oss.UnmarshalDiscardBody); err != nil {
 		return nil, c.toClientError(err, "UnmarshalOutputFail", output)
 	}
