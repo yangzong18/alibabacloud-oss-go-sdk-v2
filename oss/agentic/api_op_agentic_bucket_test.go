@@ -351,6 +351,7 @@ func TestMarshalInput_ListBucketSpaces(t *testing.T) {
 		Bucket:            oss.Ptr("my-agentic"),
 		Prefix:            oss.Ptr("sandbox-"),
 		ContinuationToken: oss.Ptr("token1"),
+		StartAfter:        oss.Ptr("sandbox-000"),
 		MaxKeys:           &maxKeys,
 	}
 	input = &oss.OperationInput{
@@ -362,6 +363,7 @@ func TestMarshalInput_ListBucketSpaces(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, "sandbox-", input.Parameters["prefix"])
 	assert.Equal(t, "token1", input.Parameters["continuation-token"])
+	assert.Equal(t, "sandbox-000", input.Parameters["start-after"])
 	assert.Equal(t, "20", input.Parameters["max-keys"])
 }
 
@@ -375,6 +377,7 @@ func TestUnmarshalOutput_ListBucketSpaces(t *testing.T) {
   </Owner>
   <Prefix>sandbox-</Prefix>
   <MaxKeys>20</MaxKeys>
+  <StartAfter>sandbox-000</StartAfter>
   <IsTruncated>false</IsTruncated>
   <BucketSpaces>
     <BucketSpace>
@@ -403,6 +406,7 @@ func TestUnmarshalOutput_ListBucketSpaces(t *testing.T) {
 	assert.Equal(t, "1234567890123456", *result.Owner.ID)
 	assert.Equal(t, "sandbox-", *result.Prefix)
 	assert.Equal(t, 20, *result.MaxKeys)
+	assert.Equal(t, "sandbox-000", *result.StartAfter)
 	assert.False(t, *result.IsTruncated)
 	assert.Equal(t, 1, len(result.BucketSpaces))
 	assert.Equal(t, "sandbox-001", *result.BucketSpaces[0].Name)

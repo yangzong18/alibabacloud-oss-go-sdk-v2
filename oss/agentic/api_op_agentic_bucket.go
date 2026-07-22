@@ -370,6 +370,9 @@ type ListBucketSpacesRequest struct {
 	// The token from which the list operation starts. You must specify the value of NextContinuationToken that is returned in the previous response as the value of ContinuationToken.
 	ContinuationToken *string `input:"query,continuation-token"`
 
+	// The name of the bucket space after which the list operation begins, sorted alphabetically.
+	StartAfter *string `input:"query,start-after"`
+
 	// The maximum number of bucket spaces that can be returned.
 	MaxKeys *int `input:"query,max-keys"`
 
@@ -397,6 +400,9 @@ type ListBucketSpacesResult struct {
 
 	// The token from which the next list operation starts.
 	NextContinuationToken *string `xml:"NextContinuationToken"`
+
+	// The name of the bucket space after which the list operation began.
+	StartAfter *string `xml:"StartAfter"`
 
 	// Indicates whether the returned results are truncated.
 	IsTruncated *bool `xml:"IsTruncated"`
