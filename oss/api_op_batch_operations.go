@@ -6,10 +6,7 @@ import (
 )
 
 type CreateJobRequest struct {
-	// The name of the bucket to create.
-	Bucket *string `input:"host,bucket,required"`
-
-	CreateJob *CreateJobConfig `input:"body,CreateJobRequest,xml"`
+	CreateJob *CreateJobConfig `input:"body,CreateJobRequest,xml,required"`
 
 	RequestCommon
 }
@@ -25,11 +22,21 @@ type CreateJobConfig struct {
 
 	Manifest *Manifest `xml:"Manifest"`
 
+	KeyPrefixManifestGenerator *KeyPrefixManifestGenerator `xml:"KeyPrefixManifestGenerator"`
+
 	Description *string `xml:"Description"`
 
 	Priority *int32 `xml:"Priority"`
 
 	RoleArn *string `xml:"RoleArn"`
+}
+
+// KeyPrefixManifestGenerator Generates a manifest based on a key prefix in a source bucket.
+// Used as an alternative to Manifest in CreateJob.
+type KeyPrefixManifestGenerator struct {
+	SourceBucket *string `xml:"SourceBucket"`
+
+	Prefix *string `xml:"Prefix"`
 }
 
 type Operation struct {
@@ -106,7 +113,6 @@ func (c *Client) CreateJob(ctx context.Context, request *CreateJobRequest, optFn
 		Parameters: map[string]string{
 			"batchJob": "",
 		},
-		Bucket: request.Bucket,
 	}
 	input.OpMetadata.Set(signer.SubResource, []string{"batchJob"})
 	if err = c.marshalInput(request, input, updateContentMd5); err != nil {
