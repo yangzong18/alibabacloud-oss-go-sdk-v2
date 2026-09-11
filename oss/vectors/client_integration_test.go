@@ -1074,3 +1074,190 @@ func TestPaginator(t *testing.T) {
 	_, err = client.DeleteVectorIndex(context.TODO(), del)
 	assert.Nil(t, err)
 }
+
+func TestFusionMode(t *testing.T) {
+	after := before(t)
+	defer after(t)
+	//TODO
+	bucketName := bucketNamePrefix + randLowStr(6)
+	indexName := indexNamePrefix + randLowStr(5)
+	request := &PutVectorBucketRequest{
+		Bucket: oss.Ptr(bucketName),
+	}
+	client := getDefaultClient()
+	_, err := client.PutVectorBucket(context.TODO(), request)
+	dumpErrIfNotNil(err)
+	assert.Nil(t, err)
+
+	putRequest := &PutVectorIndexFusionRequest{
+		Bucket:    oss.Ptr(bucketName),
+		IndexName: oss.Ptr(indexName),
+		Mode:      oss.Ptr("fusion"),
+		SchemaConfiguration: &SchemaConfiguration{
+			Fields: []SchemaField{
+				{
+					Name:           oss.Ptr("vector_1"),
+					Type:           FieldTypeVector,
+					DataType:       VectorDataTypeFloat32,
+					Dimension:      oss.Ptr(1024),
+					DistanceMetric: DistanceMetricTypeEuclidean,
+				},
+				{
+					Name:           oss.Ptr("vector_2"),
+					Type:           FieldTypeVector,
+					DataType:       VectorDataTypeFloat32,
+					Dimension:      oss.Ptr(512),
+					DistanceMetric: DistanceMetricTypeCosine,
+				},
+				{
+					Name:    oss.Ptr("timestamps"),
+					Type:    FieldTypeLong,
+					IsArray: oss.Ptr(true),
+				},
+				{
+					Name: oss.Ptr("price"),
+					Type: FieldTypeDouble,
+				},
+				{
+					Name: oss.Ptr("ip"),
+					Type: FieldTypeIp,
+				},
+				{
+					Name: oss.Ptr("location"),
+					Type: FieldTypeGeoPoint,
+				},
+				{
+					Name: oss.Ptr("tag"),
+					Type: FieldTypeString,
+				},
+				{
+					Name:           oss.Ptr("user_id"),
+					Type:           FieldTypeString,
+					IsPartitionKey: oss.Ptr(true),
+				},
+				{
+					Name:    oss.Ptr("tags"),
+					Type:    FieldTypeString,
+					IsArray: oss.Ptr(true),
+				},
+				{
+					Name:       oss.Ptr("title_1"),
+					Type:       FieldTypeString,
+					ExactMatch: oss.Ptr(true),
+					Text: &TextConfiguration{
+						Enabled:  oss.Ptr(true),
+						Analyzer: oss.Ptr("standard"),
+						AnalyzerParameters: &AnalyzerParameters{
+							CaseSensitive: oss.Ptr(true),
+							DelimitWord:   oss.Ptr(false),
+						},
+					},
+				},
+				{
+					Name:       oss.Ptr("title_2"),
+					Type:       FieldTypeString,
+					ExactMatch: oss.Ptr(false),
+					Text: &TextConfiguration{
+						Enabled:  oss.Ptr(true),
+						Analyzer: oss.Ptr("split"),
+						AnalyzerParameters: &AnalyzerParameters{
+							CaseSensitive: oss.Ptr(true),
+							Delimiter:     oss.Ptr(" "),
+						},
+					},
+				},
+			},
+		},
+	}
+	putResult, err := client.PutVectorIndexFusion(context.TODO(), putRequest)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, putResult.StatusCode)
+	assert.NotEmpty(t, putResult.Headers.Get("X-Oss-Request-Id"))
+	time.Sleep(1 * time.Second)
+
+	putVectorsRequest := &PutVectorsRequest{
+		Bucket:    oss.Ptr(bucketName),
+		IndexName: oss.Ptr(indexName),
+		Vectors: []map[string]any{
+			{
+				"key": "vector1",
+				"data": map[string]any{
+					"float32": []float32{1.2, 2.5, 3},
+				},
+				"metadata": map[string]any{
+					"Key2": "value2",
+					"Key3": []string{"1", "2", "3"},
+				},
+			},
+		},
+	}
+	_, err = client.PutVectors(context.TODO(), putVectorsRequest)
+	dumpErrIfNotNil(err)
+	assert.Nil(t, err)
+
+	queryRequest := &QueryVectorsFusionRequest{
+		Bucket:    oss.Ptr(bucketName),
+		IndexName: oss.Ptr(indexName),
+		Knn: &KnnQuery{
+			Field:         oss.Ptr("demo"),
+			QueryVector:   map[string]any{"float32": []float32{float32(32)}},
+			TopK:          oss.Ptr(10),
+			NumCandidates: oss.Ptr(9),
+			Filter: map[string]any{
+				"meta_field_1": map[string]any{
+					"$eq": "abc",
+				},
+			},
+			Boost: oss.Ptr(float32(1)),
+		},
+		Retriever: &Retriever{
+			Simple: &SimpleRetriever{
+				Query: map[string]any{
+					"$and": []map[string]any{
+						{"type": map[string]any{"$in": []string{"a", "b"}}},
+						{"year": map[string]any{"$gte": 2020}},
+					},
+				},
+			},
+		},
+		ReturnMetadata:       oss.Ptr(true),
+		ReturnMetadataFields: []string{"key1", "key2"},
+		PartitionKeys:        []string{"key1", "key2"},
+		Limit:                oss.Ptr(10),
+		NextToken:            oss.Ptr("nextToken"),
+		Sort: []Sort{
+			{
+				"field_a":     SortOptions{Order: oss.Ptr(SortOrderTypeAsc)},
+				"_score":      SortOptions{Order: oss.Ptr(SortOrderTypeDesc)},
+				"_primaryKey": SortOptions{Order: oss.Ptr(SortOrderTypeAsc)},
+			},
+		},
+	}
+	queryResult, err := client.QueryVectorsFusion(context.TODO(), queryRequest)
+	dumpErrIfNotNil(err)
+	assert.Nil(t, err)
+	assert.Equal(t, 200, queryResult.StatusCode)
+	assert.NotEmpty(t, queryResult.Headers.Get("X-Oss-Request-Id"))
+
+	var serr *oss.ServiceError
+	bucketNameNotExist := bucketNamePrefix + "-not-exist"
+	serr = &oss.ServiceError{}
+	putRequest.Bucket = oss.Ptr(bucketNameNotExist)
+	putResult, err = client.PutVectorIndexFusion(context.TODO(), putRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.NotEmpty(t, serr.RequestID)
+	time.Sleep(1 * time.Second)
+
+	queryRequest.Bucket = oss.Ptr(bucketNameNotExist)
+	queryResult, err = client.QueryVectorsFusion(context.TODO(), queryRequest)
+	assert.NotNil(t, err)
+	errors.As(err, &serr)
+	assert.Equal(t, int(404), serr.StatusCode)
+	assert.Equal(t, "NoSuchBucket", serr.Code)
+	assert.Equal(t, "The specified bucket does not exist.", serr.Message)
+	assert.NotEmpty(t, serr.RequestID)
+}
